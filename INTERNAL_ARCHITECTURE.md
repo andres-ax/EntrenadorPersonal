@@ -5,17 +5,17 @@ Este documento explica en profundidad cómo funciona el proyecto, incluyendo la 
 ## Diagrama de arquitectura interna
 
 ```mermaid
-flowchart TD
-    A[Telegram / Webhook] --> B[Handlers]
-    B --> C[Prompt builder con perfil de usuario]
-    C --> D[Agente EntrenadorAX]
-    D --> E[Herramientas function_tool]
-    E --> F[Repositorio DB]
-    E --> G[Redis sesión y rate limit]
-    B --> H[Menu y callbacks]
-    B --> I[Reset / borrar datos]
-    J[Scheduler de recordatorios] --> K[JobQueue diario/semanal]
-    K --> L[Notificaciones proactivas via bot]
+graph TD
+    A["Telegram / Webhook"] --> B["Handlers"]
+    B --> C["Prompt builder con perfil de usuario"]
+    C --> D["Agente EntrenadorAX"]
+    D --> E["Herramientas function_tool"]
+    E --> F["Repositorio DB"]
+    E --> G["Redis sesión y rate limit"]
+    B --> H["Menu y callbacks"]
+    B --> I["Reset / borrar datos"]
+    J["Scheduler de recordatorios"] --> K["JobQueue diario/semanal"]
+    K --> L["Notificaciones proactivas via bot"]
 ```
 
 ## 1. Cómo usa el agente el perfil y las herramientas

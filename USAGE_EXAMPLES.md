@@ -5,14 +5,14 @@ Este archivo documenta ejemplos completos del uso de la aplicación, tanto en in
 ## Flujo de uso principal
 
 ```mermaid
-flowchart TD
-    A[Crear .env y entorno virtual] --> B[Instalar dependencias]
-    B --> C[Ejecutar run_bot.py o uvicorn]
-    C --> D[Telegram recibe mensaje / comandos]
-    D --> E[Handler transforma mensaje]
-    E --> F[Agente procesa prompt con perfil]
-    F --> G[Herramientas registran datos / consultan DB]
-    G --> H[Respuesta enviada al usuario]
+graph TD
+    A["Crear .env y entorno virtual"] --> B["Instalar dependencias"]
+    B --> C["Ejecutar run_bot.py o uvicorn"]
+    C --> D["Telegram recibe mensaje / comandos"]
+    D --> E["Handler transforma mensaje"]
+    E --> F["Agente procesa prompt con perfil"]
+    F --> G["Herramientas registran datos / consultan DB"]
+    G --> H["Respuesta enviada al usuario"]
 ```
 
 ---

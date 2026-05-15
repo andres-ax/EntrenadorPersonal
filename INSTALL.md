@@ -3,15 +3,15 @@
 ## Flujo de instalación
 
 ```mermaid
-flowchart TD
-    A[Instalar dependencias del sistema] --> B[Crear entorno virtual]
-    B --> C[Activar entorno virtual]
-    C --> D[Actualizar pip]
-    D --> E[Instalar proyecto con pip]
-    E --> F[Crear archivo .env]
-    F --> G[Ejecutar bot con python3 run_bot.py]
-    G --> H[Detener con Ctrl+C]
-    H --> I[Salir con deactivate]
+graph TD
+    A["Instalar dependencias del sistema"] --> B["Crear entorno virtual"]
+    B --> C["Activar entorno virtual"]
+    C --> D["Actualizar pip"]
+    D --> E["Instalar proyecto con pip"]
+    E --> F["Crear archivo .env"]
+    F --> G["Ejecutar bot con python3 run_bot.py"]
+    G --> H["Detener con Ctrl+C"]
+    H --> I["Salir con deactivate"]
 ```
 
 ## Requisitos previos

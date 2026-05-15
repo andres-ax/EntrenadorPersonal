@@ -5,18 +5,18 @@ EntrenadorAX es una aplicación de coaching deportivo personal basada en Telegra
 ## Flujo de trabajo general
 
 ```mermaid
-flowchart TD
-    A[Configurar .env] --> B[Elegir modo de ejecución]
-    B --> C[run_bot.py (polling)]
-    B --> D[FastAPI webhook]
-    C --> E[Telegram recibe mensaje]
+graph TD
+    A["Configurar .env"] --> B["Elegir modo de ejecución"]
+    B --> C["run_bot.py (polling)"]
+    B --> D["FastAPI webhook"]
+    C --> E["Telegram recibe mensaje"]
     D --> E
-    E --> F[Handlers / Prompt builder]
-    F --> G[Ejecutar agente EntrenadorAX]
-    G --> H[Tool call: registro / consulta]
-    H --> I[Base de datos PostgreSQL]
-    H --> J[Redis sesión + rate limit]
-    G --> K[Respuesta al usuario]
+    E --> F["Handlers / Prompt builder"]
+    F --> G["Ejecutar agente EntrenadorAX"]
+    G --> H["Tool call: registro / consulta"]
+    H --> I["Base de datos PostgreSQL"]
+    H --> J["Redis sesión + rate limit"]
+    G --> K["Respuesta al usuario"]
 ```
 
 ## Qué hace esta aplicación
