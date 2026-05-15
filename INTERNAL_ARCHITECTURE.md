@@ -9,7 +9,7 @@ flowchart TD
     A[Telegram / Webhook] --> B[Handlers]
     B --> C[Prompt builder con perfil de usuario]
     C --> D[Agente EntrenadorAX]
-    D --> E[Herramientas (@function_tool)]
+    D --> E[Herramientas function_tool]
     E --> F[Repositorio DB]
     E --> G[Redis sesión y rate limit]
     B --> H[Menu y callbacks]
