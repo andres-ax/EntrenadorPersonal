@@ -1,21 +1,53 @@
+"""FastAPI + webhook de Telegram. Modo produccion (Railway)."""
+from __future__ import annotations
+
+import html
+import json
 import logging
-import secrets
+import traceback
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from telegram import Update
-from telegram.ext import Application
+from telegram.constants import ParseMode
+from telegram.ext import Application, Defaults
 
+from src.cache import close_redis, ping as ping_redis
 from src.config import settings
-from src.db.connection import close_db, init_db
+from src.db.connection import close_db, engine, init_db, ping as ping_db
 from src.telegram.handlers import registrar
-from src.telegram.middlewares import close_redis
+from src.telegram.scheduler import registrar_jobs
 
 logger = logging.getLogger(__name__)
 
-WEBHOOK_SECRET = secrets.token_hex(32)
+WEBHOOK_SECRET: str = settings.webhook_secret.get_secret_value()
+ADMIN_TOKEN: str = settings.admin_token.get_secret_value()
 
 telegram_app: Application | None = None
+
+
+async def error_handler(update, context) -> None:
+    """Captura excepciones no atrapadas y notifica al developer."""
+    logger.error("Excepcion en handler de Telegram", exc_info=context.error)
+    if settings.developer_chat_id is None:
+        return
+    tb = "".join(
+        traceback.format_exception(
+            None, context.error, context.error.__traceback__
+        )
+    )
+    msg = (
+        f"<b>Excepcion en el bot</b>\n"
+        f"<pre>{html.escape(str(update))[:1000]}</pre>\n"
+        f"<pre>{html.escape(tb)[:2500]}</pre>"
+    )
+    try:
+        await context.bot.send_message(
+            chat_id=settings.developer_chat_id, text=msg, parse_mode=ParseMode.HTML
+        )
+    except Exception:
+        logger.exception("No pude notificar al developer")
 
 
 @asynccontextmanager
@@ -25,8 +57,21 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Base de datos inicializada")
 
-    telegram_app = Application.builder().token(settings.telegram_token).build()
+    defaults = Defaults(
+        parse_mode=ParseMode.HTML,
+        tzinfo=ZoneInfo(settings.default_timezone),
+        disable_notification=False,
+    )
+    telegram_app = (
+        Application.builder()
+        .token(settings.telegram_token.get_secret_value())
+        .defaults(defaults)
+        .build()
+    )
     registrar(telegram_app)
+    registrar_jobs(telegram_app)
+    telegram_app.add_error_handler(error_handler)
+
     await telegram_app.initialize()
     await telegram_app.start()
     logger.info("Telegram app inicializada y lista")
@@ -34,8 +79,11 @@ async def lifespan(app: FastAPI):
     yield
 
     if telegram_app:
-        await telegram_app.stop()
-        await telegram_app.shutdown()
+        try:
+            await telegram_app.stop()
+            await telegram_app.shutdown()
+        except Exception:
+            logger.exception("Error apagando telegram_app")
     await close_db()
     await close_redis()
 
@@ -44,8 +92,27 @@ app = FastAPI(title="EntrenadorAX", lifespan=lifespan)
 
 
 @app.get("/health")
-async def health():
-    return {"status": "ok", "bot": telegram_app is not None}
+async def health() -> dict:
+    bot_ok = telegram_app is not None and telegram_app.running
+    db_ok = await ping_db()
+    redis_ok = await ping_redis()
+    status_ok = bot_ok and db_ok and redis_ok
+    pool_info = {}
+    try:
+        pool_info = {
+            "size": engine.pool.size(),
+            "checked_out": engine.pool.checkedout(),
+            "overflow": engine.pool.overflow(),
+        }
+    except Exception:
+        pass
+    return {
+        "status": "ok" if status_ok else "degraded",
+        "bot": bot_ok,
+        "db": db_ok,
+        "redis": redis_ok,
+        "db_pool": pool_info,
+    }
 
 
 @app.post("/webhook")
@@ -53,23 +120,36 @@ async def webhook(
     request: Request,
     x_telegram_bot_api_secret_token: str = Header(None),
 ):
-    if telegram_app is None:
-        raise HTTPException(503, "Bot no inicializado")
+    if telegram_app is None or not telegram_app.running:
+        raise HTTPException(503, "Bot no listo")
 
     if x_telegram_bot_api_secret_token != WEBHOOK_SECRET:
         raise HTTPException(403, "Token invalido")
 
-    data = await request.json()
+    body = await request.body()
+    if len(body) > settings.max_webhook_payload_bytes:
+        raise HTTPException(413, "Payload too large")
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "JSON invalido")
+
     update = Update.de_json(data, telegram_app.bot)
     await telegram_app.process_update(update)
     return {"ok": True}
 
 
 @app.get("/webhook-info")
-async def webhook_info():
-    """Devuelve el secret para configurar el webhook de Telegram."""
+async def webhook_info(x_admin_token: str = Header(None)) -> dict:
+    """Devuelve la URL de webhook y secret. Protegido por X-Admin-Token."""
+    if x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(403, "Acceso denegado")
+    base = str(settings.webhook_base_url).rstrip("/") if settings.webhook_base_url else ""
     return {
-        "webhook_url": f"{settings.webhook_base_url}/webhook",
+        "webhook_url": f"{base}/webhook" if base else None,
         "secret_token": WEBHOOK_SECRET,
-        "note": "Usa: curl -X POST 'https://api.telegram.org/bot<TOKEN>/setWebhook?url=<webhook_url>&secret_token=<secret_token>'"
+        "note": (
+            "curl -X POST 'https://api.telegram.org/bot<TOKEN>/setWebhook?"
+            "url=<webhook_url>&secret_token=<secret_token>'"
+        ),
     }

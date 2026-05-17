@@ -49,6 +49,10 @@ asyncpg>=0.30,<1.0
 # AsyncSession usados en src/db/connection.py.
 sqlalchemy[asyncio]>=2.0,<3.0
 
+# Migraciones de schema (alembic upgrade head). Reemplaza el
+# Base.metadata.create_all() de init_db() en produccion.
+alembic>=1.13,<2.0
+
 
 # -----------------------------------------------------------------------------
 # Configuracion y entorno

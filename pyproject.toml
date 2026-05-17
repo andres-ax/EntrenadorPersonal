@@ -10,8 +10,10 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "asyncpg>=0.30",
     "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13",
     "pydantic-settings>=2.7",
     "python-dotenv>=1.0",
+    "redis>=5.0",
 ]
 
 [project.optional-dependencies]

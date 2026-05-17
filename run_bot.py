@@ -1,52 +1,89 @@
-#!/usr/bin/env python
 """Inicia el bot EntrenadorAX en modo polling (desarrollo local)."""
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
+import signal
 import sys
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from telegram.ext import Application
-from src.db.connection import close_db, init_db
-from src.telegram.handlers import registrar
-from src.telegram.scheduler import registrar_jobs
+from telegram.constants import ParseMode  # noqa: E402
+from telegram.ext import Application, Defaults  # noqa: E402
+
+from src.cache import close_redis  # noqa: E402
+from src.config import settings  # noqa: E402
+from src.db.connection import close_db, init_db  # noqa: E402
+from src.telegram.handlers import registrar  # noqa: E402
+from src.telegram.scheduler import registrar_jobs  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-async def main():
+async def _stop_when_signaled() -> None:
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop_event.set)
+        except NotImplementedError:
+            pass
+    await stop_event.wait()
+
+
+async def main() -> None:
     logger.info("Inicializando base de datos...")
     await init_db()
     logger.info("Base de datos lista.")
 
-    app = Application.builder().token(os.getenv("TELEGRAM_TOKEN")).build()
+    defaults = Defaults(
+        parse_mode=ParseMode.HTML,
+        tzinfo=ZoneInfo(settings.default_timezone),
+    )
+
+    app: Application = (
+        Application.builder()
+        .token(settings.telegram_token.get_secret_value())
+        .defaults(defaults)
+        .build()
+    )
     registrar(app)
     registrar_jobs(app)
 
     await app.initialize()
     await app.start()
-    logger.info("Bot iniciado! Habla con el bot en Telegram.")
+    logger.info("Bot iniciado en polling. Habla con el bot en Telegram.")
     await app.updater.start_polling(drop_pending_updates=True)
 
     try:
-        while True:
-            await asyncio.sleep(3600)
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Deteniendo bot...")
+        await _stop_when_signaled()
     finally:
-        await app.updater.stop()
+        logger.info("Deteniendo bot...")
+        try:
+            await app.updater.stop()
+        except Exception:
+            logger.exception("Error stop updater")
         await app.stop()
         await app.shutdown()
         await close_db()
+        await close_redis()
+        logger.info("Bot detenido. Bye.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

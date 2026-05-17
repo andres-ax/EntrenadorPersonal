@@ -1,45 +1,72 @@
+"""Handlers de Telegram: comandos, mensajes, callbacks, foto."""
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import date
 
-import redis.asyncio as aioredis
 import telegram.error
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram.constants import ChatAction
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from agents import RunConfig, Runner, SessionSettings
 from agents.extensions.memory import RedisSession
 
+from src.cache import limpiar_keys_usuario
 from src.coach import coach
 from src.config import settings
-from src.db.repository import eliminar_usuario, obtener_o_crear_usuario
+from src.db.repository import (
+    eliminar_usuario,
+    log_evento,
+    marcar_bot_bloqueado,
+    obtener_o_crear_usuario,
+    obtener_usuario,
+)
 from src.telegram.middlewares import check_rate_limit
 
 logger = logging.getLogger(__name__)
 
-RUN_CONFIG = RunConfig(session_settings=SessionSettings(limit=20))
+RUN_CONFIG = RunConfig(session_settings=SessionSettings(limit=settings.session_limit))
 
 
-async def _enviar_con_retry(message, texto: str, intentos: int = 3):
-    """Envia un mensaje con retry exponencial para manejar timeouts de red."""
+async def _enviar_con_retry(message, texto: str, intentos: int = 3, **kwargs) -> None:
+    """Envia un mensaje con retry exponencial. Marca bot_bloqueado en Forbidden."""
     for i in range(intentos):
         try:
-            await message.reply_text(texto)
+            await message.reply_text(texto, **kwargs)
             return
         except telegram.error.TimedOut:
             if i == intentos - 1:
                 raise
-            await asyncio.sleep(1.5 ** i)
+            await asyncio.sleep(1.5**i)
         except telegram.error.RetryAfter as e:
             await asyncio.sleep(e.retry_after)
             if i == intentos - 1:
                 raise
+        except telegram.error.Forbidden:
+            uid = getattr(message.chat, "id", None)
+            if uid is not None:
+                await marcar_bot_bloqueado(uid, True)
+            logger.info("Bot bloqueado por uid=%s", uid)
+            return
 
 
 async def _build_prompt(texto: str, uid: int) -> str:
-    """Construye el prompt con perfil inyectado para ahorrar una llamada al agente."""
+    """Construye el prompt con perfil + tono + compromiso + streak inyectados."""
     user = await obtener_o_crear_usuario(uid)
-    perfil_parts = [f"uid={uid}", f"fecha={date.today().isoformat()}"]
+    perfil_parts = [
+        f"uid={uid}",
+        f"fecha={date.today().isoformat()}",
+        f"tono={user.tono.value if user.tono else 'firme'}",
+    ]
     if user.nombre:
         perfil_parts.append(f"nombre={user.nombre}")
     if user.peso_kg:
@@ -56,22 +83,28 @@ async def _build_prompt(texto: str, uid: int) -> str:
         perfil_parts.append(f"dias_entreno={user.dias_entreno}")
     if user.deporte_principal:
         perfil_parts.append(f"deporte={user.deporte_principal}")
-    perfil_parts.append(f"onboarding={'si' if user.onboarding_completo else 'no'}")
+    perfil_parts.append(
+        f"onboarding={'si' if user.onboarding_completo else 'no'}"
+    )
     return f"[{' | '.join(perfil_parts)}] {texto}"
 
 
-async def _procesar(message, texto: str, uid: int):
-    """Ejecuta el agente OpenAI con contexto del usuario."""
+async def _procesar(message, texto: str, uid: int) -> None:
+    """Ejecuta el agente con sesion Redis. Sesion DB cerrada antes del LLM."""
     prompt = await _build_prompt(texto, uid)
-    session = RedisSession.from_url(str(uid), url=settings.redis_url)
+    session = RedisSession.from_url(
+        str(uid),
+        url=settings.redis_url_str,
+        ttl=settings.session_ttl_seconds,
+    )
     try:
         result = await Runner.run(
             coach, prompt, session=session, run_config=RUN_CONFIG
         )
         output = result.final_output
         for i in range(0, len(output), 4000):
-            await _enviar_con_retry(message, output[i:i + 4000])
-    except Exception as e:
+            await _enviar_con_retry(message, output[i : i + 4000])
+    except Exception:
         logger.exception("Error procesando mensaje uid=%s", uid)
         await _enviar_con_retry(
             message, "Ups, tuve un problema procesando tu mensaje. Intentalo de nuevo."
@@ -80,36 +113,38 @@ async def _procesar(message, texto: str, uid: int):
         await session.close()
 
 
-async def start(update: Update, ctx):
+async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
     nombre = update.effective_user.first_name
+    if not await check_rate_limit(uid):
+        await update.message.reply_text(
+            "Tranquilo, dame un segundo. Estoy procesando lo anterior."
+        )
+        return
     await obtener_o_crear_usuario(uid, nombre)
-    await update.message.chat.send_action("typing")
+    await log_evento(uid, "start", {"nombre": nombre})
+    await update.message.chat.send_action(ChatAction.TYPING)
     await _procesar(update.message, "Hola, quiero empezar!", uid)
 
 
-async def mensaje(update: Update, ctx):
+async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
-    if not await check_rate_limit(uid):
-        await update.message.reply_text("Tranquilo, estoy procesando. Espera un momento.")
+    texto = update.message.text or ""
+    if len(texto) > settings.max_message_chars:
+        await update.message.reply_text(
+            f"Mensaje muy largo (limite {settings.max_message_chars} chars). Resume."
+        )
         return
-    await update.message.chat.send_action("typing")
-    await _procesar(update.message, update.message.text, uid)
+    if not await check_rate_limit(uid):
+        await update.message.reply_text(
+            "Tranquilo, estoy procesando. Espera un momento."
+        )
+        return
+    await update.message.chat.send_action(ChatAction.TYPING)
+    await _procesar(update.message, texto, uid)
 
 
-async def _limpiar_redis(uid: int):
-    """Elimina todas las keys de sesion del usuario en Redis."""
-    client = aioredis.from_url(settings.redis_url, decode_responses=True)
-    keys = []
-    async for key in client.scan_iter(f"agents:session:{uid}*"):
-        keys.append(key)
-    if keys:
-        await client.delete(*keys)
-    await client.close()
-
-
-async def menu(update: Update, ctx):
-    """Muestra un menu rapido con botones inline."""
+async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Registrar entreno", callback_data="entreno"),
@@ -129,26 +164,30 @@ async def menu(update: Update, ctx):
     )
 
 
-async def reset(update: Update, ctx):
+async def reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Limpia la sesion de Redis del usuario para resolver historial corrupto."""
     uid = update.effective_user.id
     try:
-        await _limpiar_redis(uid)
+        n = await limpiar_keys_usuario(uid)
+        await log_evento(uid, "reset", {"keys_borradas": n})
         await update.message.reply_text(
             "Listo! Tu sesion fue reiniciada. Escribe /start para comenzar de nuevo."
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Error reseteando sesion uid=%s", uid)
         await update.message.reply_text(
             "No pude reiniciar la sesion. Intenta de nuevo en un momento."
         )
 
 
-async def borrar_datos(update: Update, ctx):
-    """Muestra advertencia y boton de confirmacion para eliminar todos los datos."""
-    keyboard = [[InlineKeyboardButton(
-        "Si, borrar TODOS mis datos", callback_data="confirmar_borrado"
-    )]]
+async def borrar_datos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "Si, borrar TODOS mis datos", callback_data="confirmar_borrado"
+            )
+        ]
+    ]
     await update.message.reply_text(
         "Esto eliminara permanentemente TODOS tus datos:\n"
         "- Perfil y onboarding\n"
@@ -161,7 +200,7 @@ async def borrar_datos(update: Update, ctx):
     )
 
 
-async def boton(update: Update, ctx):
+async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     uid = q.from_user.id
@@ -169,7 +208,8 @@ async def boton(update: Update, ctx):
     if q.data == "confirmar_borrado":
         try:
             borrado = await eliminar_usuario(uid)
-            await _limpiar_redis(uid)
+            await limpiar_keys_usuario(uid)
+            await log_evento(uid, "borrar_datos", {"existia": borrado})
             if borrado:
                 await q.edit_message_text(
                     "Todos tus datos han sido eliminados permanentemente. "
@@ -180,7 +220,7 @@ async def boton(update: Update, ctx):
                     "No encontre datos asociados a tu cuenta. "
                     "Usa /start para empezar."
                 )
-        except Exception as e:
+        except Exception:
             logger.exception("Error borrando datos uid=%s", uid)
             await q.edit_message_text(
                 "Hubo un error eliminando tus datos. Intenta de nuevo en un momento."
@@ -197,11 +237,11 @@ async def boton(update: Update, ctx):
         "historial_peso": "Muestrame mi historial de peso",
     }
     texto = mapping.get(q.data, "Hola")
-    await q.message.chat.send_action("typing")
+    await q.message.chat.send_action(ChatAction.TYPING)
     await _procesar(q.message, texto, uid)
 
 
-def registrar(app: Application):
+def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("reset", reset))
