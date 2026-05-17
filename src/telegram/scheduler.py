@@ -148,25 +148,14 @@ async def _entreno_hoy(usuario_id: int) -> bool:
 
 
 async def recordatorio_entreno(context) -> None:
-    """Diario 8am: avisa a quienes llevan 2+ dias sin entrenar."""
-
-    async def _build(u: Usuario) -> str | None:
-        dias = await _dias_sin_entrenar(u.id)
-        if dias < 2:
-            return None
-        return (
-            f"Hey <b>{u.nombre or 'crack'}</b>! Llevas <b>{dias} dias</b> sin "
-            "registrar entrenamiento. Como va todo? Si entrenaste y no lo "
-            "registraste, cuentame. Si descansaste, tambien esta bien, el "
-            "descanso es progreso."
-        )
+    """Diario 8am: dispara el sistema de escalation (entreno/sueno/comida)."""
+    from src.telegram.escalation import disparar_escalado_inicial
 
     try:
-        usuarios = await listar_usuarios_activos()
-        n = await _broadcast(context.bot, usuarios, _build)
-        logger.info("recordatorio_entreno enviado a %s usuarios", n)
+        await disparar_escalado_inicial(context)
+        logger.info("escalation diaria disparada")
     except Exception:
-        logger.exception("Error en recordatorio_entreno")
+        logger.exception("Error en disparar_escalado_inicial")
 
 
 async def recordatorio_peso(context) -> None:
@@ -291,16 +280,19 @@ def registrar_jobs(app: Application) -> None:
         logger.warning("JobQueue no disponible. Instala python-telegram-bot[job-queue]")
         return
 
+    from src.telegram.quiz import quiz_educativo_semanal, quiz_nocturno
+
     jq.run_daily(
         recordatorio_entreno,
         time=HORA_RECORDATORIO_ENTRENO,
-        name="recordatorio_entreno",
+        name="escalation_diaria",
     )
+    jq.run_daily(quiz_nocturno, time=time(21, 30), name="quiz_nocturno")
     jq.run_daily(
-        recordatorio_sueno, time=HORA_RECORDATORIO_SUENO, name="recordatorio_sueno"
-    )
-    jq.run_daily(
-        recordatorio_comida, time=HORA_RECORDATORIO_COMIDA, name="recordatorio_comida"
+        quiz_educativo_semanal,
+        time=time(10, 0),
+        days=(5,),
+        name="quiz_educativo_sabado",
     )
     jq.run_daily(
         checkin_nocturno, time=HORA_CHECKIN_NOCTURNO, name="checkin_nocturno"
@@ -319,5 +311,5 @@ def registrar_jobs(app: Application) -> None:
     )
 
     logger.info(
-        "6 jobs de recordatorios registrados: entreno, sueno, comida, checkin, peso, resumen"
+        "4 jobs registrados: escalation_diaria, checkin_nocturno, recordatorio_peso, resumen_semanal"
     )

@@ -7,7 +7,9 @@ from src.tools import (
     configurar_quiet_hours,
     consultar_compromiso,
     consultar_historial_peso,
+    consultar_resumen_visual,
     consultar_streak,
+    dar_premio_motivacional,
     firmar_compromiso,
     guardar_perfil,
     guardar_pr,
@@ -15,6 +17,7 @@ from src.tools import (
     obtener_perfil,
     obtener_pr,
     pausar,
+    proponer_ejercicio_aleatorio,
     registrar_comida,
     registrar_entreno,
     registrar_peso,
@@ -22,6 +25,7 @@ from src.tools import (
     reporte_progreso,
     resumen_nutricional,
     usar_dia_libre,
+    verificar_logros,
 )
 
 ALL_TOOLS = [
@@ -45,6 +49,10 @@ ALL_TOOLS = [
     pausar,
     usar_dia_libre,
     consultar_streak,
+    proponer_ejercicio_aleatorio,
+    dar_premio_motivacional,
+    verificar_logros,
+    consultar_resumen_visual,
 ]
 
 

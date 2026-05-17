@@ -73,3 +73,13 @@ python-dotenv>=1.0,<2.0
 # Se declara explicito aunque venga de openai-agents[redis] para fijar version
 # y dejar claro que el proyecto depende de el directamente.
 redis>=5.0,<7.0
+
+
+# -----------------------------------------------------------------------------
+# Charts y vision (Fase 6 y 7)
+# -----------------------------------------------------------------------------
+# Matplotlib para generar charts PNG (peso, volumen, macros, streak heatmap).
+matplotlib>=3.8,<4.0
+
+# Pillow para procesar imagenes recibidas (resize antes de mandar a Vision API).
+Pillow>=10.0,<12.0

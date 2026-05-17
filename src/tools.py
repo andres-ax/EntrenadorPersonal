@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 from datetime import date, datetime, timedelta
 
 from agents import function_tool
@@ -711,3 +712,90 @@ async def consultar_streak(telegram_id: int, tipo: str = "entreno") -> str:
     except Exception:
         logger.exception("Error en consultar_streak")
         return _error("no pude consultar el streak")
+
+
+# ============================================================================
+# Engagement (Fase 5/6/7)
+# ============================================================================
+
+
+@function_tool
+async def proponer_ejercicio_aleatorio(telegram_id: int) -> str:
+    """Sortea un foco de ejercicio para hoy. Solo usar si el usuario dice 'no se que entrenar'.
+
+    Args:
+        telegram_id: ID de Telegram del usuario
+    """
+    opciones = ["push", "pull", "piernas", "core + cardio", "movilidad activa", "descanso activo"]
+    eleccion = random.choice(opciones)
+    await log_evento(telegram_id, "rueda_ejercicio", {"eleccion": eleccion})
+    return _ok({"foco_propuesto": eleccion, "mensaje": f"Hoy toca: {eleccion}"})
+
+
+@function_tool
+async def dar_premio_motivacional(telegram_id: int) -> str:
+    """Otorga un sticker/mensaje motivacional aleatorio. Variable reward.
+
+    Args:
+        telegram_id: ID de Telegram del usuario
+    """
+    mensajes = [
+        "Crack, recuerda por que arrancaste.",
+        "Pequenos pasos suman. Hoy es uno mas.",
+        "Tu yo de manana te agradece.",
+        "La consistencia gana a la motivacion.",
+        "Una serie mas. Solo una.",
+        "Eres mas fuerte que tu peor dia.",
+    ]
+    await log_evento(telegram_id, "premio_motivacional", {})
+    return _ok({"mensaje": random.choice(mensajes)})
+
+
+def _detectar_logro_streak(dias: int) -> str | None:
+    if dias in (7, 30, 100, 365):
+        return f"streak_{dias}"
+    return None
+
+
+@function_tool
+async def verificar_logros(telegram_id: int) -> str:
+    """Verifica si el usuario alcanzo un hito (streak 7/30/100/365). Devuelve string del logro o vacio.
+
+    Llamar despues de registrar_entreno.
+
+    Args:
+        telegram_id: ID de Telegram del usuario
+    """
+    try:
+        s = await obtener_o_crear_streak(telegram_id, "entreno")
+        logro = _detectar_logro_streak(s.dias_actuales)
+        if logro:
+            await log_evento(telegram_id, "logro_alcanzado", {"logro": logro})
+            return _ok(
+                {"logro": logro, "dias": s.dias_actuales, "mensaje": f"Hito {logro}!"}
+            )
+        return _ok({"logro": None, "dias": s.dias_actuales})
+    except Exception:
+        logger.exception("Error en verificar_logros")
+        return _error("no pude verificar")
+
+
+@function_tool
+async def consultar_resumen_visual(telegram_id: int) -> str:
+    """Devuelve info para que el handler genere un chart visual del progreso.
+
+    Args:
+        telegram_id: ID de Telegram del usuario
+    """
+    try:
+        rep = await reporte_semanal(telegram_id)
+        return json.dumps(
+            {
+                "tipo": "chart_resumen_semanal",
+                "data": rep,
+                "instruccion": "El bot enviara una imagen con el resumen visual.",
+            },
+            default=str,
+        )
+    except Exception:
+        return _error("no pude generar")

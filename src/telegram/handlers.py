@@ -32,11 +32,17 @@ from agents.extensions.memory import RedisSession
 from src.cache import limpiar_keys_usuario
 from src.coach import coach
 from src.config import settings
+from src.services.crisis import detectar as detectar_crisis
+from src.services.crisis import detectar_diagnostico_output
 from src.db.repository import (
     actualizar_usuario,
     aceptar_modo_militar,
     cambiar_tono as repo_cambiar_tono,
+    contar_fotos_hoy,
     eliminar_usuario,
+    guardar_comida,
+    guardar_feedback_comida,
+    log_crisis,
     log_evento,
     marcar_bot_bloqueado,
     obtener_compromiso_activo,
@@ -141,8 +147,16 @@ async def _build_prompt(texto: str, uid: int) -> str:
     return f"[{' | '.join(perfil_parts)}] {texto}"
 
 
-async def _procesar(message, texto: str, uid: int, with_keyboard: bool = False) -> None:
-    """Ejecuta el agente con sesion Redis. Sesion DB cerrada antes del LLM."""
+async def _procesar(
+    message,
+    texto: str,
+    uid: int,
+    with_keyboard: bool = False,
+    ctx: ContextTypes.DEFAULT_TYPE | None = None,
+) -> None:
+    """Ejecuta el agente con sesion Redis. Sesion DB cerrada antes del LLM.
+    Cancela escalation de los tipos que el usuario cumplio durante el run.
+    """
     prompt = await _build_prompt(texto, uid)
     session = RedisSession.from_url(
         str(uid),
@@ -154,12 +168,26 @@ async def _procesar(message, texto: str, uid: int, with_keyboard: bool = False) 
             coach, prompt, session=session, run_config=RUN_CONFIG
         )
         output = result.final_output
+
+        diag = detectar_diagnostico_output(output)
+        if diag:
+            logger.warning("Output guardrail: diagnostico detectado uid=%s: %s", uid, diag)
+            output = (
+                "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
+                "que un profesional medico/nutricionista/psicologo evalue tu caso. "
+                "Sigamos con habitos concretos: que vamos a hacer hoy?"
+            )
+            await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
+
         chunks = [output[i : i + 4000] for i in range(0, len(output), 4000)] or [""]
         for i, chunk in enumerate(chunks):
             kwargs = {}
             if with_keyboard and i == len(chunks) - 1:
                 kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
             await _enviar_con_retry(message, chunk, **kwargs)
+
+        if ctx is not None and ctx.job_queue is not None:
+            await _autocancelar_escalation_si_cumplio(uid, ctx)
     except Exception:
         logger.exception("Error procesando mensaje uid=%s", uid)
         await _enviar_con_retry(
@@ -167,6 +195,23 @@ async def _procesar(message, texto: str, uid: int, with_keyboard: bool = False) 
         )
     finally:
         await session.close()
+
+
+async def _autocancelar_escalation_si_cumplio(
+    uid: int, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Tras el run del agente, cancela escalation de los tipos cumplidos hoy."""
+    try:
+        from src.telegram.escalation import _ya_cumplio_hoy, cancelar_escalado_hoy
+
+        user = await obtener_usuario(uid)
+        if user is None:
+            return
+        for tipo in ("entreno", "comida", "sueno", "peso"):
+            if await _ya_cumplio_hoy(user.id, tipo):
+                await cancelar_escalado_hoy(uid, ctx, tipo)
+    except Exception:
+        logger.exception("Error cancelando escalation uid=%s", uid)
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -185,6 +230,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "Hola, quiero empezar!",
         uid,
         with_keyboard=user.onboarding_completo,
+        ctx=ctx,
     )
 
 
@@ -202,6 +248,45 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    user = await obtener_usuario(uid)
+    pais = user.pais if user else "CO"
+    crisis = detectar_crisis(texto, pais=pais)
+    if crisis is not None:
+        try:
+            sent = await update.message.reply_text(crisis.mensaje_contenedor)
+            await log_crisis(
+                uid,
+                nivel=crisis.nivel,
+                keywords=crisis.keywords,
+                mensaje_usuario=texto[:500],
+                mensaje_enviado_id=sent.message_id,
+                derivado_a=crisis.lineas_crisis[:120],
+            )
+            if crisis.nivel == 1:
+                await pausar_recordatorios(uid, 7)
+                try:
+                    from src.telegram.escalation import cancelar_escalado_hoy
+
+                    await cancelar_escalado_hoy(uid, ctx, None)
+                except ImportError:
+                    pass
+                if settings.developer_chat_id:
+                    try:
+                        await ctx.bot.send_message(
+                            chat_id=settings.developer_chat_id,
+                            text=(
+                                f"<b>CRISIS NIVEL 1</b> uid={uid} pais={pais}\n"
+                                f"keywords: {crisis.keywords}\n"
+                                f"texto: {texto[:300]}"
+                            ),
+                        )
+                    except Exception:
+                        logger.exception("No pude notificar admin de crisis nivel 1")
+            await log_evento(uid, "crisis_detected", {"nivel": crisis.nivel})
+        except Exception:
+            logger.exception("Error manejando crisis uid=%s", uid)
+        return
+
     await reaccionar(update.message, ctx)
 
     if _CONFIRMACION_ENTRENO.search(texto):
@@ -213,7 +298,7 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             pass
 
     await update.message.chat.send_action(ChatAction.TYPING)
-    await _procesar(update.message, texto, uid)
+    await _procesar(update.message, texto, uid, ctx=ctx)
 
 
 async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -498,6 +583,83 @@ async def cmd_peso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _procesar(update.message, "Quiero registrar mi peso actual", uid)
 
 
+async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]"""
+    from src.services.charts import (
+        chart_macros_dia,
+        chart_peso,
+        chart_reporte_semanal,
+        chart_streak_calendario,
+        chart_volumen_semanal,
+    )
+
+    uid = update.effective_user.id
+    args = ctx.args or []
+    tipo = args[0].lower().strip() if args else "resumen"
+    await update.message.chat.send_action(ChatAction.UPLOAD_PHOTO)
+    fn = {
+        "peso": chart_peso,
+        "volumen": chart_volumen_semanal,
+        "macros": chart_macros_dia,
+        "streak": chart_streak_calendario,
+        "resumen": chart_reporte_semanal,
+    }.get(tipo, chart_reporte_semanal)
+    try:
+        img = await fn(uid)
+        if img is None:
+            await update.message.reply_text(
+                "No tengo suficientes datos para este grafico. Registra mas y vuelve."
+            )
+            return
+        await ctx.bot.send_photo(
+            chat_id=uid, photo=img, caption=f"<b>Tu chart {tipo}</b>"
+        )
+    except Exception:
+        logger.exception("Error generando grafico %s uid=%s", tipo, uid)
+        await update.message.reply_text("No pude generar el grafico ahora.")
+
+
+async def cmd_exportar_csv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Exporta entrenos de los ultimos 30 dias (Pro: ilimitado)."""
+    from datetime import date, timedelta
+    from io import BytesIO
+
+    from src.db.repository import es_usuario_pro, obtener_ultimas_sesiones
+
+    uid = update.effective_user.id
+    es_pro = await es_usuario_pro(uid)
+    limite = 365 if es_pro else 30
+    try:
+        sesiones = await obtener_ultimas_sesiones(uid, limite=500)
+        if not sesiones:
+            await update.message.reply_text("Aun no tienes sesiones registradas.")
+            return
+        corte = date.today() - timedelta(days=limite)
+        sesiones = [s for s in sesiones if s.fecha >= corte]
+        lines = ["fecha,tipo,duracion_min,ejercicio,series,reps,peso_kg,rpe"]
+        for s in sesiones:
+            tipo = s.tipo.value if s.tipo else ""
+            for ej in s.ejercicios:
+                lines.append(
+                    f"{s.fecha},{tipo},{s.duracion_min or ''},{ej.nombre or ''},"
+                    f"{ej.series or ''},{ej.reps or ''},{ej.peso_kg or ''},{ej.rpe or ''}"
+                )
+        csv_bytes = ("\n".join(lines)).encode("utf-8")
+        await ctx.bot.send_document(
+            chat_id=uid,
+            document=BytesIO(csv_bytes),
+            filename=f"entrenos_{date.today().isoformat()}.csv",
+            caption=(
+                f"<b>{len(sesiones)} sesiones</b> exportadas "
+                f"({'Pro - ilimitado' if es_pro else f'free - {limite} dias'})."
+            ),
+        )
+        await log_evento(uid, "exportar_csv", {"n_sesiones": len(sesiones)})
+    except Exception:
+        logger.exception("Error exportando CSV uid=%s", uid)
+        await update.message.reply_text("No pude exportar el CSV. Intenta de nuevo.")
+
+
 async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "<b>Como funciono</b>\n\n"
@@ -603,7 +765,96 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     }
     texto = mapping.get(q.data, "Hola")
     await q.message.chat.send_action(ChatAction.TYPING)
-    await _procesar(q.message, texto, uid)
+    await _procesar(q.message, texto, uid, ctx=ctx)
+
+
+async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Recibe foto del usuario. Si es comida, llama Vision API. Cap 3 fotos/dia free."""
+    from datetime import date
+
+    from src.db.repository import es_usuario_pro
+    from src.services.vision import analizar_comida, resize_si_pesa
+
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+
+    es_pro = await es_usuario_pro(uid)
+    if not es_pro:
+        n = await contar_fotos_hoy(uid)
+        if n >= 3:
+            await update.message.reply_text(
+                "Llegaste al limite de 3 fotos/dia en plan free. "
+                "Manana puedes mas, o /upgrade para Pro."
+            )
+            return
+
+    user = await obtener_usuario(uid)
+    if not user:
+        return
+    objetivo = user.objetivo or "mantenerse"
+    tono = user.tono.value if user.tono else "firme"
+
+    await update.message.chat.send_action(ChatAction.TYPING)
+
+    try:
+        photo = update.message.photo[-1]
+        file = await photo.get_file()
+        raw = bytes(await file.download_as_bytearray())
+        raw = resize_si_pesa(raw)
+    except Exception:
+        logger.exception("Error descargando foto uid=%s", uid)
+        await update.message.reply_text("No pude descargar la foto. Intenta de nuevo.")
+        return
+
+    result = await analizar_comida(raw, objetivo_usuario=objetivo, tono=tono)
+    if "error" in result:
+        if result["error"] == "no_food":
+            await update.message.reply_text(
+                "No detecto comida en esa foto. Mandame foto de tu plato y te ayudo."
+            )
+        else:
+            await update.message.reply_text(
+                "Hubo un problema analizando la foto. Intenta de nuevo en un momento."
+            )
+        return
+
+    try:
+        await guardar_feedback_comida(
+            uid,
+            foto_file_id=photo.file_id,
+            alimentos=result.get("alimentos", []),
+            calorias=result.get("calorias", 0),
+            proteinas=result.get("proteinas_g", 0),
+            carbs=result.get("carbohidratos_g", 0),
+            grasas=result.get("grasas_g", 0),
+            feedback_texto=result.get("feedback", ""),
+        )
+        await guardar_comida(
+            uid,
+            date.today().isoformat(),
+            "almuerzo",
+            result.get("alimentos", []),
+            calorias=result.get("calorias", 0),
+            proteinas=result.get("proteinas_g", 0),
+            carbs=result.get("carbohidratos_g", 0),
+            grasas=result.get("grasas_g", 0),
+        )
+        await log_evento(uid, "photo_meal", {"calorias": result.get("calorias", 0)})
+    except Exception:
+        logger.exception("Error guardando feedback uid=%s", uid)
+
+    alimentos = ", ".join(result.get("alimentos", [])) or "alimentos"
+    respuesta = (
+        f"<b>Detecte:</b> {alimentos}\n"
+        f"<b>~{result.get('calorias', 0)} kcal</b> "
+        f"(P {result.get('proteinas_g', 0):.0f}g / "
+        f"C {result.get('carbohidratos_g', 0):.0f}g / "
+        f"G {result.get('grasas_g', 0):.0f}g)\n\n"
+        f"{result.get('feedback', '')}"
+    )
+    await update.message.reply_text(respuesta)
 
 
 def registrar(app: Application) -> None:
@@ -627,5 +878,12 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("compromiso", cmd_compromiso))
     app.add_handler(CommandHandler("firmar_compromiso", cmd_firmar_compromiso))
     app.add_handler(CommandHandler("peso", cmd_peso))
+    app.add_handler(CommandHandler("grafico", cmd_grafico))
+    app.add_handler(CommandHandler("exportar_csv", cmd_exportar_csv))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensaje))
+    app.add_handler(MessageHandler(filters.PHOTO, recibir_foto))
     app.add_handler(CallbackQueryHandler(boton))
+
+    from src.telegram.quiz import registrar_handlers_quiz
+
+    registrar_handlers_quiz(app)
