@@ -23,7 +23,8 @@ _NEGATIVOS = re.compile(
     re.IGNORECASE,
 )
 _LESION = re.compile(
-    r"\b(lesi[oó]n|me\s+duele|dolor|fract|esguinc|tor(c|s)i|inflamad|hinchad)\b",
+    r"\b(lesion|lesione|lesionad|me\s+duele|dolor\s|fract|esguinc|"
+    r"tor(c|s)i|inflamad|hinchad)\b",
     re.IGNORECASE,
 )
 _FIESTA = re.compile(
@@ -54,6 +55,8 @@ def _decidir_emoji(texto: str) -> tuple[ReactionEmoji | None, bool]:
         return ReactionEmoji.RED_HEART, True
     if _LESION.search(texto):
         return ReactionEmoji.RED_HEART, False
+    if _NEGATIVOS.search(texto):
+        return ReactionEmoji.LOUDLY_CRYING_FACE, False
     if _PR_PROBABLE.search(texto):
         return ReactionEmoji.FIRE, True
     if _FIESTA.search(texto):
@@ -62,8 +65,6 @@ def _decidir_emoji(texto: str) -> tuple[ReactionEmoji | None, bool]:
         return ReactionEmoji.HIGH_VOLTAGE, False
     if _POSITIVOS.search(texto):
         return ReactionEmoji.FIRE, False
-    if _NEGATIVOS.search(texto):
-        return ReactionEmoji.LOUDLY_CRYING_FACE, False
     return None, False
 
 

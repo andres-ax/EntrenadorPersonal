@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import date
+from datetime import date, datetime
 
 import telegram.error
 from telegram import (
@@ -13,6 +13,7 @@ from telegram import (
     InlineKeyboardMarkup,
     KeyboardButton,
     KeyboardButtonRequestChat,
+    LabeledPrice,
     ReplyKeyboardMarkup,
     Update,
 )
@@ -23,6 +24,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    PreCheckoutQueryHandler,
     filters,
 )
 
@@ -583,6 +585,74 @@ async def cmd_peso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _procesar(update.message, "Quiero registrar mi peso actual", uid)
 
 
+async def cmd_upgrade(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Envia invoice para activar EntrenadorAX Pro (100 Stars/mes ~ USD 1.99)."""
+    uid = update.effective_user.id
+    try:
+        await ctx.bot.send_invoice(
+            chat_id=uid,
+            title="EntrenadorAX Pro",
+            description=(
+                "1 mes de Pro:\n"
+                "- Voz del coach en mensajes intensos\n"
+                "- Photo meal feedback ilimitado\n"
+                "- Charts avanzados y export CSV ilimitado\n"
+                "- Recordatorios prioritarios\n"
+                "- Sin cap de plan generator"
+            ),
+            payload=f"pro_mensual_{uid}_{int(datetime.utcnow().timestamp())}",
+            currency="XTR",
+            prices=[LabeledPrice("EntrenadorAX Pro Mensual", 100)],
+            start_parameter="upgrade_pro",
+        )
+        await log_evento(uid, "upgrade_invoice_enviado", {})
+    except Exception:
+        logger.exception("Error enviando invoice uid=%s", uid)
+        await update.message.reply_text("No pude crear el pago ahora. Reintenta en un momento.")
+
+
+async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Aprueba el pre-checkout en <10s. Validaciones aqui (cupon usado, etc)."""
+    q = update.pre_checkout_query
+    try:
+        await q.answer(ok=True)
+    except Exception:
+        logger.exception("Error en precheckout_handler")
+
+
+async def successful_payment_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Activa Pro al recibir successful_payment."""
+    from src.db.repository import activar_suscripcion_pro
+
+    uid = update.effective_user.id
+    payment = update.message.successful_payment
+    try:
+        await activar_suscripcion_pro(
+            uid,
+            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+            star_amount=payment.total_amount,
+            dias=30,
+        )
+        await log_evento(
+            uid,
+            "pro_activado",
+            {
+                "stars": payment.total_amount,
+                "charge_id": payment.telegram_payment_charge_id,
+            },
+        )
+        await update.message.reply_text(
+            "<b>EntrenadorAX Pro activado!</b> Gracias por confiar. "
+            "Vas a notar voz en mensajes intensos, photos ilimitadas y charts top. "
+            "Cualquier cosa, /ayuda."
+        )
+    except Exception:
+        logger.exception("Error activando Pro uid=%s", uid)
+        await update.message.reply_text(
+            "Recibi el pago pero hubo problema activando. Contacta soporte."
+        )
+
+
 async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]"""
     from src.services.charts import (
@@ -880,6 +950,11 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("peso", cmd_peso))
     app.add_handler(CommandHandler("grafico", cmd_grafico))
     app.add_handler(CommandHandler("exportar_csv", cmd_exportar_csv))
+    app.add_handler(CommandHandler("upgrade", cmd_upgrade))
+    app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
+    app.add_handler(
+        MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler)
+    )
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensaje))
     app.add_handler(MessageHandler(filters.PHOTO, recibir_foto))
     app.add_handler(CallbackQueryHandler(boton))

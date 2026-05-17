@@ -67,7 +67,16 @@ async def main() -> None:
     await app.initialize()
     await app.start()
     logger.info("Bot iniciado en polling. Habla con el bot en Telegram.")
-    await app.updater.start_polling(drop_pending_updates=True)
+    await app.updater.start_polling(
+        drop_pending_updates=True,
+        allowed_updates=[
+            "message",
+            "callback_query",
+            "poll_answer",
+            "message_reaction",
+            "pre_checkout_query",
+        ],
+    )
 
     try:
         await _stop_when_signaled()

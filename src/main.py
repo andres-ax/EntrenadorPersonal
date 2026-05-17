@@ -155,3 +155,75 @@ async def webhook_info(x_admin_token: str = Header(None)) -> dict:
             "url=<webhook_url>&secret_token=<secret_token>'"
         ),
     }
+
+
+@app.get("/admin/stats")
+async def admin_stats(x_admin_token: str = Header(None)) -> dict:
+    """Estadisticas basicas. Protegido por X-Admin-Token."""
+    from datetime import date as date_t
+    from datetime import timedelta
+
+    from sqlalchemy import func, select
+
+    from src.db.connection import async_session_factory
+    from src.db.models import (
+        CrisisLog,
+        EventoBot,
+        Suscripcion,
+        Usuario,
+    )
+
+    if x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(403, "Acceso denegado")
+    hoy = date_t.today()
+    hace_30 = hoy - timedelta(days=30)
+    async with async_session_factory() as session:
+        total_users = (
+            await session.execute(select(func.count(Usuario.id)))
+        ).scalar() or 0
+        onboarded = (
+            await session.execute(
+                select(func.count(Usuario.id)).where(
+                    Usuario.onboarding_completo == True  # noqa: E712
+                )
+            )
+        ).scalar() or 0
+        bloqueados = (
+            await session.execute(
+                select(func.count(Usuario.id)).where(
+                    Usuario.bot_bloqueado == True  # noqa: E712
+                )
+            )
+        ).scalar() or 0
+        pro_activos = (
+            await session.execute(
+                select(func.count(Suscripcion.id)).where(
+                    Suscripcion.activa == True,  # noqa: E712
+                )
+            )
+        ).scalar() or 0
+        eventos_30d = (
+            await session.execute(
+                select(EventoBot.tipo_evento, func.count(EventoBot.id))
+                .where(EventoBot.creado_en >= hace_30)
+                .group_by(EventoBot.tipo_evento)
+            )
+        ).all()
+        crisis_30d = (
+            await session.execute(
+                select(CrisisLog.nivel, func.count(CrisisLog.id))
+                .where(CrisisLog.creado_en >= hace_30)
+                .group_by(CrisisLog.nivel)
+            )
+        ).all()
+    return {
+        "fecha": hoy.isoformat(),
+        "usuarios": {
+            "total": total_users,
+            "onboarded": onboarded,
+            "bloqueados": bloqueados,
+            "pro_activos": pro_activos,
+        },
+        "eventos_30d": {tipo: cnt for tipo, cnt in eventos_30d},
+        "crisis_30d_por_nivel": {nivel: cnt for nivel, cnt in crisis_30d},
+    }
