@@ -1,0 +1,28 @@
+# =============================================================================
+# EntrenadorAX - Dependencias de desarrollo
+# =============================================================================
+# Instalacion (incluye produccion):
+#   pip install -r requirements.txt -r requirements-dev.txt
+# =============================================================================
+
+-r requirements.txt
+
+
+# -----------------------------------------------------------------------------
+# Testing
+# -----------------------------------------------------------------------------
+# Framework de tests.
+pytest>=8,<9
+
+# Soporte para `async def test_...` (requerido por handlers/scheduler asyncio).
+pytest-asyncio>=0.25,<1.0
+
+# Cliente HTTP async usado para testear endpoints FastAPI (TestClient/AsyncClient).
+httpx>=0.28,<1.0
+
+
+# -----------------------------------------------------------------------------
+# Linting / formato
+# -----------------------------------------------------------------------------
+# Linter + formateador. Configurado en pyproject.toml ([tool.ruff]).
+ruff>=0.8,<1.0

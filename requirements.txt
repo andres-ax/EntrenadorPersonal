@@ -1,0 +1,71 @@
+# =============================================================================
+# EntrenadorAX - Dependencias de produccion
+# =============================================================================
+# Python: >=3.11 (probado con 3.12 en Docker)
+# Instalacion:
+#   pip install -r requirements.txt
+#
+# Para desarrollo (tests + lint) instalar ademas:
+#   pip install -r requirements-dev.txt
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Agente IA (OpenAI Agents SDK)
+# -----------------------------------------------------------------------------
+# Framework de agentes de OpenAI. El extra [redis] habilita RedisSession
+# (memoria conversacional persistente) que se usa en src/telegram/handlers.py.
+# Trae como deps transitivas: openai, pydantic, httpx, redis.
+openai-agents[redis]>=0.14,<1.0
+
+
+# -----------------------------------------------------------------------------
+# Bot de Telegram
+# -----------------------------------------------------------------------------
+# Cliente oficial de Telegram para Python (async).
+# El extra [job-queue] instala APScheduler y tzlocal, requeridos por
+# src/telegram/scheduler.py para los recordatorios diarios/semanales.
+python-telegram-bot[job-queue]>=22.7,<23.0
+
+
+# -----------------------------------------------------------------------------
+# Servidor web (modo webhook en produccion)
+# -----------------------------------------------------------------------------
+# FastAPI expone /webhook y /health en src/main.py (Railway production).
+fastapi>=0.115,<1.0
+
+# Servidor ASGI. El extra [standard] incluye uvloop, httptools, watchfiles,
+# websockets y python-dotenv (loops mas rapidos y reload en dev).
+uvicorn[standard]>=0.34,<1.0
+
+
+# -----------------------------------------------------------------------------
+# Base de datos (PostgreSQL async)
+# -----------------------------------------------------------------------------
+# Driver async nativo de PostgreSQL usado por SQLAlchemy (postgresql+asyncpg).
+asyncpg>=0.30,<1.0
+
+# ORM principal. El extra [asyncio] garantiza soporte de AsyncEngine /
+# AsyncSession usados en src/db/connection.py.
+sqlalchemy[asyncio]>=2.0,<3.0
+
+
+# -----------------------------------------------------------------------------
+# Configuracion y entorno
+# -----------------------------------------------------------------------------
+# Carga settings desde variables de entorno y .env (src/config.py).
+pydantic-settings>=2.7,<3.0
+
+# Carga manual del archivo .env en run_bot.py y scripts/reset_db.py.
+python-dotenv>=1.0,<2.0
+
+
+# -----------------------------------------------------------------------------
+# Cache / rate limiting (Redis async)
+# -----------------------------------------------------------------------------
+# Cliente Redis async (redis.asyncio) usado directamente en
+# src/telegram/middlewares.py (rate limit por usuario) y en
+# src/telegram/handlers.py (limpieza de sesiones).
+# Se declara explicito aunque venga de openai-agents[redis] para fijar version
+# y dejar claro que el proyecto depende de el directamente.
+redis>=5.0,<7.0
