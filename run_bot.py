@@ -20,6 +20,7 @@ from telegram.ext import Application, Defaults  # noqa: E402
 from src.cache import close_redis  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.db.connection import close_db, init_db  # noqa: E402
+from src.telegram.bot_setup import setup_bot  # noqa: E402
 from src.telegram.handlers import registrar  # noqa: E402
 from src.telegram.scheduler import registrar_jobs  # noqa: E402
 
@@ -57,6 +58,7 @@ async def main() -> None:
         Application.builder()
         .token(settings.telegram_token.get_secret_value())
         .defaults(defaults)
+        .post_init(setup_bot)
         .build()
     )
     registrar(app)

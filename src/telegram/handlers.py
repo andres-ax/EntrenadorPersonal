@@ -3,10 +3,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import date
 
 import telegram.error
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    ForceReply,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    KeyboardButtonRequestChat,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
@@ -24,17 +33,46 @@ from src.cache import limpiar_keys_usuario
 from src.coach import coach
 from src.config import settings
 from src.db.repository import (
+    actualizar_usuario,
+    aceptar_modo_militar,
+    cambiar_tono as repo_cambiar_tono,
     eliminar_usuario,
     log_evento,
     marcar_bot_bloqueado,
+    obtener_compromiso_activo,
     obtener_o_crear_usuario,
+    obtener_o_crear_streak,
     obtener_usuario,
+    pausar_recordatorios,
+    set_quiet_hours,
+    ultimos_eventos,
+    usar_freeze_streak,
 )
 from src.telegram.middlewares import check_rate_limit
+from src.telegram.reacciones import reaccionar
 
 logger = logging.getLogger(__name__)
 
 RUN_CONFIG = RunConfig(session_settings=SessionSettings(limit=settings.session_limit))
+
+
+QUICK_ACTIONS_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton("Entrene"), KeyboardButton("Comi")],
+        [KeyboardButton("Dormi"), KeyboardButton("Peso")],
+        [KeyboardButton("Mi semana"), KeyboardButton("Plan de hoy")],
+    ],
+    is_persistent=True,
+    resize_keyboard=True,
+    input_field_placeholder="Escribi o tap",
+)
+
+
+_CONFIRMACION_ENTRENO = re.compile(
+    r"\b(entren[ée]|listo|hecho|termin[eé]|ya\s+lo\s+hice|complet[eé]|hice\s+pierna|"
+    r"hice\s+pecho|hice\s+espalda|hice\s+brazo)\b",
+    re.IGNORECASE,
+)
 
 
 async def _enviar_con_retry(message, texto: str, intentos: int = 3, **kwargs) -> None:
@@ -83,13 +121,27 @@ async def _build_prompt(texto: str, uid: int) -> str:
         perfil_parts.append(f"dias_entreno={user.dias_entreno}")
     if user.deporte_principal:
         perfil_parts.append(f"deporte={user.deporte_principal}")
+    if user.timezone:
+        perfil_parts.append(f"tz={user.timezone}")
     perfil_parts.append(
         f"onboarding={'si' if user.onboarding_completo else 'no'}"
     )
+    compromiso = await obtener_compromiso_activo(uid)
+    if compromiso:
+        perfil_parts.append(
+            f"compromiso='{compromiso.objetivo_texto[:80]}' (deadline={compromiso.deadline.isoformat()})"
+        )
+    try:
+        streak = await obtener_o_crear_streak(uid, "entreno")
+        perfil_parts.append(f"streak_entreno={streak.dias_actuales}")
+    except Exception:
+        pass
+    if user.pausado_hasta and user.pausado_hasta >= date.today():
+        perfil_parts.append(f"pausado_hasta={user.pausado_hasta.isoformat()}")
     return f"[{' | '.join(perfil_parts)}] {texto}"
 
 
-async def _procesar(message, texto: str, uid: int) -> None:
+async def _procesar(message, texto: str, uid: int, with_keyboard: bool = False) -> None:
     """Ejecuta el agente con sesion Redis. Sesion DB cerrada antes del LLM."""
     prompt = await _build_prompt(texto, uid)
     session = RedisSession.from_url(
@@ -102,8 +154,12 @@ async def _procesar(message, texto: str, uid: int) -> None:
             coach, prompt, session=session, run_config=RUN_CONFIG
         )
         output = result.final_output
-        for i in range(0, len(output), 4000):
-            await _enviar_con_retry(message, output[i : i + 4000])
+        chunks = [output[i : i + 4000] for i in range(0, len(output), 4000)] or [""]
+        for i, chunk in enumerate(chunks):
+            kwargs = {}
+            if with_keyboard and i == len(chunks) - 1:
+                kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
+            await _enviar_con_retry(message, chunk, **kwargs)
     except Exception:
         logger.exception("Error procesando mensaje uid=%s", uid)
         await _enviar_con_retry(
@@ -121,10 +177,15 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "Tranquilo, dame un segundo. Estoy procesando lo anterior."
         )
         return
-    await obtener_o_crear_usuario(uid, nombre)
+    user = await obtener_o_crear_usuario(uid, nombre)
     await log_evento(uid, "start", {"nombre": nombre})
     await update.message.chat.send_action(ChatAction.TYPING)
-    await _procesar(update.message, "Hola, quiero empezar!", uid)
+    await _procesar(
+        update.message,
+        "Hola, quiero empezar!",
+        uid,
+        with_keyboard=user.onboarding_completo,
+    )
 
 
 async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -140,6 +201,17 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "Tranquilo, estoy procesando. Espera un momento."
         )
         return
+
+    await reaccionar(update.message, ctx)
+
+    if _CONFIRMACION_ENTRENO.search(texto):
+        try:
+            from src.telegram.escalation import cancelar_escalado_hoy
+
+            await cancelar_escalado_hoy(uid, ctx, "entreno")
+        except ImportError:
+            pass
+
     await update.message.chat.send_action(ChatAction.TYPING)
     await _procesar(update.message, texto, uid)
 
@@ -158,9 +230,18 @@ async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             InlineKeyboardButton("Reporte semanal", callback_data="reporte"),
             InlineKeyboardButton("Historial de peso", callback_data="historial_peso"),
         ],
+        [
+            InlineKeyboardButton("Mi compromiso", callback_data="compromiso"),
+            InlineKeyboardButton("Cambiar tono", callback_data="cambiar_tono"),
+        ],
     ]
     await update.message.reply_text(
-        "Que quieres hacer?", reply_markup=InlineKeyboardMarkup(keyboard)
+        "Que quieres hacer?",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+    await update.message.reply_text(
+        "Tip: usa los botones de abajo siempre que quieras.",
+        reply_markup=QUICK_ACTIONS_KEYBOARD,
     )
 
 
@@ -200,10 +281,292 @@ async def borrar_datos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def cmd_pausa(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pausa recordatorios N dias (default 1)."""
+    uid = update.effective_user.id
+    args = ctx.args or []
+    try:
+        dias = max(1, min(30, int(args[0]))) if args else 1
+    except (ValueError, IndexError):
+        dias = 1
+    await pausar_recordatorios(uid, dias)
+    await log_evento(uid, "pausa", {"dias": dias})
+    await update.message.reply_text(
+        f"Pausa de <b>{dias} dia(s)</b>. No te molesto. Cuando estes listo, escribeme."
+    )
+
+
+async def cmd_porque_me_escribiste(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Transparencia algoritmica: muestra los ultimos 3 eventos del bot."""
+    uid = update.effective_user.id
+    eventos = await ultimos_eventos(uid, limit=3)
+    if not eventos:
+        await update.message.reply_text(
+            "No tengo registros recientes que mostrarte."
+        )
+        return
+    lineas = ["<b>Por que te escribi recientemente:</b>"]
+    for e in eventos:
+        cuando = e.creado_en.strftime("%Y-%m-%d %H:%M") if e.creado_en else "?"
+        lineas.append(f"- <code>{cuando}</code> {e.tipo_evento}")
+    lineas.append("\nSi alguno te incomoda, usa /tono o /pausa.")
+    await update.message.reply_text("\n".join(lineas))
+
+
+async def cmd_tono(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Inline keyboard con los 3 tonos."""
+    keyboard = [
+        [
+            InlineKeyboardButton("Amigable", callback_data="tono:amigable"),
+            InlineKeyboardButton("Firme", callback_data="tono:firme"),
+            InlineKeyboardButton("Militar", callback_data="tono:militar"),
+        ]
+    ]
+    user = await obtener_usuario(update.effective_user.id)
+    actual = user.tono.value if user and user.tono else "firme"
+    await update.message.reply_text(
+        f"Tu tono actual: <b>{actual}</b>.\n\n"
+        "Elige nuevo tono:\n"
+        "- <b>Amigable</b>: empatico, suave.\n"
+        "- <b>Firme</b>: directo, te recuerda los compromisos.\n"
+        "- <b>Militar</b>: imperativo, escala fuerte cuando fallas.\n",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def cmd_quiet_hours(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00"""
+    uid = update.effective_user.id
+    args = ctx.args or []
+    if len(args) != 2:
+        await update.message.reply_text(
+            "Uso: <code>/quiet_hours HH:MM HH:MM</code>\n"
+            "Ej: <code>/quiet_hours 22:00 07:00</code>"
+        )
+        return
+    try:
+        inicio, fin = args[0], args[1]
+        await set_quiet_hours(uid, inicio, fin)
+        await log_evento(uid, "quiet_hours", {"inicio": inicio, "fin": fin})
+        await update.message.reply_text(
+            f"Listo. No te molesto entre <b>{inicio}</b> y <b>{fin}</b>."
+        )
+    except Exception:
+        await update.message.reply_text(
+            "Formato invalido. Usa HH:MM 24h: <code>/quiet_hours 22:00 07:00</code>"
+        )
+
+
+async def cmd_apagar_firme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Baja el tono a amigable y reduce intensidad."""
+    uid = update.effective_user.id
+    await repo_cambiar_tono(uid, "amigable")
+    await log_evento(uid, "apagar_firme", {})
+    await update.message.reply_text(
+        "Tono cambiado a <b>amigable</b>. Voy a bajar la intensidad de los "
+        "recordatorios. Si necesitas pausa total, usa /pausa N."
+    )
+
+
+async def cmd_salir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Offboarding etico: tono amigable + pausa larga + opcion borrar datos."""
+    uid = update.effective_user.id
+    await repo_cambiar_tono(uid, "amigable")
+    await pausar_recordatorios(uid, 30)
+    await log_evento(uid, "salir", {})
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "Si, borrar todo", callback_data="confirmar_borrado"
+            )
+        ]
+    ]
+    await update.message.reply_text(
+        "Listo. Pause los recordatorios <b>30 dias</b> y baje el tono a amigable.\n\n"
+        "Cuando quieras retomar, escribime y volvemos a la rutina.\n\n"
+        "Si prefieres borrar todos tus datos, pulsa abajo:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def cmd_dia_libre(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Consume 1 freeze para no romper el streak hoy."""
+    uid = update.effective_user.id
+    ok = await usar_freeze_streak(uid, "entreno")
+    if ok:
+        await log_evento(uid, "dia_libre", {"ok": True})
+        await update.message.reply_text(
+            "Listo, dia libre usado. No rompe tu streak. Manana volvemos."
+        )
+    else:
+        await update.message.reply_text(
+            "No tienes <i>freezes</i> disponibles. Se regenera 1 cada 30 dias."
+        )
+
+
+async def cmd_feedback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pide rating 1-5 con ForceReply."""
+    await update.message.reply_text(
+        "Como te estoy tratando? Responde con un numero del <b>1 al 5</b>.",
+        reply_markup=ForceReply(selective=True, input_field_placeholder="1-5"),
+    )
+
+
+async def cmd_presumir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Compartir ultimo PR a un grupo del usuario."""
+    keyboard = [
+        [
+            KeyboardButton(
+                "Elegir chat para compartir",
+                request_chat=KeyboardButtonRequestChat(
+                    request_id=1,
+                    chat_is_channel=False,
+                ),
+            )
+        ]
+    ]
+    await update.message.reply_text(
+        "Elige el chat donde quieres presumir tu PR:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard, resize_keyboard=True, one_time_keyboard=True
+        ),
+    )
+
+
+async def cmd_hoy(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delega al agente: que toca hoy."""
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+    await update.message.chat.send_action(ChatAction.TYPING)
+    await _procesar(update.message, "Que toca hoy en mi plan?", uid)
+
+
+async def cmd_pr(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delega al agente: lista mis PRs."""
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+    await update.message.chat.send_action(ChatAction.TYPING)
+    await _procesar(update.message, "Lista todos mis PRs", uid)
+
+
+async def cmd_reporte(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delega al agente: reporte semanal."""
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+    await update.message.chat.send_action(ChatAction.TYPING)
+    await _procesar(update.message, "Dame mi reporte semanal completo", uid)
+
+
+async def cmd_compromiso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delega al agente: ver o firmar compromiso."""
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+    await update.message.chat.send_action(ChatAction.TYPING)
+    user = await obtener_usuario(uid)
+    compromiso = await obtener_compromiso_activo(uid) if user else None
+    if compromiso:
+        await _procesar(update.message, "Muestrame mi compromiso actual", uid)
+    else:
+        await _procesar(
+            update.message, "Quiero firmar un nuevo compromiso conmigo mismo", uid
+        )
+
+
+async def cmd_firmar_compromiso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Atajo al flow de firma."""
+    uid = update.effective_user.id
+    await update.message.chat.send_action(ChatAction.TYPING)
+    await _procesar(
+        update.message, "Quiero firmar un compromiso conmigo mismo", uid
+    )
+
+
+async def cmd_peso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+    await update.message.chat.send_action(ChatAction.TYPING)
+    await _procesar(update.message, "Quiero registrar mi peso actual", uid)
+
+
+async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "<b>Como funciono</b>\n\n"
+        "1) Escribime cualquier cosa: 'hice pierna hoy, 4x8 sentadilla 80kg', "
+        "'almorce pollo y arroz', 'dormi 7h', 'peso 82kg'.\n"
+        "2) Yo te recuerdo entrenar, comer y dormir si no lo haces.\n"
+        "3) Mientras mas faltes a tu compromiso, mas intenso me pongo.\n"
+        "4) Comandos clave:\n"
+        "   /menu - acciones rapidas\n"
+        "   /tono - cambiar entre amigable/firme/militar\n"
+        "   /pausa N - silenciarme N dias\n"
+        "   /compromiso - ver mi pacto contigo\n"
+        "   /pr - mis personal records\n"
+        "   /reporte - resumen semanal\n"
+        "   /ayuda - este texto\n"
+        "   /salir - bajar tono y reducir mensajes\n"
+        "   /borrar_datos - eliminar todo\n\n"
+        "<b>Privacidad:</b> tus datos viven en tu instancia. Puedes borrar todo "
+        "cuando quieras con /borrar_datos."
+    )
+
+
 async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     uid = q.from_user.id
+
+    if q.data.startswith("tono:"):
+        nuevo = q.data.split(":", 1)[1]
+        if nuevo == "militar":
+            user = await obtener_usuario(uid)
+            if user is None or user.modo_militar_aceptado_en is None:
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "Acepto el modo militar",
+                            callback_data="aceptar_militar",
+                        )
+                    ]
+                ]
+                await q.edit_message_text(
+                    "<b>Modo militar - disclaimer</b>\n\n"
+                    "Te enviare mensajes mas intensos escalando frecuencia y "
+                    "dureza si fallas tu compromiso. NUNCA cruzaremos a "
+                    "humillaciones, ataques al cuerpo o lenguaje toxico. Maximo "
+                    "2 mensajes/dia y cada 30 dias te pregunto si quieres "
+                    "seguir.\n\n"
+                    "<b>NO recomiendo</b> modo militar si tienes o tuviste: "
+                    "ansiedad, depresion, trastorno alimenticio, TOC, PTSD, "
+                    "dismorfia corporal, RED-S, embarazo, postparto reciente, "
+                    "o eres menor de 18. Si estas en tratamiento, consultalo "
+                    "con tu profesional antes.\n\n"
+                    "Aceptas?",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+                return
+        await repo_cambiar_tono(uid, nuevo)
+        await log_evento(uid, "cambio_tono", {"tono": nuevo})
+        await q.edit_message_text(f"Tono cambiado a <b>{nuevo}</b>.")
+        return
+
+    if q.data == "aceptar_militar":
+        await aceptar_modo_militar(uid)
+        await repo_cambiar_tono(uid, "militar")
+        await log_evento(uid, "acepto_militar", {})
+        await q.edit_message_text(
+            "Aceptado. Modo militar activado. <b>Sin excusas.</b>"
+        )
+        return
 
     if q.data == "confirmar_borrado":
         try:
@@ -235,6 +598,8 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "peso": "Quiero registrar mi peso actual",
         "reporte": "Como voy esta semana? Dame mi reporte",
         "historial_peso": "Muestrame mi historial de peso",
+        "compromiso": "Quiero ver o firmar mi compromiso",
+        "cambiar_tono": "Quiero cambiar el tono del coach",
     }
     texto = mapping.get(q.data, "Hola")
     await q.message.chat.send_action(ChatAction.TYPING)
@@ -246,5 +611,21 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("reset", reset))
     app.add_handler(CommandHandler("borrar_datos", borrar_datos))
+    app.add_handler(CommandHandler("pausa", cmd_pausa))
+    app.add_handler(CommandHandler("porque_me_escribiste", cmd_porque_me_escribiste))
+    app.add_handler(CommandHandler("ayuda", cmd_ayuda))
+    app.add_handler(CommandHandler("tono", cmd_tono))
+    app.add_handler(CommandHandler("quiet_hours", cmd_quiet_hours))
+    app.add_handler(CommandHandler("apagar_firme", cmd_apagar_firme))
+    app.add_handler(CommandHandler("salir", cmd_salir))
+    app.add_handler(CommandHandler("dia_libre", cmd_dia_libre))
+    app.add_handler(CommandHandler("feedback", cmd_feedback))
+    app.add_handler(CommandHandler("presumir", cmd_presumir))
+    app.add_handler(CommandHandler("hoy", cmd_hoy))
+    app.add_handler(CommandHandler("pr", cmd_pr))
+    app.add_handler(CommandHandler("reporte", cmd_reporte))
+    app.add_handler(CommandHandler("compromiso", cmd_compromiso))
+    app.add_handler(CommandHandler("firmar_compromiso", cmd_firmar_compromiso))
+    app.add_handler(CommandHandler("peso", cmd_peso))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensaje))
     app.add_handler(CallbackQueryHandler(boton))

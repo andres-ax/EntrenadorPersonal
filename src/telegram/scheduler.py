@@ -39,11 +39,20 @@ _SEND_DELAY_S = 0.04
 
 
 async def _enviar_safe(
-    bot, chat_id: int, texto: str, parse_mode: str | None = ParseMode.HTML
+    bot,
+    chat_id: int,
+    texto: str,
+    parse_mode: str | None = ParseMode.HTML,
+    silent: bool = False,
 ) -> None:
     async with _SEND_SEMAPHORE:
         try:
-            await bot.send_message(chat_id=chat_id, text=texto, parse_mode=parse_mode)
+            await bot.send_message(
+                chat_id=chat_id,
+                text=texto,
+                parse_mode=parse_mode,
+                disable_notification=silent,
+            )
             await asyncio.sleep(_SEND_DELAY_S)
         except telegram.error.Forbidden:
             await marcar_bot_bloqueado(chat_id, True)
@@ -58,6 +67,7 @@ async def _broadcast(
     bot,
     usuarios: list[Usuario],
     builder: Callable[[Usuario], Awaitable[str | None]],
+    silent: bool = False,
 ) -> int:
     """Construye un mensaje por usuario y los envia en paralelo (rate-limited)."""
     pares: list[tuple[int, str]] = []
@@ -70,7 +80,9 @@ async def _broadcast(
             logger.exception("Error construyendo mensaje para %s", u.telegram_id)
     if not pares:
         return 0
-    await asyncio.gather(*[_enviar_safe(bot, uid, txt) for uid, txt in pares])
+    await asyncio.gather(
+        *[_enviar_safe(bot, uid, txt, silent=silent) for uid, txt in pares]
+    )
     return len(pares)
 
 
@@ -202,7 +214,7 @@ async def resumen_semanal(context) -> None:
 
     try:
         usuarios = await listar_usuarios_activos()
-        await _broadcast(context.bot, usuarios, _build)
+        await _broadcast(context.bot, usuarios, _build, silent=True)
     except Exception:
         logger.exception("Error en resumen_semanal")
 
@@ -267,7 +279,7 @@ async def checkin_nocturno(context) -> None:
 
     try:
         usuarios = await listar_usuarios_activos()
-        await _broadcast(context.bot, usuarios, _build)
+        await _broadcast(context.bot, usuarios, _build, silent=True)
     except Exception:
         logger.exception("Error en checkin_nocturno")
 

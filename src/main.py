@@ -16,6 +16,7 @@ from telegram.ext import Application, Defaults
 from src.cache import close_redis, ping as ping_redis
 from src.config import settings
 from src.db.connection import close_db, engine, init_db, ping as ping_db
+from src.telegram.bot_setup import setup_bot
 from src.telegram.handlers import registrar
 from src.telegram.scheduler import registrar_jobs
 
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
         Application.builder()
         .token(settings.telegram_token.get_secret_value())
         .defaults(defaults)
+        .post_init(setup_bot)
         .build()
     )
     registrar(telegram_app)
