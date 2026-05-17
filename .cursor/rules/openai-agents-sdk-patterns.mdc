@@ -1,0 +1,145 @@
+---
+description: Reglas estrictas del OpenAI Agents SDK (>=0.14) que aplican al definir Agents y function_tool en src/coach.py y src/tools.py
+globs: src/{coach,tools}.py
+alwaysApply: false
+---
+
+# OpenAI Agents SDK - Reglas estrictas
+
+Para profundizar: skill `.cursor/skills/openai-agents-sdk/` (SKILL.md + 4 referencias).
+
+## 1. `@function_tool` requiere docstring Google-style con `Args:`
+
+El SDK construye el schema JSON que el LLM ve a partir del docstring + type hints. Sin `Args:`, el LLM no sabra para que sirve la tool.
+
+```python
+@function_tool
+async def registrar_entreno(telegram_id: int, fecha: str, tipo: str) -> str:
+    """Registra un entrenamiento.
+
+    Args:
+        telegram_id: ID de Telegram del usuario
+        fecha: formato YYYY-MM-DD
+        tipo: DEBE ser uno de fuerza, cardio, movilidad, deporte
+    """
+```
+
+Bad: sin docstring, sin `Args:`, o sin describir cada parametro.
+
+## 2. Tools devuelven `str` (JSON serializable). NUNCA otros tipos
+
+```python
+# GOOD
+return json.dumps({"ok": True, "id": 123})
+
+# BAD
+return {"ok": True, "id": 123}     # dict no soportado
+return 123                          # tipo simple no soportado
+```
+
+## 3. Tools NO lanzan excepciones al usuario
+
+Si una excepcion sube hasta `Runner.run`, el run COMPLETO falla. Capturar y devolver error estructurado:
+
+```python
+try:
+    pr = await repo.get_pr(uid, ejercicio)
+    return json.dumps({"peso_kg": pr.peso_kg})
+except Exception:
+    logger.exception("Error en obtener_pr")
+    return json.dumps({"ok": False, "error": "no pude consultar el PR"})
+```
+
+## 4. Type hints SIMPLES en argumentos
+
+`int`, `float`, `str`, `bool`. Para colecciones, usar `str` JSON-serializado y parsear dentro:
+
+```python
+# GOOD
+async def registrar(ejercicios_json: str = "[]") -> str:
+    """...
+    Args:
+        ejercicios_json: JSON array, ej: [{"nombre":"X","reps":8}]
+    """
+    ejercicios = _safe_json_loads(ejercicios_json, [])
+
+# BAD - el LLM no genera bien dict/list anidados
+async def registrar(ejercicios: list[dict[str, int]]) -> str: ...
+```
+
+## 5. Tools SIEMPRE `async def`
+
+EntrenadorAX es async-first. Una tool sync bloquea el event loop:
+
+```python
+# GOOD
+@function_tool
+async def obtener_perfil(telegram_id: int) -> str: ...
+
+# BAD
+@function_tool
+def obtener_perfil(telegram_id: int) -> str: ...
+```
+
+## 6. Validar enums contra sets al inicio
+
+```python
+TIPOS_ENTRENO_VALIDOS = {"fuerza", "cardio", "movilidad", "deporte"}
+
+@function_tool
+async def registrar_entreno(..., tipo: str) -> str:
+    tipo = tipo.lower().strip()
+    if tipo not in TIPOS_ENTRENO_VALIDOS:
+        return json.dumps({"ok": False, "error": f"tipo invalido: {tipo}"})
+```
+
+## 7. RedisSession: `close()` en `finally` y `SessionSettings(limit=N)`
+
+```python
+from agents import RunConfig, Runner, SessionSettings
+from agents.extensions.memory import RedisSession
+
+RUN_CONFIG = RunConfig(session_settings=SessionSettings(limit=20))
+
+session = RedisSession.from_url(str(uid), url=settings.redis_url)
+try:
+    result = await Runner.run(coach, prompt, session=session, run_config=RUN_CONFIG)
+finally:
+    await session.close()
+```
+
+NUNCA combinar `session` con `conversation_id` o `previous_response_id` (RunError).
+
+## 8. Tools NO duplican logica de DB
+
+Las tools son SOLO la interfaz para el LLM. La logica de Postgres vive en `src/db/repository.py`:
+
+```python
+# GOOD - tool delgada, delega a repository
+@function_tool
+async def registrar_entreno(...) -> str:
+    sesion = await repo_guardar_sesion(...)
+    return json.dumps({"ok": True, "sesion_id": sesion.id})
+
+# BAD - tool con queries SQLAlchemy embebidas
+@function_tool
+async def registrar_entreno(...) -> str:
+    async with async_session_factory() as session:
+        sesion = SesionEntrenamiento(...)
+        session.add(sesion)
+        await session.commit()
+```
+
+## 9. Numero de tools: vigila el limite practico
+
+| # tools | Comportamiento del LLM |
+|---|---|
+| 1-12 | Excelente discriminacion |
+| 13-20 | LLM puede equivocarse; mejorar docstrings |
+| 21+ | Considerar handoffs (especialistas) |
+
+EntrenadorAX tiene 12 hoy. Si llegas a 15+, leer `referencias/handoffs-guardrails.md` y dividir.
+
+## 10. Prompt del Agent: actualizar al cambiar tools
+
+Si modificas la firma o enums validos de una tool, actualiza la REGLA correspondiente del prompt en `coach.py` (especialmente la REGLA #7 VALORES VALIDOS).

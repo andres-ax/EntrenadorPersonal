@@ -6,6 +6,11 @@
         "command": ".cursor/hooks/ruff-autofix.sh",
         "matcher": "Write",
         "timeout": 15
+      },
+      {
+        "command": ".cursor/hooks/validar-function-tool.sh",
+        "matcher": "Write",
+        "timeout": 10
       }
     ],
     "beforeShellExecution": [
