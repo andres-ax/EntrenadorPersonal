@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": ".cursor/hooks/ruff-autofix.sh",
+        "matcher": "Write",
+        "timeout": 15
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/proteger-secretos.sh",
+        "matcher": "git\\s+(commit|push|add)",
+        "failClosed": true,
+        "timeout": 10
+      }
+    ]
+  }
+}

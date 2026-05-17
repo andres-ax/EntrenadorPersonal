@@ -1,0 +1,98 @@
+---
+description: Convenciones de codigo y patrones del bot EntrenadorAX (Python async, OpenAI Agents SDK, python-telegram-bot, SQLAlchemy async, FastAPI)
+globs: src/**/*.py
+alwaysApply: false
+---
+
+# Convenciones EntrenadorAX
+
+## 1. Async siempre
+
+Toda IO (DB, Redis, HTTP, Telegram) es `async def`. NUNCA bloquees el event loop.
+
+```python
+async def obtener_usuario(uid: int) -> Usuario:
+    async with async_session_factory() as session:
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
+        return result.scalar_one_or_none()
+```
+
+Bad: `def obtener_usuario(uid): return session.execute(...)` (sync en path async).
+
+## 2. Tools del agente (`@function_tool`)
+
+Todas en `src/tools.py`. Reglas obligatorias:
+
+- Docstring Google-style con `Args:` (el SDK lo usa como schema para el LLM).
+- Devolver `str` JSON-serializable con `json.dumps(...)`.
+- NUNCA lanzar excepciones: devolver `json.dumps({"ok": False, "error": "..."})`.
+- Validar enums contra `TIPOS_ENTRENO_VALIDOS` / `TIPOS_COMIDA_VALIDOS`.
+- Si la tool toma `fecha: str`, normalizar con `_validar_fecha(fecha)`.
+
+```python
+@function_tool
+async def registrar_entreno(telegram_id: int, fecha: str, tipo: str) -> str:
+    """Registra un entrenamiento.
+
+    Args:
+        telegram_id: ID de Telegram del usuario
+        fecha: formato YYYY-MM-DD
+        tipo: fuerza, cardio, movilidad, deporte
+    """
+    fecha = _validar_fecha(fecha)
+    if tipo not in TIPOS_ENTRENO_VALIDOS:
+        return json.dumps({"ok": False, "error": f"tipo invalido: {tipo}"})
+    ...
+```
+
+## 3. Manejo de errores en handlers de Telegram
+
+Nunca exponer trace tecnico al usuario. Patron canonico:
+
+```python
+try:
+    result = await Runner.run(coach, prompt, session=session)
+except Exception:
+    logger.exception("Error procesando uid=%s", uid)
+    await _enviar_con_retry(message, "Ups, tuve un problema. Intentalo de nuevo.")
+```
+
+Usar `_enviar_con_retry` (existe en `src/telegram/handlers.py`) para todo `reply_text` que pueda sufrir `telegram.error.TimedOut` o `RetryAfter`.
+
+## 4. Modelos SQLAlchemy
+
+- FKs con `ondelete="CASCADE"`.
+- Relaciones con `cascade="all, delete-orphan"`.
+- Defaults de servidor con `func.now()` (no `datetime.utcnow`).
+- Enums tipados con `enum.Enum` + `Column(Enum(...))`.
+
+```python
+sesiones = relationship(
+    "SesionEntrenamiento",
+    back_populates="usuario",
+    cascade="all, delete-orphan",
+)
+```
+
+## 5. Imports al tope (refuerza `no-inline-imports`)
+
+Nunca `import` dentro de funciones excepto para break circular imports documentado con comentario.
+
+## 6. Prompts del coach (`src/coach.py`)
+
+El system prompt tiene 12 reglas numeradas. Al agregar/modificar una tool:
+
+- Si introduces nuevos valores enum, actualiza la REGLA #7 (VALORES VALIDOS).
+- Si la nueva tool reemplaza comportamiento, ajusta las REGLAS #10/#11 segun aplique.
+- Mantener tono: corto, directo, motivacional sin cursi, sin emojis.
+
+## 7. Config (`src/config.py`)
+
+Toda variable de entorno pasa por `Settings(BaseSettings)`. Nunca `os.getenv(...)` directo en codigo de runtime (solo aceptable en `run_bot.py` y `scripts/`).
+
+```python
+from src.config import settings
+client = aioredis.from_url(settings.redis_url)
+```
+
+Bad: `aioredis.from_url(os.getenv("REDIS_URL"))` en codigo de `src/`.
