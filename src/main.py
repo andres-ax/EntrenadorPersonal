@@ -234,6 +234,7 @@ async def request_id_and_access_log(request: Request, call_next):
     try:
         response = await call_next(request)
         status_code = response.status_code
+        response.headers["x-request-id"] = rid
         return response
     except Exception:
         elapsed_ms = (time.perf_counter() - t0) * 1000
