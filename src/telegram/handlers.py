@@ -1318,16 +1318,39 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("No pude descargar la foto. Intenta de nuevo.")
         return
 
-    result = await analizar_comida(raw, objetivo_usuario=objetivo, tono=tono)
+    if caption:
+        logger.info(
+            "recibir_foto con caption uid=%s len=%d preview=%r",
+            uid, len(caption), caption[:60],
+        )
+    result = await analizar_comida(
+        raw, objetivo_usuario=objetivo, tono=tono, caption=caption
+    )
     if "error" in result:
-        if result["error"] == "no_food":
-            await update.message.reply_text(
-                "No detecto comida en esa foto. Mandame foto de tu plato y te ayudo."
-            )
-        else:
-            await update.message.reply_text(
-                "Hubo un problema analizando la foto. Intenta de nuevo en un momento."
-            )
+        # Antes respondiamos con texto fijo y dejabamos al usuario colgado.
+        # Ahora delegamos al agente con contexto explicito para que decida
+        # apropiadamente (ej: si es foto del entrenamiento, comente; si es
+        # paquete sin etiqueta, le ayude a estimar).
+        err = result["error"]
+        logger.info(
+            "photo error delegado al coach uid=%s error=%s tiene_caption=%s",
+            uid, err, bool(caption),
+        )
+        contexto_partes = [
+            "[CONTEXTO_FOTO]",
+            f"El usuario te envio una foto pero el analizador no detecto comida (error={err}).",
+        ]
+        if caption:
+            contexto_partes.append(f"Caption del usuario: {caption!r}.")
+        contexto_partes.append(
+            "Responde al usuario: si el caption sugiere que es un producto/etiqueta, "
+            "pidele info textual del paquete (gramos, porciones, calorias). "
+            "Si parece foto de entreno, pidele descripcion textual del entreno. "
+            "Si no hay caption, di que solo procesas fotos de comida/etiquetas "
+            "y pidele que mande de nuevo con la foto correcta o que describa por texto."
+        )
+        contexto = " ".join(contexto_partes)
+        await _procesar(update.message, contexto, uid, ctx=ctx)
         return
 
     # Saneamos lo que viene de Vision (puede devolver dict en alimentos).

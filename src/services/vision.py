@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import time
 from io import BytesIO
 
 from openai import AsyncOpenAI
@@ -15,24 +16,45 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Timeout explicito para Vision: una llamada tipica responde en 3-7s; 25s
+# da margen razonable y evita esperas de 30+s (vimos 36s en prod). max_retries=1
+# para que un fallo transitorio no bloquee al usuario, sin acumular costo.
+_VISION_TIMEOUT_S = 25.0
+_VISION_MAX_RETRIES = 1
+
 _client: AsyncOpenAI | None = None
 
 
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
+        _client = AsyncOpenAI(
+            api_key=settings.openai_api_key.get_secret_value(),
+            timeout=_VISION_TIMEOUT_S,
+            max_retries=_VISION_MAX_RETRIES,
+        )
     return _client
 
 
 def _prompt_sistema(tono: str) -> str:
     base = (
-        "Eres un nutricionista deportivo ISSN-CISSN. Analiza la foto de la "
-        "comida que envia el usuario. Devuelve SOLO JSON valido con esta forma:\n"
+        "Eres un nutricionista deportivo ISSN-CISSN. Analiza la foto que "
+        "envia el usuario. Puede ser:\n"
+        "1) Un plato/comida lista para comer (caso normal): identifica "
+        "   alimentos y estima calorias y macros.\n"
+        "2) Una etiqueta nutricional o paquete de producto: extrae los "
+        "   valores de la etiqueta tal cual aparecen (por porcion).\n"
+        "3) Un alimento crudo, ingrediente o pieza de fruta/verdura: "
+        "   estima como porcion estandar.\n\n"
+        "Devuelve SOLO JSON valido con esta forma:\n"
         '{"alimentos": ["alimento1","alimento2",...], "calorias": int, '
         '"proteinas_g": float, "carbohidratos_g": float, "grasas_g": float, '
-        '"feedback": "1-2 frases sobre la comida y su impacto en el objetivo"}\n'
-        "Si la foto no tiene comida visible, devuelve {\"error\": \"no_food\"}. "
+        '"fuente": "estimacion" | "etiqueta" | "ingrediente_crudo", '
+        '"feedback": "1-2 frases sobre el impacto en su objetivo"}\n\n'
+        "Si la foto NO contiene comida, ingredientes, ni etiqueta "
+        "nutricional (ej: foto de skate, perro, paisaje, captura de "
+        "pantalla sin info nutricional), devuelve "
+        '{"error": "no_food"}.\n'
         "Nunca uses lenguaje alimento limpio/sucio ni hagas shaming. "
         "Nunca des diagnostico medico."
     )
@@ -49,13 +71,23 @@ async def analizar_comida(
     foto_bytes: bytes,
     objetivo_usuario: str = "mantenerse",
     tono: str = "firme",
+    caption: str = "",
 ) -> dict:
     """Llama Vision API y devuelve dict con alimentos, macros y feedback.
 
-    Si error, devuelve {"error": "..."}.
+    Acepta `caption` opcional para que el usuario pueda adjuntar texto a la
+    foto (ej: "es el paquete de filetes, 250g") y eso entre al contexto del
+    modelo.
+
+    Si error, devuelve {"error": "no_food" | "json_invalido" | "api_error"}.
+    Incluye `vision_elapsed_ms` en el log para diagnosticar latencia.
     """
+    t0 = time.perf_counter()
     try:
         b64 = base64.b64encode(foto_bytes).decode("ascii")
+        user_text = f"Mi objetivo es: {objetivo_usuario}. Analiza esta comida."
+        if caption:
+            user_text += f"\nContexto del usuario: {caption.strip()[:300]}"
         response = await _get_client().chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -65,7 +97,7 @@ async def analizar_comida(
                     "content": [
                         {
                             "type": "text",
-                            "text": f"Mi objetivo es: {objetivo_usuario}. Analiza esta comida.",
+                            "text": user_text,
                         },
                         {
                             "type": "image_url",
@@ -80,21 +112,40 @@ async def analizar_comida(
         )
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
         if "error" in data:
+            logger.info(
+                "analizar_comida no_food/error vision_elapsed_ms=%.1f error=%s",
+                elapsed_ms, data["error"],
+            )
             return {"error": data["error"]}
+        logger.info(
+            "analizar_comida OK vision_elapsed_ms=%.1f n_alim=%d kcal=%s fuente=%s",
+            elapsed_ms,
+            len(data.get("alimentos", []) or []),
+            data.get("calorias"),
+            data.get("fuente", "?"),
+        )
         return {
             "alimentos": data.get("alimentos", []),
             "calorias": int(data.get("calorias", 0) or 0),
             "proteinas_g": float(data.get("proteinas_g", 0) or 0),
             "carbohidratos_g": float(data.get("carbohidratos_g", 0) or 0),
             "grasas_g": float(data.get("grasas_g", 0) or 0),
+            "fuente": data.get("fuente", "estimacion"),
             "feedback": data.get("feedback", "").strip(),
         }
     except json.JSONDecodeError:
-        logger.exception("Vision devolvio JSON invalido")
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.exception(
+            "Vision devolvio JSON invalido vision_elapsed_ms=%.1f", elapsed_ms
+        )
         return {"error": "json_invalido"}
     except Exception:
-        logger.exception("Error en analizar_comida")
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.exception(
+            "Error en analizar_comida vision_elapsed_ms=%.1f", elapsed_ms
+        )
         return {"error": "api_error"}
 
 
