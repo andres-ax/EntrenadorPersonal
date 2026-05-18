@@ -33,7 +33,7 @@ function renderCell(v: any) {
 <Base
   title="Precios EntrenadorAX - Desde $5.000 COP/mes"
   description="4 tiers desde Free hasta Elite + Lifetime. Pagos por Bre-B/Nequi/Daviplata. Tabla comparativa de features y precios para tu coach IA personal."
-  canonical="https://entrenadorax.com/precios"
+  canonical={new URL("/precios", Astro.site).toString()}
 >
   <Navbar />
   <main>

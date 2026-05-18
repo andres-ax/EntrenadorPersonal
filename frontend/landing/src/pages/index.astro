@@ -41,7 +41,7 @@ const faqSchema = {
 <Base
   title="EntrenadorAX - El coach IA que NO te deja en paz cuando fallas"
   description="Bot Telegram con coach AI proactivo. Te persigue (con humor y respeto) hasta que cumples tu compromiso. 67 deportes soportados incluyendo BMX, skate, rollers, MMA, climbing. Pagos por Bre-B desde $5.000 COP. Beta cerrada en Colombia."
-  canonical="https://entrenadorax.com"
+  canonical={new URL("/", Astro.site).toString()}
 >
   <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
   <Navbar />

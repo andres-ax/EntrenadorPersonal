@@ -8,7 +8,7 @@ Tanstack Query. Conecta al backend FastAPI en `/admin/*`.
 ```bash
 cd frontend/admin
 npm install
-echo "NEXT_PUBLIC_API_BASE_URL=https://api.entrenadorax.com" > .env.local
+echo "NEXT_PUBLIC_API_BASE_URL=https://entrenadorpersonal-production.up.railway.app" > .env.local
 npm run dev
 ```
 

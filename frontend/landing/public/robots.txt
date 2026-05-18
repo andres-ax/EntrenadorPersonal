@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://entrenadorax.com/sitemap-index.xml
+Sitemap: https://entrenadorpersonal-production.up.railway.app/sitemap-index.xml

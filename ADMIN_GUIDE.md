@@ -1,6 +1,6 @@
 # ADMIN_GUIDE.md - Guia del administrador
 
-Como operar el panel admin de EntrenadorAX en `admin.entrenadorax.com`.
+Como operar el panel admin de EntrenadorAX en `entrenadorax-admin-production.up.railway.app`.
 
 ## Login
 

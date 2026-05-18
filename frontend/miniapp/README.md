@@ -8,8 +8,8 @@ Tailwind + Recharts + Telegram Web Apps SDK.
 ```bash
 cd frontend/miniapp
 npm install
-echo "VITE_API_BASE_URL=https://api.entrenadorax.com" > .env.local
-echo "VITE_REALTIME_WS_URL=wss://realtime.entrenadorax.com/ws/realtime" >> .env.local
+echo "VITE_API_BASE_URL=https://entrenadorpersonal-production.up.railway.app" > .env.local
+echo "VITE_REALTIME_WS_URL=wss://entrenadorpersonal-production.up.railway.app/ws/realtime" >> .env.local
 echo "VITE_BOT_USERNAME=entrenadorax_bot" >> .env.local
 npm run dev
 ```
@@ -30,8 +30,9 @@ Genera `dist/` listo para subir a Cloudflare Pages, Vercel, Netlify.
 ## Deploy a Cloudflare Pages
 
 1. `wrangler pages deploy dist --project-name entrenadorax-miniapp`
-2. Asigna dominio custom `app.entrenadorax.com`.
-3. En backend setea `MINIAPP_URL=https://app.entrenadorax.com`.
+2. Por defecto Railway expone el servicio en `entrenadorpersonal-production.up.railway.app`.
+   Si tienes dominio custom, agregalo en Railway y apuntalo via CNAME.
+3. En backend setea `MINIAPP_URL=https://<tu-dominio-o-railway>.app`.
 4. Reinicia el bot (en `post_init` actualiza el `setChatMenuButton`).
 
 ## Estructura

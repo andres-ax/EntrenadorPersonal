@@ -9,7 +9,8 @@ cd frontend/landing
 npm install
 cat > .env <<EOF
 PUBLIC_BOT_USERNAME=entrenadorax_bot
-PUBLIC_PLAUSIBLE_DOMAIN=entrenadorax.com
+PUBLIC_SITE_URL=https://entrenadorpersonal-production.up.railway.app
+PUBLIC_PLAUSIBLE_DOMAIN=entrenadorpersonal-production.up.railway.app
 EOF
 npm run dev
 ```
@@ -21,7 +22,9 @@ npm run build
 wrangler pages deploy dist --project-name entrenadorax-landing
 ```
 
-Asigna dominio `entrenadorax.com` con CNAME en tu DNS provider.
+Railway ya expone el servicio en `entrenadorpersonal-production.up.railway.app`.
+Para dominio custom: agregar en Railway > Settings > Domains y apuntar CNAME
+desde tu DNS provider. Luego setea `PUBLIC_SITE_URL` con el dominio nuevo.
 
 ## Paginas generadas
 

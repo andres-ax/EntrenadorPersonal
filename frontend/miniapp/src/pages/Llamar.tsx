@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { getJwt } from "../lib/api";
 import { haptic, notifyHaptic } from "../lib/telegram";
 
+// El realtime WS vive en el mismo servicio Railway que la API (montado en
+// /ws/realtime, ver src/realtime/server.py). Fallback al dominio real.
 const REALTIME_WS =
-  import.meta.env.VITE_REALTIME_WS_URL || "wss://realtime.entrenadorax.com/ws/realtime";
+  import.meta.env.VITE_REALTIME_WS_URL ||
+  "wss://entrenadorpersonal-production.up.railway.app/ws/realtime";
 
 type Estado = "idle" | "conectando" | "en_llamada" | "terminada" | "error" | "sin_cuota";
 

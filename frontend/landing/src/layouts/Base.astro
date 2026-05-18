@@ -31,7 +31,7 @@ const plausibleDomain = import.meta.env.PUBLIC_PLAUSIBLE_DOMAIN;
           title,
           type: "website",
           image: "/og-image.png",
-          url: canonical || "https://entrenadorax.com",
+          url: canonical || Astro.site?.toString() || "/",
         },
         optional: {
           description,

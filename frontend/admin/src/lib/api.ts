@@ -2,8 +2,15 @@
 
 import axios, { AxiosInstance } from "axios";
 
+// IMPORTANTE: Next.js inyecta NEXT_PUBLIC_* en build-time, no runtime.
+// Si la env var falta durante el build, este fallback queda hardcoded en el
+// bundle. Usamos la URL real de Railway (no api.entrenadorax.com, que no
+// resuelve DNS) para que el admin funcione incluso si NEXT_PUBLIC_API_BASE_URL
+// no se setea. Cuando consigamos el dominio entrenadorax.com, basta con
+// setear NEXT_PUBLIC_API_BASE_URL en Railway y rebuild.
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.entrenadorax.com";
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "https://entrenadorpersonal-production.up.railway.app";
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE,

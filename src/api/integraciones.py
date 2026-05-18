@@ -44,8 +44,14 @@ def _telegram_id_from_state(state: str) -> Optional[int]:
 def _client_credentials(proveedor: str) -> tuple[str, str, str]:
     cid = os.environ.get(f"{proveedor.upper()}_CLIENT_ID", "")
     csec = os.environ.get(f"{proveedor.upper()}_CLIENT_SECRET", "")
-    base_url = settings.admin_url or "https://api.entrenadorax.com"
-    redirect = f"{str(base_url).rstrip('/')}/api/integraciones/{proveedor}/callback"
+    # El callback OAuth lo recibe la API del bot (este router se monta en
+    # src/main.py bajo /api/integraciones/*), no el admin web. Por eso
+    # webhook_base_url y NO admin_url. Fallback al dominio Railway real.
+    api_base = str(
+        settings.webhook_base_url
+        or "https://entrenadorpersonal-production.up.railway.app"
+    ).rstrip("/")
+    redirect = f"{api_base}/api/integraciones/{proveedor}/callback"
     return cid, csec, redirect
 
 

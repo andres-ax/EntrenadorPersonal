@@ -23,7 +23,7 @@ const schemaOrg = {
   "@type": "SportsActivityLocation",
   name: `EntrenadorAX para ${deporte.nombre}`,
   description: `Coach AI en Telegram especializado en ${deporte.nombre} (${categoriaLabel}). Trackea ${deporte.metricas}.`,
-  url: `https://entrenadorax.com/deportes/${deporte.slug}`,
+  url: new URL(`/deportes/${deporte.slug}`, Astro.site).toString(),
   inLanguage: "es-CO",
   sport: deporte.nombre,
   audience: {
@@ -42,7 +42,7 @@ const schemaOrg = {
 <Base
   title={`EntrenadorAX para ${deporte.nombre} - Coach IA en Telegram`}
   description={`Coach IA especializado en ${deporte.nombre} (${categoriaLabel}). Trackea ${deporte.metricas}. Escena CO: ${deporte.escena}. Empieza gratis en Telegram.`}
-  canonical={`https://entrenadorax.com/deportes/${deporte.slug}`}
+  canonical={new URL(`/deportes/${deporte.slug}`, Astro.site).toString()}
 >
   <script type="application/ld+json" set:html={JSON.stringify(schemaOrg)} />
   <Navbar />

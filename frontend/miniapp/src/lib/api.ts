@@ -1,6 +1,11 @@
 import axios, { AxiosInstance } from "axios";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.entrenadorax.com";
+// Vite inyecta VITE_* en build-time. Fallback al dominio Railway real
+// (no api.entrenadorax.com, que no resuelve DNS). Cuando consigamos el
+// dominio entrenadorax.com basta con setear VITE_API_BASE_URL y rebuild.
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://entrenadorpersonal-production.up.railway.app";
 
 let _jwt: string | null = null;
 let _expira: number = 0;

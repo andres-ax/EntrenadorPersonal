@@ -47,10 +47,12 @@ npm install && npm run build
 wrangler pages deploy dist --project-name entrenadorax-landing
 ```
 
-Asigna dominios en Cloudflare:
-- `app.entrenadorax.com` -> miniapp
-- `entrenadorax.com` -> landing
-- `admin.entrenadorax.com` -> admin-web Railway (CNAME a railway.app)
+Dominios actuales (Railway expone `*.up.railway.app` por defecto):
+- Landing + miniapp + API + WS realtime: `entrenadorpersonal-production.up.railway.app`
+- Admin panel: `entrenadorax-admin-production.up.railway.app`
+
+Si en el futuro consigues un dominio propio, lo agregas en Railway >
+Settings > Domains y apuntas el CNAME desde tu proveedor DNS.
 
 ## Migraciones DB
 
@@ -71,21 +73,21 @@ railway run python scripts/crear_admin.py \
 
 ```bash
 # Obtener el secret token del bot-api
-curl https://api.entrenadorax.com/webhook-info \
+curl https://entrenadorpersonal-production.up.railway.app/webhook-info \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
-# Setear webhook en Telegram
+# Setear webhook en Telegram (en cada arranque del bot se hace automatico
+# via auto-setWebhook si WEBHOOK_BASE_URL esta seteada; este curl es manual).
 curl -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/setWebhook" \
-  -d "url=https://api.entrenadorax.com/webhook" \
+  -d "url=https://entrenadorpersonal-production.up.railway.app/webhook" \
   -d "secret_token=$WEBHOOK_SECRET" \
   -d "allowed_updates=[\"message\",\"callback_query\",\"poll_answer\",\"message_reaction\",\"successful_payment\",\"pre_checkout_query\",\"inline_query\"]"
 ```
 
 ## Health checks
 
-- `https://api.entrenadorax.com/health` -> bot-api (DB + Redis + bot)
-- `https://realtime.entrenadorax.com/health` -> realtime-ws
-- `https://admin.entrenadorax.com/login` -> admin-web
+- `https://entrenadorpersonal-production.up.railway.app/health` -> bot-api (DB + Redis + bot + WS realtime)
+- `https://entrenadorax-admin-production.up.railway.app/login` -> admin-web
 
 ## Migracion v1 -> v2
 
@@ -110,7 +112,7 @@ automaticamente `setChatMenuButton` apuntando a la Mini App.
 
 Para cada proveedor, registra app en su developer portal:
 
-- Whoop: redirect URI = `https://api.entrenadorax.com/api/integraciones/whoop/callback`
+- Whoop: redirect URI = `https://entrenadorpersonal-production.up.railway.app/api/integraciones/whoop/callback`
 - Strava: idem
 - Garmin: idem
 - Google Fit: idem
