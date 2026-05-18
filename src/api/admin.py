@@ -14,8 +14,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select, or_
-from sqlalchemy.orm import selectinload
 
+from src.config import settings
 from src.api.admin_auth import (
     LoginRequest,
     LoginResponse,

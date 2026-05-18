@@ -97,7 +97,7 @@ async def prs(uid: int = Depends(get_uid_from_token)) -> dict:
 async def chart_peso_png(uid: int = Depends(get_uid_from_token)) -> Response:
     img = await chart_peso(uid)
     if img is None:
-        raise HTTPException(204)
+        return Response(status_code=204)
     return Response(content=img.getvalue(), media_type="image/png")
 
 
@@ -105,7 +105,7 @@ async def chart_peso_png(uid: int = Depends(get_uid_from_token)) -> Response:
 async def chart_volumen_png(uid: int = Depends(get_uid_from_token)) -> Response:
     img = await chart_volumen_semanal(uid)
     if img is None:
-        raise HTTPException(204)
+        return Response(status_code=204)
     return Response(content=img.getvalue(), media_type="image/png")
 
 
@@ -116,7 +116,7 @@ async def chart_macros_png(
     fecha_obj = date.fromisoformat(fecha) if fecha else None
     img = await chart_macros_dia(uid, fecha_obj)
     if img is None:
-        raise HTTPException(204)
+        return Response(status_code=204)
     return Response(content=img.getvalue(), media_type="image/png")
 
 
@@ -124,7 +124,7 @@ async def chart_macros_png(
 async def chart_streak_png(uid: int = Depends(get_uid_from_token)) -> Response:
     img = await chart_streak_calendario(uid)
     if img is None:
-        raise HTTPException(204)
+        return Response(status_code=204)
     return Response(content=img.getvalue(), media_type="image/png")
 
 

@@ -123,21 +123,9 @@ async def newsletter_signup(req: NewsletterReq, request: Request) -> dict:
         session.add(evento)
         await session.commit()
 
-    if settings.resend_api_key:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.post(
-                    "https://api.resend.com/audiences/{}/contacts".format(
-                        settings.plausible_domain or "default"
-                    ),
-                    headers={
-                        "Authorization": f"Bearer {settings.resend_api_key.get_secret_value()}",
-                        "Content-Type": "application/json",
-                    },
-                    json={"email": req.email},
-                )
-        except Exception:
-            logger.warning("No pude registrar email en Resend (audience inexistente o key invalida)")
+    # Resend newsletter deshabilitado: no tenemos audience ID configurado.
+    # El email queda guardado en la tabla eventos_bot para exportar manualmente.
+    # Cuando se configure RESEND_API_KEY + un audience en Resend, reactivar aqui.
 
     return {"ok": True, "ya_inscrito": False}
 

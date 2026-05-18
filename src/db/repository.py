@@ -609,14 +609,6 @@ async def _resumen_sueno_semanal_internal(session, uid: int) -> dict:
     }
 
 
-async def resumen_sueno_semanal(telegram_id: int) -> dict:
-    async with async_session_factory() as session:
-        uid = await _get_usuario_id(session, telegram_id)
-        if uid is None:
-            return {"promedio_horas": 0, "promedio_calidad": 0, "dias_registrados": 0}
-        return await _resumen_sueno_semanal_internal(session, uid)
-
-
 # --- Reportes ---
 
 
@@ -822,19 +814,6 @@ async def incrementar_citado_compromiso(compromiso_id: int) -> None:
         c = result.scalar_one_or_none()
         if c:
             c.citado_veces = (c.citado_veces or 0) + 1
-            await session.commit()
-
-
-async def actualizar_pinned_message_compromiso(
-    compromiso_id: int, pinned_message_id: int
-) -> None:
-    async with async_session_factory() as session:
-        result = await session.execute(
-            select(Compromiso).where(Compromiso.id == compromiso_id)
-        )
-        c = result.scalar_one_or_none()
-        if c:
-            c.pinned_message_id = pinned_message_id
             await session.commit()
 
 
@@ -1225,25 +1204,6 @@ async def es_usuario_pro(telegram_id: int) -> bool:
 
 
 _FEATURE_CACHE: dict[str, tuple[float, dict]] = {}
-
-
-async def obtener_features_plan(plan: PlanSuscripcion) -> dict:
-    """Lee features dinamicas desde plan_definicion. Cache 5 min in-process."""
-    import time as _t
-
-    key = plan.value
-    ahora = _t.time()
-    cached = _FEATURE_CACHE.get(key)
-    if cached and (ahora - cached[0]) < 300:
-        return cached[1]
-    async with async_session_factory() as session:
-        result = await session.execute(
-            select(PlanDefinicion).where(PlanDefinicion.plan == plan)
-        )
-        definicion = result.scalar_one_or_none()
-        features: dict = definicion.features if definicion else {}
-    _FEATURE_CACHE[key] = (ahora, features)
-    return features
 
 
 def _dias_por_duracion(plan: PlanSuscripcion, duracion: DuracionPago) -> int:
@@ -1688,38 +1648,6 @@ def get_deporte_info(deporte_slug: str | None) -> dict:
     if not deporte_slug:
         return {}
     return _CATALOG_FULL_CACHE.get(deporte_slug.lower().strip(), {})
-
-
-async def listar_deportes_por_categoria(categoria: str) -> list[dict]:
-    """Devuelve todos los deportes de una categoria."""
-    if not _CATALOG_FULL_CACHE:
-        await cargar_catalog_en_cache()
-    return [d for d in _CATALOG_FULL_CACHE.values() if d["categoria"] == categoria]
-
-
-async def slugs_disponibles() -> set[str]:
-    """Devuelve set de todos los slugs activos. Util para validar guardar_perfil."""
-    if not _CATALOG_CACHE:
-        await cargar_catalog_en_cache()
-    return set(_CATALOG_CACHE.keys())
-
-
-async def actualizar_categoria_usuario(
-    telegram_id: int, deporte_slug: str | None
-) -> Optional[Usuario]:
-    """Cuando se setea deporte_principal, actualiza categoria_deporte segun catalog."""
-    if not deporte_slug:
-        return None
-    categoria = get_categoria_deporte(deporte_slug)
-    try:
-        cat_enum = CategoriaDeporte(categoria)
-    except ValueError:
-        cat_enum = CategoriaDeporte.INDOOR_FUERZA
-    return await actualizar_usuario(
-        telegram_id,
-        deporte_principal=deporte_slug,
-        categoria_deporte=cat_enum,
-    )
 
 
 # ============================================================================
@@ -2385,14 +2313,6 @@ async def listar_recordatorios_activos_global() -> list[Recordatorio]:
             select(Recordatorio).where(Recordatorio.activo.is_(True))
         )
         return list(result.scalars().all())
-
-
-async def obtener_recordatorio(recordatorio_id: int) -> Optional[Recordatorio]:
-    async with async_session_factory() as session:
-        result = await session.execute(
-            select(Recordatorio).where(Recordatorio.id == recordatorio_id)
-        )
-        return result.scalar_one_or_none()
 
 
 async def desactivar_recordatorio(recordatorio_id: int, telegram_id: int) -> bool:

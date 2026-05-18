@@ -295,8 +295,8 @@ async def crear_magic_link(req: MagicLinkReq) -> MagicLinkResp:
 
 
 @router.get("/verify", response_model=TokenResp)
-async def verificar_magic_link(token: str) -> TokenResp:
-    """Verifica magic link + devuelve JWT (crea usuario si no existe)."""
+async def verificar_magic_link(token: str, response: Response) -> TokenResp:
+    """Verifica magic link + devuelve JWT + setea cookie user_jwt."""
     if not token:
         raise HTTPException(400, "token requerido")
     async with _afs() as session:
@@ -332,4 +332,14 @@ async def verificar_magic_link(token: str) -> TokenResp:
         ml.used_at = _dt.utcnow()
         await session.commit()
         uid = user.telegram_id
-    return TokenResp(jwt=_sign_jwt(uid), uid=uid, expira_en=JWT_TTL_SECONDS)
+    jwt = _sign_jwt(uid)
+    response.set_cookie(
+        key="user_jwt",
+        value=jwt,
+        max_age=JWT_TTL_SECONDS,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+    return TokenResp(jwt=jwt, uid=uid, expira_en=JWT_TTL_SECONDS)
