@@ -48,11 +48,115 @@
         </div>
         <p class="text-xs text-slate-400 mt-4">Sin tarjeta. Sin instalacion. Sin app extra.</p>
       </div>
-      {# Mockup del celular #}
-      <div class="flex justify-center md:justify-end">
-        <img src="/static/img/hero-phone-mockup.png" alt="EntrenadorAX en Telegram - conversacion con el coach IA"
-             class="w-72 md:w-96 drop-shadow-2xl animate-slide-up" loading="eager" />
+      {# Chat animado: simula conversacion real con el bot #}
+      <div class="flex justify-center md:justify-end animate-slide-up">
+        <div class="w-72 md:w-80 rounded-[2rem] bg-slate-800 shadow-2xl shadow-black/40 border border-slate-700/50 overflow-hidden">
+          {# Notch #}
+          <div class="flex justify-center pt-2 pb-1">
+            <div class="w-20 h-1 bg-slate-700 rounded-full"></div>
+          </div>
+          {# Header tipo Telegram #}
+          <div class="bg-slate-800 border-b border-slate-700/50 px-4 py-2.5 flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold shrink-0">AX</div>
+            <div>
+              <div class="text-white text-sm font-semibold leading-tight">EntrenadorAX</div>
+              <div class="text-emerald-400 text-[10px]">en linea</div>
+            </div>
+          </div>
+          {# Area de chat #}
+          <div id="hero-chat" class="bg-slate-900/80 px-3 py-3 h-72 md:h-80 overflow-hidden flex flex-col justify-end gap-1.5">
+            {# Los mensajes se inyectan por JS #}
+          </div>
+          {# Input falso #}
+          <div class="bg-slate-800 border-t border-slate-700/50 px-3 py-2 flex items-center gap-2">
+            <div class="flex-1 bg-slate-700/50 rounded-full px-3 py-1.5 text-slate-500 text-xs">Escribe un mensaje...</div>
+            <div class="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </div>
+          </div>
+          {# Bottom bar #}
+          <div class="flex justify-center pb-1.5 pt-1">
+            <div class="w-24 h-1 bg-slate-700 rounded-full"></div>
+          </div>
+        </div>
       </div>
+
+      <style>
+        .chat-bubble{opacity:0;transform:translateY(8px);animation:chatIn .3s ease forwards}
+        @keyframes chatIn{to{opacity:1;transform:translateY(0)}}
+        .typing-dots span{display:inline-block;width:5px;height:5px;margin:0 1px;border-radius:50%;background:#94a3b8;animation:dotPulse 1.2s infinite}
+        .typing-dots span:nth-child(2){animation-delay:.2s}
+        .typing-dots span:nth-child(3){animation-delay:.4s}
+        @keyframes dotPulse{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+      </style>
+
+      <script>
+      (function(){
+        var msgs=[
+          {r:"user",t:"Hice pierna hoy, sentadilla 4x8 80kg"},
+          {r:"bot", t:"Registrado! Sentadilla 80kg x8 reps. Nuevo PR! El anterior era 75kg. Sigue asi crack!"},
+          {r:"user",t:"Almorce pollo con arroz y ensalada"},
+          {r:"bot", t:"Anotado: ~520 kcal, 48g proteina. Te faltan ~80g para tu meta. Que comes en la cena?"},
+          {r:"user",t:"Dormi 7 horas anoche"},
+          {r:"bot", t:"Bien! Registrado. Tu racha va en 12 dias seguidos. No la rompas!"},
+          {r:"user",t:"Peso 78.5kg"},
+          {r:"bot", t:"Anotado. Bajaste 0.5kg esta semana. Vas por buen camino, crack."},
+        ];
+        var chat=document.getElementById("hero-chat");
+        if(!chat)return;
+        var idx=0,running=true;
+
+        function clear(){
+          chat.style.opacity="0";
+          setTimeout(function(){chat.innerHTML="";chat.style.opacity="1";idx=0;next();},600);
+        }
+
+        function addBubble(role,text){
+          var d=document.createElement("div");
+          d.className="chat-bubble max-w-[85%] px-3 py-1.5 rounded-2xl text-[11px] md:text-xs leading-relaxed break-words "
+            +(role==="user"
+              ?"self-end bg-brand-600 text-white rounded-br-md"
+              :"self-start bg-slate-700 text-slate-100 rounded-bl-md");
+          d.textContent=text;
+          // Remove typing indicator if present
+          var tp=chat.querySelector(".typing-dots");
+          if(tp)tp.remove();
+          chat.appendChild(d);
+          chat.scrollTop=chat.scrollHeight;
+        }
+
+        function showTyping(){
+          var d=document.createElement("div");
+          d.className="typing-dots self-start bg-slate-700 rounded-2xl rounded-bl-md px-3 py-2 max-w-[60px]";
+          d.innerHTML="<span></span><span></span><span></span>";
+          chat.appendChild(d);
+          chat.scrollTop=chat.scrollHeight;
+        }
+
+        function next(){
+          if(!running)return;
+          if(idx>=msgs.length){setTimeout(clear,3000);return;}
+          var m=msgs[idx++];
+          if(m.r==="bot"){
+            showTyping();
+            setTimeout(function(){addBubble(m.r,m.t);setTimeout(next,1200);},800);
+          }else{
+            addBubble(m.r,m.t);
+            setTimeout(next,1200);
+          }
+        }
+
+        // Arrancar con un delay para que el hero se vea antes
+        setTimeout(next,1000);
+
+        // Pausar si el chat no es visible (performance)
+        if(window.IntersectionObserver){
+          new IntersectionObserver(function(entries){
+            running=entries[0].isIntersecting;
+          },{threshold:0.1}).observe(chat);
+        }
+      })();
+      </script>
     </div>
 
     {# Social proof stats #}
