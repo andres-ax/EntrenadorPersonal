@@ -14,6 +14,8 @@ from src.db.models import (
     CategoriaDeporte,
     CheckinNocturno,
     DeporteCatalogo,
+    SubtipoSesion,
+    TipoPR,
     Comida,
     Compromiso,
     CrisisLog,
@@ -1421,3 +1423,262 @@ async def actualizar_categoria_usuario(
         deporte_principal=deporte_slug,
         categoria_deporte=cat_enum,
     )
+
+
+# ============================================================================
+# PR3 - PersonalRecord polimorfico (truco/grado/tiempo/etc) + sesiones skill
+# ============================================================================
+
+
+async def guardar_pr_truco(
+    telegram_id: int,
+    deporte: str,
+    nombre_truco: str,
+    spot: str = "",
+    video_url: str = "",
+    notas: str = "",
+    fecha: Optional[date] = None,
+) -> PersonalRecord:
+    """PR de truco aterrizado (skate/BMX/rollers/parkour). tipo_pr=TRUCO.
+
+    Solo registrar PRIMERA vez que se aterriza el truco; repeticiones van en
+    SesionEntrenamiento.
+    """
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            usuario = Usuario(telegram_id=telegram_id)
+            session.add(usuario)
+            await session.flush()
+            uid = usuario.id
+
+        pr = PersonalRecord(
+            usuario_id=uid,
+            tipo_pr=TipoPR.TRUCO,
+            ejercicio=nombre_truco,
+            deporte=deporte,
+            spot=spot or None,
+            video_url=video_url or None,
+            notas=notas or None,
+            fecha=fecha or date.today(),
+        )
+        session.add(pr)
+        await session.commit()
+        await session.refresh(pr)
+        return pr
+
+
+async def guardar_pr_via_escalada(
+    telegram_id: int,
+    nombre_via: str,
+    grado: str,
+    spot: str,
+    estilo: str = "redpoint",
+    notas: str = "",
+    fecha: Optional[date] = None,
+) -> PersonalRecord:
+    """PR de via/boulder escalada. tipo_pr=GRADO."""
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            usuario = Usuario(telegram_id=telegram_id)
+            session.add(usuario)
+            await session.flush()
+            uid = usuario.id
+
+        pr = PersonalRecord(
+            usuario_id=uid,
+            tipo_pr=TipoPR.GRADO,
+            ejercicio=nombre_via,
+            deporte="climbing",
+            grado=grado,
+            spot=spot,
+            notas=f"estilo={estilo}; {notas}" if notas else f"estilo={estilo}",
+            fecha=fecha or date.today(),
+        )
+        session.add(pr)
+        await session.commit()
+        await session.refresh(pr)
+        return pr
+
+
+async def guardar_pr_tiempo(
+    telegram_id: int,
+    nombre_prueba: str,
+    tiempo_seg: float,
+    distancia_m: Optional[float] = None,
+    deporte: str = "running",
+    fecha: Optional[date] = None,
+) -> PersonalRecord:
+    """PR de tiempo (running, natacion, ciclismo TT). tipo_pr=TIEMPO."""
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            usuario = Usuario(telegram_id=telegram_id)
+            session.add(usuario)
+            await session.flush()
+            uid = usuario.id
+
+        pr = PersonalRecord(
+            usuario_id=uid,
+            tipo_pr=TipoPR.TIEMPO,
+            ejercicio=nombre_prueba,
+            deporte=deporte,
+            tiempo_seg=tiempo_seg,
+            distancia_m=distancia_m,
+            fecha=fecha or date.today(),
+        )
+        session.add(pr)
+        await session.commit()
+        await session.refresh(pr)
+        return pr
+
+
+async def guardar_sesion_skill(
+    telegram_id: int,
+    deporte: str,
+    duracion_min: int,
+    spot: str = "",
+    foco_sesion: str = "",
+    trucos_intentados: int = 0,
+    trucos_aterrizados: int = 0,
+    num_caidas: int = 0,
+    sensacion_1_5: int = 3,
+    co_riders: str = "",
+    notas: str = "",
+    fecha: Optional[date] = None,
+) -> SesionEntrenamiento:
+    """Sesion skill urbano (skate/BMX/rollers/parkour/escalada)."""
+    from src.db.models import TipoEjercicio
+
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            usuario = Usuario(telegram_id=telegram_id)
+            session.add(usuario)
+            await session.flush()
+            uid = usuario.id
+
+        sesion = SesionEntrenamiento(
+            usuario_id=uid,
+            fecha=fecha or date.today(),
+            tipo=TipoEjercicio.DEPORTE,
+            subtipo=SubtipoSesion.SKILL,
+            duracion_min=duracion_min,
+            spot=spot or None,
+            deporte_slug=deporte,
+            foco_sesion=foco_sesion or None,
+            trucos_intentados=trucos_intentados,
+            trucos_aterrizados=trucos_aterrizados,
+            num_caidas=num_caidas,
+            sensacion_1_5=max(1, min(5, sensacion_1_5)),
+            co_riders=co_riders or None,
+            notas=notas or None,
+        )
+        session.add(sesion)
+        await session.commit()
+        await session.refresh(sesion)
+        return sesion
+
+
+async def guardar_sesion_sparring(
+    telegram_id: int,
+    estilo: str,
+    rounds: int,
+    duracion_round_min: int = 3,
+    intensidad_1_10: int = 5,
+    golpe_cabeza_fuerte: bool = False,
+    notas: str = "",
+    fecha: Optional[date] = None,
+) -> SesionEntrenamiento:
+    """Sesion sparring (combate). subtipo=SPARRING."""
+    from src.db.models import TipoEjercicio
+
+    duracion_total = max(1, rounds * duracion_round_min)
+    notas_finales = notas
+    if golpe_cabeza_fuerte:
+        notas_finales = (
+            f"[GOLPE_CABEZA_FUERTE] {notas}" if notas else "[GOLPE_CABEZA_FUERTE]"
+        )
+
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            usuario = Usuario(telegram_id=telegram_id)
+            session.add(usuario)
+            await session.flush()
+            uid = usuario.id
+
+        sesion = SesionEntrenamiento(
+            usuario_id=uid,
+            fecha=fecha or date.today(),
+            tipo=TipoEjercicio.DEPORTE,
+            subtipo=SubtipoSesion.SPARRING,
+            duracion_min=duracion_total,
+            rounds=rounds,
+            intensidad_1_10=max(1, min(10, intensidad_1_10)),
+            deporte_slug=estilo,
+            notas=notas_finales,
+        )
+        session.add(sesion)
+        await session.commit()
+        await session.refresh(sesion)
+        return sesion
+
+
+async def listar_sesiones_skill(
+    telegram_id: int, deporte: str, dias: int = 30
+) -> list[SesionEntrenamiento]:
+    """Lista sesiones skill de un deporte en ventana de N dias."""
+    desde = date.today() - timedelta(days=dias)
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return []
+        result = await session.execute(
+            select(SesionEntrenamiento).where(
+                SesionEntrenamiento.usuario_id == uid,
+                SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
+                SesionEntrenamiento.deporte_slug == deporte,
+                SesionEntrenamiento.fecha >= desde,
+            ).order_by(SesionEntrenamiento.fecha.desc())
+        )
+        return list(result.scalars().all())
+
+
+async def listar_trucos_aterrizados(
+    telegram_id: int, deporte: Optional[str] = None
+) -> list[PersonalRecord]:
+    """Lista todos los PRs tipo TRUCO del usuario."""
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return []
+        query = select(PersonalRecord).where(
+            PersonalRecord.usuario_id == uid,
+            PersonalRecord.tipo_pr == TipoPR.TRUCO,
+        )
+        if deporte:
+            query = query.where(PersonalRecord.deporte == deporte)
+        query = query.order_by(PersonalRecord.fecha.desc())
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+
+async def listar_sparring_reciente(
+    telegram_id: int, dias: int = 14
+) -> list[SesionEntrenamiento]:
+    """Sesiones sparring recientes (para detectar trauma craneal acumulado)."""
+    desde = date.today() - timedelta(days=dias)
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return []
+        result = await session.execute(
+            select(SesionEntrenamiento).where(
+                SesionEntrenamiento.usuario_id == uid,
+                SesionEntrenamiento.subtipo == SubtipoSesion.SPARRING,
+                SesionEntrenamiento.fecha >= desde,
+            ).order_by(SesionEntrenamiento.fecha.desc())
+        )
+        return list(result.scalars().all())

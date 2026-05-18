@@ -725,6 +725,39 @@ async def broadcast(
 # --- Notificacion al bot ---
 
 
+@router.get("/health/all")
+async def health_all(admin: dict = Depends(get_admin_from_token)) -> dict:
+    """Health agregado: bot-api, realtime-ws, worker, postgres, redis."""
+    import httpx as _h
+    from src.cache import ping as _ping_r
+    from src.db.connection import ping as _ping_d
+
+    out = {
+        "bot_api": {"db": False, "redis": False},
+        "realtime_ws": {"ok": False},
+    }
+    try:
+        out["bot_api"]["db"] = await _ping_d()
+        out["bot_api"]["redis"] = await _ping_r()
+    except Exception:
+        pass
+    realtime_url = settings.realtime_ws_url
+    if realtime_url:
+        http_url = (
+            realtime_url.replace("wss://", "https://")
+            .replace("ws://", "http://")
+            .rsplit("/ws/", 1)[0]
+            + "/health"
+        )
+        try:
+            async with _h.AsyncClient(timeout=3.0) as client:
+                r = await client.get(http_url)
+                out["realtime_ws"] = r.json()
+        except Exception:
+            pass
+    return out
+
+
 async def _publicar_evento_pago(
     telegram_id: int, tipo: str, payload: dict
 ) -> None:

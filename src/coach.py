@@ -2,14 +2,17 @@
 from agents import Agent
 
 from src.tools import (
+    calcular_peso_objetivo_responsable,
     cambiar_tono,
     confirmar_modo_militar,
     configurar_quiet_hours,
     consultar_compromiso,
     consultar_historial_peso,
+    consultar_progreso_skill,
     consultar_resumen_visual,
     consultar_streak,
     dar_premio_motivacional,
+    evaluar_concusion_simplificado,
     firmar_compromiso,
     guardar_perfil,
     guardar_pr,
@@ -20,8 +23,13 @@ from src.tools import (
     proponer_ejercicio_aleatorio,
     registrar_comida,
     registrar_entreno,
+    registrar_pelea,
     registrar_peso,
+    registrar_sesion_skill,
+    registrar_sparring,
     registrar_sueno,
+    registrar_truco_aterrizado,
+    registrar_via_escalada,
     reporte_progreso,
     resumen_nutricional,
     usar_dia_libre,
@@ -53,6 +61,16 @@ ALL_TOOLS = [
     dar_premio_motivacional,
     verificar_logros,
     consultar_resumen_visual,
+    # PR3 - deportes urbanos
+    registrar_truco_aterrizado,
+    registrar_sesion_skill,
+    registrar_via_escalada,
+    consultar_progreso_skill,
+    # PR3 - combate
+    registrar_sparring,
+    registrar_pelea,
+    calcular_peso_objetivo_responsable,
+    evaluar_concusion_simplificado,
 ]
 
 
@@ -342,6 +360,42 @@ Sub-reglas SEGUN categoria_deporte inyectada en el contexto:
 
 NUNCA mezcles vocabularios: si categoria=urbano NO digas "sets" ni "1RM". Si
 categoria=combate NO digas "ollie". Si categoria=escalada usa grados, no kg.
+
+## REGLA #15: VALIDACION CRUZADA - tool correcta segun categoria
+
+Antes de llamar a `registrar_entreno` o `guardar_pr`, CHEQUEA la categoria
+inyectada en el contexto y usa la tool especializada:
+
+### categoria=urbano (skate/BMX/rollers/parkour/scooter):
+- "hice mi primer kickflip", "logré tailwhip", "aterricé un truco":
+  -> `registrar_truco_aterrizado(es_primer_aterrizaje=True)` (NO guardar_pr).
+- "estuve 2 horas en el skatepark", "rodé en Salitre", "sesion en Aranjuez":
+  -> `registrar_sesion_skill` (NO registrar_entreno).
+- "como voy en skate ultimo mes", "mis PRs de BMX": -> `consultar_progreso_skill`.
+
+### categoria=escalada (climbing):
+- "envie una 5.11a en Suesca", "primer V5 boulder":
+  -> `registrar_via_escalada` (NO guardar_pr).
+- "me dolio el dedo" -> escalada nivel 3 trauma o sugerir off hangboard 7-14d.
+
+### categoria=combate (boxeo/BJJ/MMA/muay_thai/kickboxing/wrestling/judo/karate/taekwondo/capoeira/krav_maga):
+- "5 rolls de 7 min en BJJ", "8 rounds de sparring", "me dieron en la cabeza":
+  -> `registrar_sparring(golpe_cabeza_fuerte=True si aplica)` (NO registrar_entreno).
+  - Si golpe_cabeza_fuerte=True: pregunta "te molesto algo de la cabeza?
+    sentiste mareo, nausea, no recuerdas algo?" Si responde si -> usa
+    `evaluar_concusion_simplificado` y aplica REGLA #13 si severidad>=baja-moderada.
+- "tuve pelea", "perdi por decision", "peso 78 pesaje 86 dia pelea":
+  -> `registrar_pelea`.
+- "voy a cortar X kg para mi pelea": -> `calcular_peso_objetivo_responsable`.
+  Si activa alerta_critica, derivar a nutricionista (NO seguir).
+
+### categoria=indoor_fuerza, outdoor_endurance, equipo, ecuestre, motor, tradicional_co:
+- Sigue el flow clasico: `registrar_entreno` + `guardar_pr` cuando aplique.
+
+### Verificacion antes de PR:
+Para guardar_pr tradicional, primero llama `obtener_pr` para comparar. Solo
+guarda si el nuevo peso x reps supera el historico. Para tools polimorficas
+(truco, via escalada) no hace falta consultar antes (cada truco/via es unico).
 
 ## REGLA #12: COMANDOS QUE EL USER PUEDE INVOCAR
 

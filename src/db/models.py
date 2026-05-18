@@ -121,6 +121,34 @@ class CategoriaDeporte(str, enum.Enum):
     OTRO = "otro"
 
 
+class TipoPR(str, enum.Enum):
+    """Tipo de Personal Record. Default PESO_REPS para back-compat fuerza."""
+    PESO_REPS = "peso_reps"
+    TIEMPO = "tiempo"
+    TRUCO = "truco"
+    GRADO = "grado"
+    PROFUNDIDAD = "profundidad"
+    ALTURA = "altura"
+    WATTS = "watts"
+    VELOCIDAD = "velocidad"
+    RONDAS = "rondas"
+    CINTURON = "cinturon"
+    DISTANCIA = "distancia"
+
+
+class SubtipoSesion(str, enum.Enum):
+    """Subtipo de sesion para deportes que no son fuerza pura."""
+    SETS = "sets"
+    SKILL = "skill"
+    SPARRING = "sparring"
+    DRILLING = "drilling"
+    COMPETENCIA = "competencia"
+    LONG_RUN = "long_run"
+    INTERVALOS = "intervalos"
+    DESCANSO_ACTIVO = "descanso_activo"
+    OTRO = "otro"
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -206,8 +234,19 @@ class SesionEntrenamiento(Base):
     )
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     tipo = Column(Enum(TipoEjercicio))
+    subtipo = Column(Enum(SubtipoSesion), default=SubtipoSesion.SETS, nullable=False)
     duracion_min = Column(Integer)
     rpe_promedio = Column(Float)
+    intensidad_1_10 = Column(Integer, nullable=True)
+    num_caidas = Column(Integer, default=0)
+    sensacion_1_5 = Column(Integer, nullable=True)
+    spot = Column(String(120), nullable=True)
+    deporte_slug = Column(String(48), nullable=True, index=True)
+    trucos_intentados = Column(Integer, default=0)
+    trucos_aterrizados = Column(Integer, default=0)
+    rounds = Column(Integer, nullable=True)
+    co_riders = Column(String(200), nullable=True)
+    foco_sesion = Column(String(120), nullable=True)
     notas = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -252,16 +291,44 @@ class Comida(Base):
 
 
 class PersonalRecord(Base):
+    """PR polimorfico. Soporta:
+    - PESO_REPS (gimnasio/powerlifting/halterofilia) - default back-compat
+    - TIEMPO (running, natacion: ej PR de 5K en 22:15)
+    - TRUCO (skate/BMX/rollers/parkour: ej "primer kickflip aterrizado")
+    - GRADO (escalada: ej V6 boulder, 5.12a sport)
+    - PROFUNDIDAD (apnea/buceo: ej 35m CWT)
+    - WATTS (ciclismo: ej FTP 320w)
+    - VELOCIDAD (patinaje velocidad, MTB)
+    - RONDAS (combate: ej "primer KO en round 2")
+    - CINTURON (BJJ/karate/TKD/judo: ej "purple belt BJJ")
+    - DISTANCIA (running/ciclismo PR de distancia nueva)
+    """
+
     __tablename__ = "personal_records"
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
         Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
     )
+    tipo_pr = Column(
+        Enum(TipoPR), default=TipoPR.PESO_REPS, nullable=False, index=True
+    )
     ejercicio = Column(String(100), nullable=False)
-    peso_kg = Column(Float, nullable=False)
+    peso_kg = Column(Float)
     reps = Column(Integer)
-    fecha = Column(Date, default=date.today)
+    fecha = Column(Date, default=date.today, index=True)
+    deporte = Column(String(48), nullable=True, index=True)
+    video_url = Column(String(300), nullable=True)
+    spot = Column(String(120), nullable=True)
+    grado = Column(String(16), nullable=True)
+    tiempo_seg = Column(Float, nullable=True)
+    profundidad_m = Column(Float, nullable=True)
+    watts = Column(Integer, nullable=True)
+    velocidad_kmh = Column(Float, nullable=True)
+    rondas = Column(Integer, nullable=True)
+    cinturon = Column(String(32), nullable=True)
+    distancia_m = Column(Float, nullable=True)
+    notas = Column(Text, nullable=True)
 
     usuario = relationship("Usuario", back_populates="prs")
 

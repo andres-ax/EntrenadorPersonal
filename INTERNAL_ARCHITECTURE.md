@@ -1,22 +1,72 @@
-# Documentación Interna de EntrenadorAX
+# Documentación Interna de EntrenadorAX V2
 
-Este documento explica en profundidad cómo funciona el proyecto, incluyendo la arquitectura interna del agente, el pipeline de mensajes de Telegram, los recordatorios y el modelo de datos.
+Plataforma multi-servicio: bot Telegram + Mini App + Admin web + WebSocket
+Realtime + Worker + Landing. Deployada en Railway + Cloudflare Pages.
 
-## Diagrama de arquitectura interna
+## Arquitectura V2
+
+```mermaid
+flowchart TB
+    subgraph Frontends
+        MINIAPP["frontend/miniapp<br/>Vite+React+tma.js"]
+        ADMIN["frontend/admin<br/>Next.js 15+shadcn"]
+        LANDING["frontend/landing<br/>Astro 5+Tailwind"]
+    end
+    subgraph Backend["Backend (Railway)"]
+        BOT["bot-api<br/>FastAPI + python-telegram-bot"]
+        REALTIME["realtime-ws<br/>FastAPI WebSocket relay"]
+        WORKER["worker<br/>arq async"]
+        DB[("Postgres managed")]
+        REDIS[("Redis managed")]
+    end
+    USER["Usuario"] -- "Telegram" --> BOT
+    USER -- "tap MainButton" --> MINIAPP
+    MINIAPP -- "JWT initData" --> BOT
+    MINIAPP -- "WSS audio" --> REALTIME
+    REALTIME -- "WSS" --> OAI["OpenAI Realtime API"]
+    ADMIN -- "Bearer JWT" --> BOT
+    LANDING -- "API publica" --> BOT
+    WEARABLE["Whoop/Garmin/Strava"] -- "OAuth+API" --> WORKER
+    BOT --> DB
+    BOT --> REDIS
+    REALTIME --> DB
+    REALTIME --> REDIS
+    WORKER --> DB
+    WORKER --> REDIS
+    BOT -- "Vision" --> OPENAI["OpenAI API"]
+```
+
+## Diagrama de arquitectura interna del bot
 
 ```mermaid
 graph TD
     A["Telegram / Webhook"] --> B["Handlers"]
     B --> C["Prompt builder con perfil de usuario"]
-    C --> D["Agente EntrenadorAX"]
-    D --> E["Herramientas function_tool"]
-    E --> F["Repositorio DB"]
-    E --> G["Redis sesión y rate limit"]
+    C --> D["Agente EntrenadorAX (Agents SDK)"]
+    D --> E["23+ function_tools"]
+    E --> F["Repository (SQLAlchemy async)"]
+    E --> G["Redis sesión + cache features"]
     B --> H["Menu y callbacks"]
-    B --> I["Reset / borrar datos"]
-    J["Scheduler de recordatorios"] --> K["JobQueue diario/semanal"]
-    K --> L["Notificaciones proactivas via bot"]
+    B --> I["Pagos / Wearables / Comunidad"]
+    J["JobQueue scheduler"] --> K["8 jobs: escalation, hidratacion, quiz, etc"]
+    L["Redis pubsub"] --> M["pubsub_listener (notif al usuario)"]
+    L --> N["broadcasts admin"]
+    L --> O["pr canal logros"]
 ```
+
+## Capas
+
+| Capa | Modulos | Responsabilidad |
+|---|---|---|
+| API HTTP | `src/main.py`, `src/api/*` | FastAPI + webhook + REST + admin |
+| Realtime WS | `src/realtime/server.py`, `src/realtime/*` | Relay WebSocket OpenAI |
+| Worker | `src/worker/main.py`, `src/worker/jobs_*` | Sync wearables, rankings, procesado |
+| Bot | `src/telegram/handlers.py`, `src/telegram/*` | Handlers, escalation, scheduler |
+| Coach | `src/coach.py`, `src/tools.py` | Agente IA + tools |
+| Services | `src/services/*` | TTS, Vision, Crisis, Pricing, etc |
+| Persistence | `src/db/repository.py`, `src/db/models.py` | ORM + queries |
+| Config | `src/config.py`, `src/cache.py` | Settings + Redis singleton |
+| i18n | `src/i18n/{es,en,pt}.json` | Traducciones |
 
 ## 1. Cómo usa el agente el perfil y las herramientas
 

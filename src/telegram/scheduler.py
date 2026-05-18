@@ -376,7 +376,16 @@ def registrar_jobs(app: Application) -> None:
         name="reconsent_militar",
     )
 
+    try:
+        from src.telegram.jobs_deportes import registrar_jobs_deportes
+
+        registrar_jobs_deportes(app)
+    except Exception:
+        logger.exception("Error registrando jobs_deportes")
+
     logger.info(
-        "8 jobs registrados: escalation, quiz_nocturno, quiz_sabado, checkin, "
-        "peso_lunes, resumen_domingo, hidratacion_2h, reconsent_militar"
+        "13 jobs registrados: escalation, quiz_nocturno, quiz_sabado, checkin, "
+        "peso_lunes, resumen_domingo, hidratacion_2h, reconsent_militar, "
+        "recordar_sesion_skill, peso_diario_camp, recovery_post_sparring, "
+        "taper_alert, weekly_load_endurance"
     )

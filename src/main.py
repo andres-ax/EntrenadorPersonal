@@ -26,6 +26,22 @@ from src.telegram.scheduler import registrar_jobs
 
 logger = logging.getLogger(__name__)
 
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn.get_secret_value(),
+            environment=settings.env,
+            traces_sample_rate=0.1,
+            profiles_sample_rate=0.1,
+            integrations=[FastApiIntegration()],
+        )
+        logger.info("Sentry inicializado")
+    except Exception:
+        logger.exception("Error inicializando Sentry")
+
 WEBHOOK_SECRET: str = settings.webhook_secret.get_secret_value()
 ADMIN_TOKEN: str = settings.admin_token.get_secret_value()
 

@@ -38,6 +38,18 @@ from src.realtime.openai_client import RealtimeBridge
 
 logger = logging.getLogger(__name__)
 
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn.get_secret_value(),
+            environment=settings.env,
+            traces_sample_rate=0.05,
+        )
+    except Exception:
+        logger.exception("Sentry init fallo en realtime-ws")
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
