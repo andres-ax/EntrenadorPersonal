@@ -62,7 +62,7 @@ def _decidir_emoji(texto: str) -> tuple[ReactionEmoji | None, bool]:
     if _FIESTA.search(texto):
         return ReactionEmoji.CLOWN_FACE, False
     if _SUENO_BIEN.search(texto):
-        return ReactionEmoji.HIGH_VOLTAGE, False
+        return ReactionEmoji.HIGH_VOLTAGE_SIGN, False
     if _POSITIVOS.search(texto):
         return ReactionEmoji.FIRE, False
     return None, False

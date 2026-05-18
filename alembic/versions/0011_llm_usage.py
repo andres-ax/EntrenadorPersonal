@@ -6,8 +6,8 @@ Revises: 0010
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0011"
-down_revision = "0010"
+revision = "0011_llm_usage"
+down_revision = "0010_drop_unique_foto_sha256"
 
 
 def upgrade() -> None:
