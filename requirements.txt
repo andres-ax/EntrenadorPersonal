@@ -75,7 +75,8 @@ email-validator>=2.0,<3.0
 # src/telegram/handlers.py (limpieza de sesiones).
 # Se declara explicito aunque venga de openai-agents[redis] para fijar version
 # y dejar claro que el proyecto depende de el directamente.
-redis>=5.0,<7.0
+# openai-agents 0.14.0+ requiere redis>=7, asi que ampliamos el rango.
+redis>=5.0,<8.0
 
 
 # -----------------------------------------------------------------------------
