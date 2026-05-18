@@ -1,0 +1,72 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+  <div class="px-5 py-3 border-b border-slate-100 text-sm flex justify-between items-center">
+    <div><strong>{{ data.total }}</strong> usuarios</div>
+    <div class="text-xs text-slate-500">
+      mostrando {{ data["items"]|length }} (offset {{ filtros.offset }})
+    </div>
+  </div>
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+      <tr>
+        <th class="px-4 py-2 text-left">UID</th>
+        <th class="px-4 py-2 text-left">Nombre / Email</th>
+        <th class="px-4 py-2 text-left">Plan</th>
+        <th class="px-4 py-2 text-left">Pais</th>
+        <th class="px-4 py-2 text-left">Tono</th>
+        <th class="px-4 py-2 text-left">Estado</th>
+        <th class="px-4 py-2 text-left">Registrado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for u in data["items"] %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-mono text-xs">
+            <a href="/admin/usuarios/{{ u.telegram_id }}" class="text-brand-600 hover:underline">{{ u.telegram_id }}</a>
+          </td>
+          <td class="px-4 py-2">
+            <div class="font-medium">{{ u.nombre or "-" }}</div>
+            <div class="text-xs text-slate-500">{{ u.email or "" }}</div>
+          </td>
+          <td class="px-4 py-2">
+            <span class="px-2 py-0.5 rounded-full text-xs bg-brand-100 text-brand-700">{{ u.plan_actual }}</span>
+            {% if u.plan_expira_en %}<div class="text-xs text-slate-500">expira {{ u.plan_expira_en|humano }}</div>{% endif %}
+          </td>
+          <td class="px-4 py-2 text-sm">{{ u.pais or "-" }}</td>
+          <td class="px-4 py-2 text-xs">{{ u.tono }}</td>
+          <td class="px-4 py-2">
+            {% if u.bot_bloqueado %}
+              <span class="text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700">bloqueado</span>
+            {% elif u.pausado_hasta %}
+              <span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">pausado</span>
+            {% else %}
+              <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">activo</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ u.created_at|humano }}</td>
+          <td class="px-4 py-2 text-right">
+            <a href="/admin/usuarios/{{ u.telegram_id }}" class="text-sm text-brand-600 hover:underline">Ver</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="px-4 py-6 text-center text-slate-500">Sin resultados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if data.total > filtros.limit %}
+    <div class="px-5 py-3 border-t border-slate-100 flex justify-between items-center text-sm">
+      {% set prev_off = (filtros.offset - filtros.limit) %}
+      {% set next_off = filtros.offset + filtros.limit %}
+      {% if prev_off >= 0 %}
+        <a href="?q={{ filtros.q }}&plan={{ filtros.plan or '' }}&offset={{ prev_off }}&limit={{ filtros.limit }}"
+           class="text-brand-600 hover:underline">&larr; Anterior</a>
+      {% else %}<span></span>{% endif %}
+      <span class="text-xs text-slate-500">{{ filtros.offset + 1 }}-{{ filtros.offset + data["items"]|length }} de {{ data.total }}</span>
+      {% if next_off < data.total %}
+        <a href="?q={{ filtros.q }}&plan={{ filtros.plan or '' }}&offset={{ next_off }}&limit={{ filtros.limit }}"
+           class="text-brand-600 hover:underline">Siguiente &rarr;</a>
+      {% else %}<span></span>{% endif %}
+    </div>
+  {% endif %}
+</div>

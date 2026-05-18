@@ -1,0 +1,40 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<h1 class="text-xl font-bold text-slate-900">Wearables</h1>
+<p class="text-sm text-slate-500">Conecta Whoop, Strava, Garmin o Google Fit para sincronizar tu actividad.</p>
+
+<div id="wearables-list" hx-get="/api/me/wearables" hx-trigger="load" hx-swap="innerHTML" class="mt-4 text-sm">
+  Cargando...
+</div>
+
+<script>
+  document.body.addEventListener("htmx:afterRequest", function (evt) {
+    if (evt.detail.elt && evt.detail.elt.id === "wearables-list") {
+      try {
+        var data = JSON.parse(evt.detail.xhr.responseText);
+        var items = data.proveedores || data || [];
+        var html = '<ul class="space-y-2">';
+        items.forEach(function (w) {
+          var conectado = w.conectado;
+          html += '<li class="bg-white border border-slate-200 rounded-xl p-4">'
+                + '<div class="flex items-center justify-between">'
+                + '<div><div class="font-medium">' + (w.nombre || w.proveedor) + '</div>'
+                + '<div class="text-xs text-slate-500">' + (conectado ? "Conectado" : "Desconectado") + '</div></div>';
+          if (conectado) {
+            html += '<button hx-post="/api/me/wearables/' + w.proveedor + '/sync" class="text-xs bg-emerald-600 text-white px-3 py-1 rounded">Sync</button>';
+          } else {
+            html += '<a href="/api/me/wearables/' + w.proveedor + '/connect" class="text-xs bg-brand-600 text-white px-3 py-1 rounded">Conectar</a>';
+          }
+          html += '</div></li>';
+        });
+        html += '</ul>';
+        evt.detail.elt.innerHTML = html;
+        htmx.process(evt.detail.elt);
+      } catch (e) {
+        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando wearables.</p>';
+      }
+    }
+  });
+</script>
+{% endblock %}

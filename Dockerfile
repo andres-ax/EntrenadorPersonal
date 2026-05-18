@@ -1,24 +1,11 @@
 # =============================================================================
-# Multi-stage build: stage 1 compila la landing Astro, stage 2 corre el bot.
-# El bot-api sirve la landing estatica desde "/" para que la URL Railway
-# muestre la home y NO un "Not Found".
+# Dockerfile single-stage Python puro.
+#
+# Antes: multi-stage con Node 22 que compilaba la landing Astro -> dist/.
+# Ahora: la landing, el admin y la mini app son templates Jinja2 servidos
+# directamente por FastAPI. Cero Node, cero TypeScript, cero build step
+# de frontend. Build ~3x mas rapido y un unico stack en el repo.
 # =============================================================================
-
-# --- Stage 1: build de la landing (Astro) ---
-FROM node:22-slim AS landing-builder
-
-WORKDIR /landing
-
-# Copia solo los manifests primero para aprovechar cache de Docker.
-COPY frontend/landing/package.json frontend/landing/package-lock.json* ./
-RUN npm install --no-audit --no-fund
-
-# Copia el resto del proyecto landing y construye.
-COPY frontend/landing/ .
-RUN npm run build
-
-
-# --- Stage 2: runtime Python (bot-api + landing servida estatica) ---
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -34,12 +21,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 RUN pip install --no-cache-dir -e . --no-deps
 
-# Trae el dist/ generado por el stage 1 al directorio que el backend monta.
-COPY --from=landing-builder /landing/dist /app/frontend/landing/dist
-
 EXPOSE 8080
 
-# El script ejecuta `alembic upgrade head` + `uvicorn` con $PORT correcto.
-# Tambien lo usa Railway como startCommand (railway.toml apunta a ./start.sh).
+# start.sh corre `alembic upgrade head` + `uvicorn` con $PORT correcto.
+# Railway lo usa como startCommand (railway.toml apunta a ./start.sh).
 RUN chmod +x /app/start.sh
 CMD ["./start.sh"]

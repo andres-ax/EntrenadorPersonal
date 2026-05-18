@@ -1,0 +1,72 @@
+{% extends "landing/_layout.html" %}
+
+{% block title %}{{ deporte.nombre }} en EntrenadorAX{% endblock %}
+{% block description %}Coach IA especializado en {{ deporte.nombre }}: {{ deporte.metricas|truncate(100) }}{% endblock %}
+
+{% block landing_content %}
+<section class="bg-white py-12">
+  <div class="max-w-3xl mx-auto px-4">
+    <a href="/deportes" class="text-sm text-slate-500 hover:text-slate-900">&larr; Todos los deportes</a>
+    <h1 class="text-4xl font-bold text-slate-900 mt-3 mb-2">{{ deporte.nombre }}</h1>
+    {% set categoria_labels = {"urbano":"Urbano","combate":"Combate","equipo":"Equipo","individual_outdoor":"Outdoor","indoor":"Indoor","tradicional_co":"Tradicional Colombia","ecuestre":"Ecuestre","acuatico":"Acuatico","motor":"Motor"} %}
+    <span class="inline-block px-3 py-1 rounded-full bg-brand-100 text-brand-700 text-sm">{{ categoria_labels.get(deporte.categoria, deporte.categoria) }}</span>
+
+    <div class="mt-8 space-y-6 text-slate-700">
+      {% if deporte.modalidades %}
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">Modalidades soportadas</h2>
+          <div class="flex flex-wrap gap-2">
+            {% for m in deporte.modalidades %}
+              <span class="text-sm bg-slate-100 text-slate-700 px-3 py-1 rounded">{{ m }}</span>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if deporte.metricas %}
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">Que mide el coach</h2>
+          <p class="text-sm">{{ deporte.metricas }}</p>
+        </div>
+      {% endif %}
+
+      {% if deporte.vocabulario %}
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">Vocabulario que entiende</h2>
+          <p class="text-sm font-mono bg-slate-50 p-3 rounded">{{ deporte.vocabulario }}</p>
+        </div>
+      {% endif %}
+
+      {% if deporte.escena %}
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">Escena en Colombia</h2>
+          <p class="text-sm">{{ deporte.escena }}</p>
+        </div>
+      {% endif %}
+
+      {% if deporte.equipamiento %}
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">Equipamiento</h2>
+          <p class="text-sm">{{ deporte.equipamiento }}</p>
+        </div>
+      {% endif %}
+
+      {% if deporte.plataforma %}
+        <div>
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">Donde se publica</h2>
+          <p class="text-sm">{{ deporte.plataforma }}</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="mt-12 bg-brand-600 text-white rounded-2xl p-6 text-center">
+      <h3 class="text-xl font-bold mb-2">Probar el coach para {{ deporte.nombre }}</h3>
+      <p class="text-brand-100 mb-4 text-sm">Mandale "hola" al bot y dile que practicas {{ deporte.nombre|lower }}. El se adapta.</p>
+      <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
+         class="inline-block bg-white text-brand-700 hover:bg-slate-100 px-6 py-3 rounded-lg font-semibold">
+        @EntrenadorAX_bot
+      </a>
+    </div>
+  </div>
+</section>
+{% endblock %}

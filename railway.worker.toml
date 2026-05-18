@@ -1,7 +1,0 @@
-[build]
-  builder = "DOCKERFILE"
-  dockerfilePath = "Dockerfile.worker"
-
-[deploy]
-  startCommand = "arq src.worker.main.WorkerSettings"
-  restartPolicyType = "ON_FAILURE"

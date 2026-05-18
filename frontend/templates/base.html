@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="{{ lang|default('es') }}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{% block title %}EntrenadorAX{% endblock %}</title>
+
+{# SEO / Open Graph (los bloques se sobreescriben por pagina) #}
+<meta name="description" content="{% block description %}Coach AI 24/7 dentro de Telegram. Entreno, comida, sueno, peso.{% endblock %}" />
+{% if canonical %}<link rel="canonical" href="{{ canonical }}" />{% endif %}
+<meta property="og:type" content="{% block og_type %}website{% endblock %}" />
+<meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}" />
+<meta property="og:description" content="{% block og_description %}{{ self.description() }}{% endblock %}" />
+<meta property="og:url" content="{{ canonical|default('') }}" />
+<meta property="og:image" content="{% block og_image %}/static/img/og-image.png{% endblock %}" />
+<meta name="twitter:card" content="summary_large_image" />
+
+{# Tailwind via CDN (sin build, sin Node). Para produccion con mayor performance
+   se podria cambiar a un CSS estatico generado por Tailwind CLI standalone,
+   pero el overhead del CDN JIT (~250KB) es aceptable para este proyecto. #}
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          // Paleta EntrenadorAX (navy/teal)
+          brand: {
+            50: "#eef7ff",
+            100: "#d9eaff",
+            200: "#bbd9ff",
+            300: "#8fc1ff",
+            400: "#5da0ff",
+            500: "#3679f5",
+            600: "#1f5ad8",
+            700: "#1b46ad",
+            800: "#1c3d8a",
+            900: "#1c356d",
+          },
+        },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+{# HTMX para interactividad sin SPA. Usado por admin y miniapp. #}
+<script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+
+<link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml" />
+{% block head_extra %}{% endblock %}
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
+{% block body %}
+  {% block content %}{% endblock %}
+{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

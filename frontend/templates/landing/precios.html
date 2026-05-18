@@ -1,0 +1,79 @@
+{% extends "landing/_layout.html" %}
+
+{% block title %}Precios - EntrenadorAX{% endblock %}
+{% block description %}Plan Starter desde $5.000 COP/mes. Pro, Elite y Lifetime con cupos limitados. Pagos por Bre-B, Nequi, Daviplata o transferencia.{% endblock %}
+
+{% block landing_content %}
+<section class="bg-white py-16">
+  <div class="max-w-5xl mx-auto px-4">
+    <h1 class="text-4xl font-bold text-slate-900 text-center mb-2">Precios simples</h1>
+    <p class="text-slate-600 text-center mb-12">Sin tarjetas. Pagas por Bre-B / Nequi / Daviplata cuando quieras.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div class="bg-white border border-slate-200 rounded-2xl p-6">
+        <div class="text-xs uppercase text-slate-500">Free</div>
+        <div class="text-3xl font-bold mt-2">$0</div>
+        <p class="text-sm text-slate-600 mt-1">Probar 7 dias</p>
+        <ul class="text-sm space-y-2 mt-4 text-slate-700">
+          <li>Registro de entrenos, comida, sueno</li>
+          <li>Recordatorios basicos</li>
+          <li>1 tono (amigable)</li>
+        </ul>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-6">
+        <div class="text-xs uppercase text-slate-500">Starter</div>
+        <div class="text-3xl font-bold mt-2">{{ precios.starter|cop }}<span class="text-base font-normal text-slate-500">/mes</span></div>
+        <p class="text-sm text-slate-600 mt-1">Para empezar firme</p>
+        <ul class="text-sm space-y-2 mt-4 text-slate-700">
+          <li>Todo lo de Free</li>
+          <li>3 tonos (amigable / firme / militar)</li>
+          <li>Reportes semanales</li>
+          <li>PRs ilimitados</li>
+        </ul>
+      </div>
+      <div class="bg-brand-600 text-white rounded-2xl p-6 ring-4 ring-brand-200">
+        <div class="text-xs uppercase opacity-80">Pro - mas popular</div>
+        <div class="text-3xl font-bold mt-2">{{ precios.pro|cop }}<span class="text-base font-normal opacity-80">/mes</span></div>
+        <p class="text-sm opacity-90 mt-1">Coach completo</p>
+        <ul class="text-sm space-y-2 mt-4">
+          <li>Todo lo de Starter</li>
+          <li>Plan semanal automatico</li>
+          <li>Macros automaticos de fotos</li>
+          <li>Graficos PNG</li>
+          <li>PDF mensual</li>
+          <li>Deportes urbanos completos</li>
+        </ul>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-6">
+        <div class="text-xs uppercase text-slate-500">Elite</div>
+        <div class="text-3xl font-bold mt-2">{{ precios.elite|cop }}<span class="text-base font-normal text-slate-500">/mes</span></div>
+        <p class="text-sm text-slate-600 mt-1">Llamadas de voz</p>
+        <ul class="text-sm space-y-2 mt-4 text-slate-700">
+          <li>Todo lo de Pro</li>
+          <li>Llamadas de voz (Realtime API)</li>
+          <li>Wearables: Whoop, Strava, Garmin</li>
+          <li>Soporte prioritario</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-10 bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
+      <div class="text-xs uppercase text-amber-700">Lifetime - cupos limitados ({{ precios.cupos_lifetime }})</div>
+      <div class="text-3xl font-bold text-amber-800 mt-2">{{ precios.lifetime|cop }}<span class="text-base font-normal opacity-80"> pago unico</span></div>
+      <p class="text-sm text-amber-700 mt-1">Acceso de por vida a TODOS los planes futuros. Solo durante beta CO.</p>
+    </div>
+
+    <p class="text-center text-slate-500 text-sm mt-8">
+      Descuento {{ precios.descuento_anual_pct }}% si pagas el ano completo.
+    </p>
+  </div>
+</section>
+
+<section class="bg-slate-50 py-16">
+  <div class="max-w-2xl mx-auto px-4 text-center">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4">Como pago?</h2>
+    <p class="text-slate-600 mb-6">Abre el bot en Telegram, escribe <code class="bg-white px-2 py-1 rounded">/pagar</code> y elige plan + metodo (Bre-B, Nequi, Daviplata, transferencia).</p>
+    <p class="text-slate-600">El admin valida tu comprobante en menos de 24 horas. Mientras tanto activamos un plan provisional para que no esperes.</p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,46 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+      <tr>
+        <th class="px-4 py-2 text-left">#</th>
+        <th class="px-4 py-2 text-left">Plan / Duracion</th>
+        <th class="px-4 py-2 text-left">Monto</th>
+        <th class="px-4 py-2 text-left">Estado</th>
+        <th class="px-4 py-2 text-left">Metodo</th>
+        <th class="px-4 py-2 text-left">Creado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in data["items"] %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-medium">
+            <a href="/admin/pagos/{{ p.id }}" class="text-brand-600 hover:underline">#{{ p.id }}</a>
+          </td>
+          <td class="px-4 py-2">{{ p.plan_solicitado }} <span class="text-xs text-slate-500">{{ p.duracion }}</span></td>
+          <td class="px-4 py-2">
+            {{ p.monto_cop|cop }}
+            {% if not p.monto_match %}<span class="text-xs text-amber-600 ml-1">(esperado {{ p.monto_esperado_cop|cop }})</span>{% endif %}
+          </td>
+          <td class="px-4 py-2">
+            {% set color = {
+              "pendiente_humano": "bg-amber-100 text-amber-700",
+              "aprobado": "bg-emerald-100 text-emerald-700",
+              "rechazado": "bg-rose-100 text-rose-700",
+              "vision_ok": "bg-sky-100 text-sky-700",
+              "vision_pendiente": "bg-slate-100 text-slate-700",
+            }.get(p.estado, "bg-slate-100 text-slate-700") %}
+            <span class="px-2 py-0.5 rounded-full text-xs {{ color }}">{{ p.estado }}</span>
+          </td>
+          <td class="px-4 py-2">{{ p.metodo }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ p.creado_en|humano }}</td>
+          <td class="px-4 py-2">
+            <a href="/admin/pagos/{{ p.id }}" class="text-sm text-brand-600 hover:underline">Ver</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="px-4 py-6 text-center text-slate-500">Sin pagos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

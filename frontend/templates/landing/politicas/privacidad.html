@@ -1,0 +1,56 @@
+{% extends "landing/_layout.html" %}
+
+{% block title %}Politica de privacidad - EntrenadorAX{% endblock %}
+{% block description %}Como manejamos tus datos personales en EntrenadorAX. Cumple Ley 1581 Colombia.{% endblock %}
+
+{% block landing_content %}
+<section class="bg-white py-12">
+  <div class="max-w-3xl mx-auto px-4 prose prose-slate">
+    <h1>Politica de privacidad</h1>
+    <p>Ultima actualizacion: enero 2026.</p>
+
+    <h2>Responsable</h2>
+    <p>EntrenadorAX es operado por AX Software, Bogota, Colombia. Cumplimos la Ley Estatutaria 1581 de 2012 (proteccion de datos personales) y el Decreto 1377 de 2013.</p>
+
+    <h2>Que datos recopilamos</h2>
+    <ul>
+      <li><strong>Telegram ID y nombre</strong>: lo da el bot al iniciar la conversacion.</li>
+      <li><strong>Datos de fitness</strong>: entrenamientos, comidas, sueno, peso, PRs que tu mismo registras.</li>
+      <li><strong>Fotos de comida</strong>: las procesamos con OpenAI Vision para calcular macros. No las almacenamos.</li>
+      <li><strong>Voz</strong>: las notas de voz se transcriben con OpenAI Whisper y se descartan despues.</li>
+      <li><strong>Comprobantes de pago</strong>: solo para validar tu plan. Eliminables.</li>
+    </ul>
+
+    <h2>Para que usamos los datos</h2>
+    <ul>
+      <li>Personalizar tu coach.</li>
+      <li>Generar tus reportes, graficos y PRs.</li>
+      <li>Enviarte recordatorios.</li>
+      <li>Validar pagos.</li>
+    </ul>
+
+    <h2>Compartimos datos?</h2>
+    <p>No vendemos datos. Compartimos solo lo minimo necesario con:</p>
+    <ul>
+      <li><strong>OpenAI</strong>: para procesar tus mensajes, fotos y voz (no entrenan modelos con tus datos via API).</li>
+      <li><strong>Telegram</strong>: la conversacion ocurre en su plataforma.</li>
+      <li><strong>Railway</strong>: hosting de la base de datos.</li>
+      <li><strong>Wearables conectados</strong>: si conectaste Whoop/Strava/Garmin, solo el token oauth.</li>
+    </ul>
+
+    <h2>Tus derechos</h2>
+    <p>Puedes en cualquier momento:</p>
+    <ul>
+      <li><code>/exportar_csv</code> - bajar todo tu historial en CSV.</li>
+      <li><code>/borrar_datos</code> - eliminacion permanente e irreversible.</li>
+      <li><code>/feedback</code> - mandarnos quejas o sugerencias.</li>
+    </ul>
+
+    <h2>Crisis y salud</h2>
+    <p>Si el bot detecta riesgo de autolesion en tus mensajes, te conecta con la <strong>Linea Atencion a la Crisis (123) de Bogota</strong>, <strong>Linea 106 ICBF</strong> o <strong>Linea Salud Mental Colombia (601) 4080000</strong>. NO somos sustituto de atencion medica.</p>
+
+    <h2>Contacto</h2>
+    <p>Para cualquier consulta sobre privacidad: <a href="mailto:privacidad@entrenadorax.com">privacidad@entrenadorax.com</a>.</p>
+  </div>
+</section>
+{% endblock %}

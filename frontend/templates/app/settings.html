@@ -1,0 +1,39 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<h1 class="text-xl font-bold text-slate-900">Configuracion</h1>
+<p class="text-sm text-slate-500">Tu perfil y preferencias.</p>
+
+<div id="perfil-view" hx-get="/api/me/perfil" hx-trigger="load" hx-swap="innerHTML"
+     class="mt-4 text-sm">Cargando...</div>
+
+<div class="mt-8 pt-6 border-t border-slate-200">
+  <h2 class="font-semibold text-slate-800 mb-2">Acciones</h2>
+  <a href="/app/wearables" class="block bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-lg text-sm mb-2">
+    Wearables conectados
+  </a>
+  <a href="/app/pagar" class="block bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-lg text-sm">
+    Ver mi plan / pagar
+  </a>
+</div>
+
+<script>
+  document.body.addEventListener("htmx:afterRequest", function (evt) {
+    if (evt.detail.elt && evt.detail.elt.id === "perfil-view") {
+      try {
+        var p = JSON.parse(evt.detail.xhr.responseText);
+        var html = '<dl class="grid grid-cols-2 gap-y-1">';
+        ["nombre","email","pais","tono","idioma","plan_actual","peso_kg","altura_cm","edad"].forEach(function (k) {
+          if (p[k] !== undefined && p[k] !== null) {
+            html += '<dt class="text-slate-500">' + k + '</dt><dd class="font-medium">' + p[k] + '</dd>';
+          }
+        });
+        html += '</dl>';
+        evt.detail.elt.innerHTML = html;
+      } catch (e) {
+        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando perfil.</p>';
+      }
+    }
+  });
+</script>
+{% endblock %}

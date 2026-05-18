@@ -134,3 +134,13 @@ sentry-sdk[fastapi]>=2.0,<3.0
 
 # Logs JSON estructurados (consumidos por Railway / agregadores).
 python-json-logger>=2.0,<3.0
+
+
+# -----------------------------------------------------------------------------
+# UI server-side (consolidacion total a Python: admin + miniapp + landing)
+# -----------------------------------------------------------------------------
+# Jinja2 para renderizar HTML server-side de admin (/admin/*), miniapp (/app/*)
+# y landing (/, /precios, /deportes/*). Reemplaza los antiguos frontends
+# Next.js / Vite / Astro. La interactividad usa HTMX y vanilla JS via CDN
+# (no requiere Node ni build step de frontend).
+jinja2>=3.1,<4.0

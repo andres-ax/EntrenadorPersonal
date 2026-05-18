@@ -1,0 +1,27 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Pagos" %}
+
+{% block admin_content %}
+<div class="bg-white rounded-xl shadow-sm p-5 mb-4">
+  <form method="get" action="/admin/pagos"
+        hx-get="/admin/pagos"
+        hx-target="#pagos-tabla"
+        hx-trigger="submit, change from:select"
+        hx-push-url="true"
+        class="flex gap-3 text-sm items-center">
+    <select name="estado" class="px-3 py-2 border border-slate-300 rounded-lg">
+      <option value="" {% if not filtros.estado %}selected{% endif %}>Todos</option>
+      {% for s in ["pendiente_humano", "aprobado", "rechazado", "vision_ok", "vision_pendiente"] %}
+        <option value="{{ s }}" {% if filtros.estado == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg">
+      Filtrar
+    </button>
+  </form>
+</div>
+
+<div id="pagos-tabla">
+  {% include "admin/_pagos_tabla.html" %}
+</div>
+{% endblock %}

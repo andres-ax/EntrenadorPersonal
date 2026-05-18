@@ -1,0 +1,34 @@
+{% extends "landing/_layout.html" %}
+
+{% block title %}Manejo de datos TCA - EntrenadorAX{% endblock %}
+{% block description %}Como manejamos datos sensibles relacionados con trastornos de conducta alimentaria (TCA).{% endblock %}
+
+{% block landing_content %}
+<section class="bg-white py-12">
+  <div class="max-w-3xl mx-auto px-4 prose prose-slate">
+    <h1>Manejo de datos TCA (Trastornos de Conducta Alimentaria)</h1>
+    <p>EntrenadorAX maneja datos de fitness y nutricion, que pueden ser sensibles para personas con TCA actuales o en recuperacion.</p>
+
+    <h2>Que hacemos para protegerte</h2>
+    <ul>
+      <li><strong>Deteccion automatica de crisis</strong>: el bot identifica mensajes con keywords de riesgo (TCA, autolesion, ideacion suicida) y te conecta con lineas de ayuda.</li>
+      <li><strong>NO incentivamos restricciones extremas</strong>: el coach no genera planes con menos de 1.500 kcal sin orden medica.</li>
+      <li><strong>NO comparamos cuerpos</strong>: no usamos imagenes de "cuerpos ideales" ni fotos de progreso de otros usuarios.</li>
+      <li><strong>NO calculamos IMC con tono critico</strong>: si pides peso objetivo, el coach evalua si es saludable y te deriva a especialista si detecta riesgo.</li>
+    </ul>
+
+    <h2>Lineas de crisis</h2>
+    <ul>
+      <li><strong>Bogota - Crisis 24/7</strong>: 123</li>
+      <li><strong>Linea 106</strong> (ICBF, jovenes): 106</li>
+      <li><strong>Linea Salud Mental Colombia</strong>: (601) 4080000</li>
+      <li><strong>Fundacion Equilibrio</strong> (TCA Colombia): <a href="https://www.fundacionequilibrio.com" target="_blank" rel="noopener">fundacionequilibrio.com</a></li>
+    </ul>
+
+    <h2>Datos eliminables</h2>
+    <p>Si quieres borrar todo tu historial: <code>/borrar_datos</code> en el bot. Es permanente e irreversible.</p>
+
+    <p>Si tu o alguien que conoces necesita ayuda inmediata: <strong>llama al 123</strong>.</p>
+  </div>
+</section>
+{% endblock %}

@@ -9,7 +9,7 @@ import logging
 import time as _t
 from typing import Optional
 
-from fastapi import Header, HTTPException
+from fastapi import Cookie, Header, HTTPException, Request
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -114,6 +114,54 @@ async def require_super(admin: dict) -> dict:
     if admin.get("rol") != RolAdmin.SUPER.value:
         raise HTTPException(403, "Requiere rol super")
     return admin
+
+
+# Nombre de la cookie HttpOnly que guarda el JWT admin tras el login del panel
+# HTML. Se setea desde POST /admin/login y se lee en `get_admin_from_cookie`.
+ADMIN_COOKIE_NAME = "admin_jwt"
+
+
+async def get_admin_from_cookie(
+    request: Request,
+    admin_jwt: str | None = Cookie(default=None, alias=ADMIN_COOKIE_NAME),
+) -> dict:
+    """Dependency para rutas HTML del panel (src/web/admin_ui.py).
+
+    Lee el JWT desde la cookie HttpOnly `admin_jwt`. Si no existe o es
+    invalido, redirige a /admin/login (via 303). Las rutas JSON siguen
+    usando `get_admin_from_token` (Authorization Bearer).
+    """
+    from fastapi.responses import RedirectResponse
+
+    if not admin_jwt:
+        raise HTTPException(
+            status_code=303,
+            detail="Redirect to login",
+            headers={"Location": "/admin/login"},
+        )
+    payload = verify_admin_jwt(admin_jwt)
+    if payload is None:
+        # Cookie expirada o invalida: limpiarla y redirigir
+        resp = RedirectResponse(url="/admin/login", status_code=303)
+        resp.delete_cookie(ADMIN_COOKIE_NAME)
+        raise HTTPException(
+            status_code=303,
+            detail="Cookie expirada",
+            headers={"Location": "/admin/login", "Set-Cookie": f"{ADMIN_COOKIE_NAME}=; Max-Age=0; Path=/"},
+        )
+    return payload
+
+
+async def get_admin_optional(
+    admin_jwt: str | None = Cookie(default=None, alias=ADMIN_COOKIE_NAME),
+) -> dict | None:
+    """Variante que NO redirige; devuelve None si no hay sesion.
+
+    Util para la pagina de login (mostrar boton "ya estas logueado").
+    """
+    if not admin_jwt:
+        return None
+    return verify_admin_jwt(admin_jwt)
 
 
 class LoginRequest(BaseModel):

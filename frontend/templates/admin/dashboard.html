@@ -1,0 +1,92 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Dashboard" %}
+
+{% block admin_content %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs text-slate-500 uppercase">Ingresos {{ finanzas.periodo_dias }}d</div>
+    <div class="text-2xl font-bold mt-1">{{ finanzas.ingresos_periodo_cop|cop }}</div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs text-slate-500 uppercase">Pagos por revisar</div>
+    <div class="text-2xl font-bold mt-1 {% if finanzas.pagos_pendientes_revision %}text-amber-600{% endif %}">
+      {{ finanzas.pagos_pendientes_revision }}
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs text-slate-500 uppercase">Usuarios totales</div>
+    <div class="text-2xl font-bold mt-1">
+      {{ finanzas.usuarios_por_plan.values()|sum }}
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs text-slate-500 uppercase">Crisis 7d</div>
+    <div class="text-2xl font-bold mt-1 {% if crisis_recientes.total %}text-rose-600{% endif %}">
+      {{ crisis_recientes.total }}
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-slate-800">Pagos pendientes</h2>
+      <a href="/admin/pagos" class="text-sm text-brand-600 hover:underline">Ver todos</a>
+    </div>
+    {% if pagos_pendientes.items %}
+      <ul class="divide-y divide-slate-100 text-sm">
+        {% for p in pagos_pendientes.items %}
+          <li class="py-2 flex items-center justify-between">
+            <div>
+              <a href="/admin/pagos/{{ p.id }}" class="font-medium text-slate-800 hover:text-brand-600">
+                Pago #{{ p.id }}
+              </a>
+              <span class="ml-2 text-xs text-slate-500">{{ p.plan_solicitado }} - {{ p.metodo }}</span>
+            </div>
+            <div class="text-right">
+              <div class="font-semibold">{{ p.monto_cop|cop }}</div>
+              <div class="text-xs text-slate-500">{{ p.creado_en|humano }}</div>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-slate-500">Sin pagos pendientes.</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-slate-800">Crisis recientes</h2>
+      <a href="/admin/crisis" class="text-sm text-brand-600 hover:underline">Ver todas</a>
+    </div>
+    {% if crisis_recientes.items %}
+      <ul class="divide-y divide-slate-100 text-sm">
+        {% for c in crisis_recientes.items %}
+          <li class="py-2 flex items-center justify-between">
+            <div>
+              <span class="font-medium text-slate-800">Nivel {{ c.nivel }}</span>
+              <span class="ml-2 text-xs text-slate-500">UID {{ c.usuario_id }}</span>
+            </div>
+            <div class="text-xs text-slate-500">{{ c.creado_en|humano }}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-slate-500">Sin crisis recientes.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm p-5 mt-6">
+  <h2 class="font-semibold text-slate-800 mb-3">Usuarios por plan</h2>
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+    {% for plan, count in finanzas.usuarios_por_plan.items() %}
+      <div class="p-3 rounded-lg bg-slate-50">
+        <div class="text-xs uppercase text-slate-500">{{ plan }}</div>
+        <div class="text-xl font-bold text-slate-800">{{ count }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

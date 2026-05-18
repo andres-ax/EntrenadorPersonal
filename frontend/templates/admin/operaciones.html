@@ -1,0 +1,49 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Operaciones" %}
+
+{% block admin_content %}
+<div class="bg-white rounded-xl shadow-sm p-6 max-w-2xl">
+  <h2 class="font-semibold text-slate-800 mb-2">Broadcast a usuarios</h2>
+  <p class="text-sm text-slate-500 mb-4">
+    Envia un mensaje masivo. El bot publica via Redis pubsub y filtra por plan/pais
+    si se especifican. Solo rol super.
+  </p>
+  {% if result %}
+    <div class="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+      Broadcast encolado correctamente.
+    </div>
+  {% endif %}
+  <form method="post" action="/admin/operaciones/broadcast_form" class="space-y-3 text-sm">
+    <div>
+      <label class="block text-xs uppercase text-slate-500 mb-1">Mensaje</label>
+      <textarea name="mensaje" rows="4" required maxlength="4000"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg"></textarea>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs uppercase text-slate-500 mb-1">Plan minimo (opcional)</label>
+        <select name="plan_minimo" class="w-full px-3 py-2 border border-slate-300 rounded-lg">
+          <option value="">Todos</option>
+          <option value="starter">starter+</option>
+          <option value="pro">pro+</option>
+          <option value="elite">elite+</option>
+          <option value="lifetime">solo lifetime</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs uppercase text-slate-500 mb-1">Pais (opcional)</label>
+        <input name="pais" maxlength="2" placeholder="CO, MX, AR..."
+               class="w-full px-3 py-2 border border-slate-300 rounded-lg uppercase" />
+      </div>
+    </div>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="silent" value="true" checked /> Notificacion silenciosa
+    </label>
+    <button type="submit"
+            onclick="return confirm('Enviar broadcast a todos los usuarios que cumplen los filtros?');"
+            class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2 rounded-lg">
+      Enviar broadcast
+    </button>
+  </form>
+</div>
+{% endblock %}

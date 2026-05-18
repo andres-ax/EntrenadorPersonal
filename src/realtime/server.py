@@ -19,7 +19,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from starlette.websockets import WebSocketState
@@ -54,45 +54,13 @@ if settings.sentry_dsn:
         logger.exception("Sentry init fallo en realtime-ws")
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    await init_db()
-    logger.info("realtime-ws iniciado")
-    yield
-    await close_db()
-    await close_redis()
+# Router que se monta en src/main.py. Antes este modulo era un FastAPI
+# standalone (Dockerfile.realtime), pero ahora todo corre en el mismo
+# proceso para simplificar deploy (consolidacion a Python puro).
+router = APIRouter(tags=["realtime"])
 
 
-app = FastAPI(title="EntrenadorAX Realtime WS", lifespan=lifespan)
-
-allowed_origins = []
-if settings.miniapp_url:
-    allowed_origins.append(str(settings.miniapp_url).rstrip("/"))
-if settings.landing_url:
-    allowed_origins.append(str(settings.landing_url).rstrip("/"))
-if not allowed_origins:
-    allowed_origins = ["*"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/health")
-async def health() -> dict:
-    db_ok = await ping_db()
-    redis_ok = await ping_redis()
-    return {
-        "status": "ok" if (db_ok and redis_ok) else "degraded",
-        "db": db_ok,
-        "redis": redis_ok,
-    }
-
-
-@app.websocket("/ws/realtime")
+@router.websocket("/ws/realtime")
 async def ws_realtime(ws: WebSocket) -> None:
     token = ws.query_params.get("token", "")
     uid = verify_jwt(token)

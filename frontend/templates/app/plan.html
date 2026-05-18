@@ -1,0 +1,24 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<h1 class="text-xl font-bold text-slate-900">Plan semanal</h1>
+<p class="text-sm text-slate-500">Genera o consulta tu plan de la semana.</p>
+
+<div class="mt-4">
+  <button
+    hx-post="/api/me/plan/generar"
+    hx-target="#plan-output"
+    hx-swap="innerHTML"
+    hx-indicator="#plan-loading"
+    class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-lg">
+    Generar plan nuevo
+  </button>
+  <div id="plan-loading" class="htmx-indicator text-center text-sm text-slate-500 mt-3">
+    Generando plan...
+  </div>
+</div>
+
+<div id="plan-output" class="mt-6 prose prose-sm">
+  <p class="text-slate-500">Toca el boton para generar.</p>
+</div>
+{% endblock %}

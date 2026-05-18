@@ -1,0 +1,35 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Usuarios" %}
+
+{% block admin_content %}
+<div class="bg-white rounded-xl shadow-sm p-5 mb-4">
+  <form method="get" action="/admin/usuarios"
+        hx-get="/admin/usuarios"
+        hx-target="#usuarios-tabla"
+        hx-trigger="submit, change from:select"
+        hx-push-url="true"
+        class="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
+    <input type="text" name="q" value="{{ filtros.q or '' }}"
+           placeholder="Buscar nombre / email / codigo"
+           class="md:col-span-2 px-3 py-2 border border-slate-300 rounded-lg" />
+    <select name="plan" class="px-3 py-2 border border-slate-300 rounded-lg">
+      <option value="">Todos los planes</option>
+      {% for p in ["free", "starter", "pro", "elite", "lifetime"] %}
+        <option value="{{ p }}" {% if filtros.plan == p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <select name="bloqueado" class="px-3 py-2 border border-slate-300 rounded-lg">
+      <option value="">Bloqueados: todos</option>
+      <option value="true" {% if filtros.bloqueado is sameas true %}selected{% endif %}>Solo bloqueados</option>
+      <option value="false" {% if filtros.bloqueado is sameas false %}selected{% endif %}>Solo activos</option>
+    </select>
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 rounded-lg">
+      Filtrar
+    </button>
+  </form>
+</div>
+
+<div id="usuarios-tabla">
+  {% include "admin/_usuarios_tabla.html" %}
+</div>
+{% endblock %}

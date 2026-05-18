@@ -1,0 +1,29 @@
+{# Sidebar fijo del panel admin. La variable `active` indica que item resaltar. #}
+<aside class="w-60 bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+  <div class="p-4 border-b border-slate-800">
+    <div class="text-lg font-bold">EntrenadorAX</div>
+    <div class="text-xs text-slate-400">Admin Panel</div>
+  </div>
+  <nav class="flex-1 p-3 space-y-1 text-sm">
+    {% set items = [
+      ("dashboard", "/admin/", "Dashboard"),
+      ("usuarios", "/admin/usuarios", "Usuarios"),
+      ("pagos", "/admin/pagos", "Pagos"),
+      ("crisis", "/admin/crisis", "Crisis"),
+      ("finanzas", "/admin/finanzas", "Finanzas"),
+      ("operaciones", "/admin/operaciones", "Operaciones"),
+      ("admins", "/admin/admins", "Admins"),
+    ] %}
+    {% for key, url, label in items %}
+      <a href="{{ url }}"
+         class="flex items-center px-3 py-2 rounded-lg
+                {% if active == key %}bg-brand-600 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+        {{ label }}
+      </a>
+    {% endfor %}
+  </nav>
+  <footer class="p-3 border-t border-slate-800 text-xs text-slate-500">
+    <div>v2.0 - Python only</div>
+    <a href="/" class="hover:text-slate-300">Ver landing</a>
+  </footer>
+</aside>

@@ -1,0 +1,28 @@
+{% extends "app/_layout.html" %}
+{% set page_title = "Dashboard" %}
+
+{% block app_content %}
+<h1 class="text-xl font-bold text-slate-900">Hoy</h1>
+<p class="text-sm text-slate-500">Resumen de tu dia y graficos.</p>
+
+{# Los charts vienen del endpoint /api/me/charts/*.png que renderiza
+   matplotlib server-side. Solo agregamos `?_=ts` para evitar cache. #}
+<div class="grid grid-cols-1 gap-3 mt-4">
+  <div class="bg-white border border-slate-200 rounded-xl p-3">
+    <h3 class="text-xs uppercase text-slate-500 mb-2">Peso</h3>
+    <img src="/api/me/charts/peso.png" alt="Peso" class="w-full rounded" loading="lazy" />
+  </div>
+  <div class="bg-white border border-slate-200 rounded-xl p-3">
+    <h3 class="text-xs uppercase text-slate-500 mb-2">Volumen entreno</h3>
+    <img src="/api/me/charts/volumen.png" alt="Volumen" class="w-full rounded" loading="lazy" />
+  </div>
+  <div class="bg-white border border-slate-200 rounded-xl p-3">
+    <h3 class="text-xs uppercase text-slate-500 mb-2">Macros</h3>
+    <img src="/api/me/charts/macros.png" alt="Macros" class="w-full rounded" loading="lazy" />
+  </div>
+  <div class="bg-white border border-slate-200 rounded-xl p-3">
+    <h3 class="text-xs uppercase text-slate-500 mb-2">Streak</h3>
+    <img src="/api/me/charts/streak.png" alt="Streak" class="w-full rounded" loading="lazy" />
+  </div>
+</div>
+{% endblock %}

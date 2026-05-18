@@ -1,0 +1,50 @@
+{% extends "landing/_layout.html" %}
+
+{% block title %}71 deportes soportados - EntrenadorAX{% endblock %}
+{% block description %}Lista completa de deportes que el coach IA maneja: BMX, skate, surf, MMA, climbing, futbol, trail, tejo, coleo y mas.{% endblock %}
+
+{% block landing_content %}
+<section class="bg-white py-12">
+  <div class="max-w-6xl mx-auto px-4">
+    <h1 class="text-4xl font-bold text-slate-900 mb-2">Deportes soportados ({{ deportes|length }})</h1>
+    <p class="text-slate-600 mb-10">Cada uno con vocabulario, metricas y escena colombiana propia. El coach se adapta a tu deporte.</p>
+
+    {% set por_cat = {} %}
+    {% for d in deportes %}
+      {% if d.categoria not in por_cat %}
+        {% set _ = por_cat.update({d.categoria: []}) %}
+      {% endif %}
+      {% set _ = por_cat[d.categoria].append(d) %}
+    {% endfor %}
+
+    {% set categoria_labels = {
+      "urbano": "Urbanos / Skill-based",
+      "combate": "Combate / Artes marciales",
+      "equipo": "Deportes de equipo",
+      "individual_outdoor": "Outdoor individual",
+      "indoor": "Indoor / Estudio",
+      "tradicional_co": "Tradicionales Colombia",
+      "ecuestre": "Ecuestre",
+      "acuatico": "Acuaticos",
+      "motor": "Motor",
+    } %}
+
+    {% for cat in ["urbano","combate","equipo","individual_outdoor","indoor","tradicional_co","ecuestre","acuatico","motor"] %}
+      {% if cat in por_cat %}
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-slate-800 mb-4">{{ categoria_labels[cat] }} <span class="text-sm text-slate-500 font-normal">({{ por_cat[cat]|length }})</span></h2>
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {% for d in por_cat[cat] %}
+              <a href="/deportes/{{ d.slug }}"
+                 class="bg-white border border-slate-200 hover:border-brand-500 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:text-brand-700 transition">
+                {{ d.nombre }}
+                {% if d.destacado %}<span class="text-xs text-amber-600">*</span>{% endif %}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

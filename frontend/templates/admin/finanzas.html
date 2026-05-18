@@ -1,0 +1,64 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Finanzas" %}
+
+{% block admin_content %}
+<div class="bg-white rounded-xl shadow-sm p-5 mb-4">
+  <form method="get" class="flex gap-3 text-sm items-center">
+    <label>Periodo</label>
+    <select name="dias" class="px-3 py-2 border border-slate-300 rounded-lg">
+      {% for d in [7, 30, 90, 365] %}
+        <option value="{{ d }}" {% if dias == d %}selected{% endif %}>{{ d }} dias</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg">
+      Aplicar
+    </button>
+  </form>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs text-slate-500 uppercase">Ingresos {{ data.periodo_dias }}d</div>
+    <div class="text-3xl font-bold mt-1 text-emerald-600">{{ data.ingresos_periodo_cop|cop }}</div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs text-slate-500 uppercase">Pagos pendientes revision</div>
+    <div class="text-3xl font-bold mt-1 {% if data.pagos_pendientes_revision %}text-amber-600{% endif %}">{{ data.pagos_pendientes_revision }}</div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs text-slate-500 uppercase">Calculado a</div>
+    <div class="text-sm text-slate-600 mt-1">{{ data.fecha|fecha }}</div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-3">Usuarios por plan</h3>
+    <table class="w-full text-sm">
+      <thead class="text-xs uppercase text-slate-500"><tr><th class="text-left">Plan</th><th class="text-right">Usuarios</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for plan, count in data.usuarios_por_plan.items() %}
+          <tr><td class="py-2">{{ plan }}</td><td class="py-2 text-right font-medium">{{ count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-3">Ingresos por metodo</h3>
+    <table class="w-full text-sm">
+      <thead class="text-xs uppercase text-slate-500"><tr><th class="text-left">Metodo</th><th class="text-right">Total</th><th class="text-right">N</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for metodo, info in data.ingresos_por_metodo.items() %}
+          <tr>
+            <td class="py-2">{{ metodo }}</td>
+            <td class="py-2 text-right font-medium">{{ info.total_cop|cop }}</td>
+            <td class="py-2 text-right text-slate-500">{{ info.n }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="py-4 text-center text-slate-500">Sin pagos en el periodo.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

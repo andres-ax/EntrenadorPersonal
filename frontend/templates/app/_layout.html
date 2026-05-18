@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+{# Telegram WebApp SDK. Usamos `window.Telegram.WebApp` directamente sin
+   dependencias adicionales. #}
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  body { background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #1e293b); }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex flex-col max-w-md mx-auto bg-white">
+  {% include "app/_navbar.html" %}
+  <main class="flex-1 p-4 space-y-3">
+    {% block app_content %}{% endblock %}
+  </main>
+  {% include "app/_tabbar.html" %}
+</div>
+{% endblock %}

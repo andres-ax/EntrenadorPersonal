@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block body %}
+{% include "landing/_components/_navbar.html" %}
+<main>
+  {% block landing_content %}{% endblock %}
+</main>
+{% include "landing/_components/_footer.html" %}
+{% endblock %}

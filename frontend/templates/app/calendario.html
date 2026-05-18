@@ -1,0 +1,32 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<h1 class="text-xl font-bold text-slate-900">Calendario</h1>
+<p class="text-sm text-slate-500">Tus entrenos de las ultimas 4 semanas.</p>
+
+<div id="calendar-data" hx-get="/api/me/calendar" hx-trigger="load" hx-swap="innerHTML"
+     class="mt-4 text-sm text-slate-500">
+  Cargando...
+</div>
+
+<script>
+  // Como /api/me/calendar devuelve JSON (no HTML), renderizamos manualmente.
+  document.body.addEventListener("htmx:afterRequest", function (evt) {
+    if (evt.detail.elt && evt.detail.elt.id === "calendar-data") {
+      try {
+        var data = JSON.parse(evt.detail.xhr.responseText);
+        var html = '<div class="grid grid-cols-7 gap-1 text-center text-xs">';
+        var days = data.dias || [];
+        days.forEach(function (d) {
+          var bg = d.tiene_entreno ? "bg-emerald-500" : "bg-slate-200";
+          html += '<div class="' + bg + ' rounded p-2 text-white">' + (d.dia || "") + '</div>';
+        });
+        html += '</div>';
+        evt.detail.elt.innerHTML = html;
+      } catch (e) {
+        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando calendario.</p>';
+      }
+    }
+  });
+</script>
+{% endblock %}

@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-
-Sitemap: https://entrenadorpersonal-production.up.railway.app/sitemap-index.xml

@@ -1,0 +1,35 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<h1 class="text-xl font-bold text-slate-900">Mejorar tu plan</h1>
+<p class="text-sm text-slate-500">Pago via Bre-B, Nequi o transferencia.</p>
+
+<div class="space-y-3 mt-4">
+  <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+    <div class="text-xs uppercase text-slate-500">Starter</div>
+    <div class="text-2xl font-bold">{{ precios.starter|cop }}<span class="text-sm font-normal text-slate-500">/mes</span></div>
+  </div>
+  <div class="bg-brand-600 text-white rounded-xl p-4">
+    <div class="text-xs uppercase opacity-80">Pro - mas popular</div>
+    <div class="text-2xl font-bold">{{ precios.pro|cop }}<span class="text-sm font-normal opacity-80">/mes</span></div>
+  </div>
+  <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+    <div class="text-xs uppercase text-slate-500">Elite (con voz)</div>
+    <div class="text-2xl font-bold">{{ precios.elite|cop }}<span class="text-sm font-normal text-slate-500">/mes</span></div>
+  </div>
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+    <div class="text-xs uppercase text-amber-700">Lifetime</div>
+    <div class="text-2xl font-bold text-amber-800">{{ precios.lifetime|cop }}</div>
+    <div class="text-xs text-amber-700">pago unico, cupos limitados</div>
+  </div>
+</div>
+
+<p class="text-sm text-slate-600 mt-6">
+  Para pagar, abre el bot en Telegram y escribe <code class="bg-slate-100 px-2 py-0.5 rounded">/pagar</code>.
+  El te guia paso a paso.
+</p>
+
+<a href="https://t.me/EntrenadorAX_bot" class="block mt-4 bg-brand-600 hover:bg-brand-700 text-white text-center font-semibold py-3 rounded-lg">
+  Abrir bot
+</a>
+{% endblock %}

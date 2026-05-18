@@ -17,7 +17,7 @@ import logging
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Response
 from pydantic import BaseModel
 
 from src.config import settings
@@ -123,8 +123,14 @@ class TokenResp(BaseModel):
 
 
 @router.post("/initdata", response_model=TokenResp)
-async def validar_initdata(req: InitDataReq) -> TokenResp:
-    """Valida initData del Mini App y devuelve JWT corto."""
+async def validar_initdata(req: InitDataReq, response: Response) -> TokenResp:
+    """Valida initData del Mini App y devuelve JWT corto.
+
+    Tambien setea una cookie HttpOnly `user_jwt` que las paginas HTML del
+    mini app (/app/*) leen para autenticar al usuario sin pasar el token
+    por JS / localStorage. El JSON response se mantiene por compatibilidad
+    con clientes que ya envian el JWT en el header Authorization.
+    """
     parsed = _validar_init_data(req.init_data)
     if parsed is None:
         raise HTTPException(401, "initData invalido")
@@ -134,7 +140,20 @@ async def validar_initdata(req: InitDataReq) -> TokenResp:
         uid = int(user.get("id"))
     except Exception:
         raise HTTPException(401, "user invalido en initData")
-    return TokenResp(jwt=_sign_jwt(uid), uid=uid, expira_en=JWT_TTL_SECONDS)
+    jwt = _sign_jwt(uid)
+    # Cookie para las paginas HTML del mini app (Telegram WebApp).
+    # SameSite=None porque Telegram abre la web app en un iframe cross-site.
+    # Secure obligatorio para SameSite=None.
+    response.set_cookie(
+        key="user_jwt",
+        value=jwt,
+        max_age=JWT_TTL_SECONDS,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
+    return TokenResp(jwt=jwt, uid=uid, expira_en=JWT_TTL_SECONDS)
 
 
 async def get_uid_from_token(authorization: str | None = Header(None)) -> int:

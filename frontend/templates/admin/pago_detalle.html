@@ -1,0 +1,76 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Pago #" ~ comp_id %}
+{% set comp = data.comprobante %}
+{% set u = data.usuario %}
+
+{% block admin_content %}
+<a href="/admin/pagos" class="text-sm text-slate-500 hover:text-slate-800">&larr; Volver a pagos</a>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+  <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
+    <h2 class="font-bold text-lg text-slate-800 mb-3">
+      Pago #{{ comp.id }}
+      <span class="ml-2 text-sm font-normal px-2 py-0.5 rounded-full bg-slate-100">{{ comp.estado }}</span>
+    </h2>
+    <div class="text-sm grid grid-cols-2 gap-y-2">
+      <div>Usuario: <a href="/admin/usuarios/{{ u.telegram_id }}" class="text-brand-600 hover:underline">{{ u.nombre or u.telegram_id }}</a></div>
+      <div>Plan: <span class="font-medium">{{ comp.plan_solicitado }} / {{ comp.duracion }}</span></div>
+      <div>Monto recibido: <span class="font-medium">{{ comp.monto_cop|cop }}</span></div>
+      <div>Monto esperado: <span class="font-medium">{{ comp.monto_esperado_cop|cop }}</span> {% if comp.monto_match %}<span class="text-emerald-600 text-xs">match</span>{% else %}<span class="text-amber-600 text-xs">diferencia</span>{% endif %}</div>
+      <div>Metodo: <span class="font-medium">{{ comp.metodo }}</span></div>
+      <div>Referencia: <span class="font-mono text-xs">{{ comp.referencia or "-" }}</span></div>
+      <div>Cuenta origen: <span class="font-mono text-xs">{{ comp.cuenta_origen or "-" }}</span></div>
+      <div>Cuenta destino: <span class="font-mono text-xs">{{ comp.cuenta_destino or "-" }}</span></div>
+      <div>Fecha pago: <span class="font-medium">{{ comp.fecha_pago|fecha if comp.fecha_pago else "-" }}</span></div>
+      <div>Creado: <span class="font-medium">{{ comp.creado_en|fecha }}</span></div>
+    </div>
+    {% if comp.motivo_rechazo %}
+      <div class="mt-4 p-3 bg-rose-50 text-rose-700 text-sm rounded-lg">
+        <strong>Rechazado:</strong> {{ comp.motivo_rechazo }}
+      </div>
+    {% endif %}
+    {% if comp.notas_admin %}
+      <div class="mt-4 p-3 bg-slate-50 text-slate-700 text-sm rounded-lg">
+        <strong>Notas admin:</strong> {{ comp.notas_admin }}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm p-5 space-y-3">
+    {% if comp.foto_file_id %}
+      <a href="/admin/pagos/{{ comp.id }}/foto" target="_blank">
+        <img src="/admin/pagos/{{ comp.id }}/foto" alt="Comprobante" class="w-full rounded-lg border border-slate-200" />
+      </a>
+    {% else %}
+      <div class="text-sm text-slate-500">Sin foto.</div>
+    {% endif %}
+
+    {% if comp.estado == "pendiente_humano" %}
+      <form method="post" action="/admin/pagos/{{ comp.id }}/aprobar_form" class="space-y-2">
+        <label class="text-xs uppercase text-slate-500">Notas (opcional)</label>
+        <textarea name="notas" rows="2" class="w-full px-2 py-1 border border-slate-300 rounded text-sm"></textarea>
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1.5 rounded">
+          Aprobar pago
+        </button>
+      </form>
+      <form method="post" action="/admin/pagos/{{ comp.id }}/rechazar_form" class="space-y-2 pt-2 border-t border-slate-100">
+        <label class="text-xs uppercase text-slate-500">Motivo rechazo</label>
+        <input name="motivo" required class="w-full px-2 py-1 border border-slate-300 rounded text-sm" />
+        <label class="text-xs flex items-center gap-2">
+          <input type="checkbox" name="bloquear" value="true" /> Tambien bloquear al usuario
+        </label>
+        <button type="submit" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-1.5 rounded">
+          Rechazar pago
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if comp.vision_payload %}
+  <div class="mt-6 bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-2">Vision payload</h3>
+    <pre class="text-xs bg-slate-50 p-3 rounded overflow-x-auto">{{ comp.vision_payload|tojson(indent=2) }}</pre>
+  </div>
+{% endif %}
+{% endblock %}

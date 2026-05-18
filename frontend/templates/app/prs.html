@@ -1,0 +1,35 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<h1 class="text-xl font-bold text-slate-900">Personal Records</h1>
+<p class="text-sm text-slate-500">Tus mejores marcas registradas.</p>
+
+<div id="prs-table" hx-get="/api/me/prs" hx-trigger="load" hx-swap="innerHTML"
+     class="mt-4 text-sm">
+  Cargando...
+</div>
+
+<script>
+  document.body.addEventListener("htmx:afterRequest", function (evt) {
+    if (evt.detail.elt && evt.detail.elt.id === "prs-table") {
+      try {
+        var data = JSON.parse(evt.detail.xhr.responseText);
+        var items = data.items || data || [];
+        if (!items.length) {
+          evt.detail.elt.innerHTML = '<p class="text-slate-500">Aun no tienes PRs. Pidele al bot: "registra mi PR de sentadilla 100kg x5".</p>';
+          return;
+        }
+        var html = '<ul class="divide-y divide-slate-100">';
+        items.forEach(function (p) {
+          html += '<li class="py-3"><div class="font-medium">' + (p.ejercicio || p.skill || "?") + '</div>'
+                + '<div class="text-xs text-slate-500">' + (p.peso_kg ? p.peso_kg + " kg" : "") + (p.reps ? " x " + p.reps : "") + (p.detalle || "") + '</div></li>';
+        });
+        html += '</ul>';
+        evt.detail.elt.innerHTML = html;
+      } catch (e) {
+        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando PRs.</p>';
+      }
+    }
+  });
+</script>
+{% endblock %}

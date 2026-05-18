@@ -1,68 +1,70 @@
-# DEPLOY.md - Deploy de EntrenadorAX V2
+# DEPLOY.md - Deploy de EntrenadorAX
 
-Arquitectura multi-servicio en Railway + frontends estaticos en Cloudflare Pages.
+Stack consolidado: **un solo proceso Python en Railway** que sirve el bot,
+el admin panel, la mini app y la landing. Cero servicios extra.
 
-## Servicios
+## Servicios Railway
 
-| Servicio | Stack | Deploy | Puerto |
-|---|---|---|---|
-| `bot-api` | FastAPI + python-telegram-bot | Railway (Dockerfile) | 8000 |
-| `realtime-ws` | FastAPI + WebSocket relay OpenAI | Railway (Dockerfile.realtime) | 8001 |
-| `worker` | arq + asyncpg | Railway (Dockerfile.worker) | n/a |
-| `admin-web` | Next.js 15 | Railway (frontend/admin/Dockerfile) | 3001 |
-| `miniapp` | Vite + React | Cloudflare Pages (estatico) | - |
-| `landing` | Astro 5 | Cloudflare Pages (estatico) | - |
-| Postgres | managed | Railway addon | 5432 |
-| Redis | managed | Railway addon | 6379 |
+| Servicio | Rol | Dockerfile |
+|---|---|---|
+| `EntrenadorPersonal` | FastAPI + bot + admin HTML + mini app HTML + landing | `Dockerfile` |
+| `Postgres` | DB managed | (Railway addon) |
+| `Redis` | cache / pubsub / sesiones managed | (Railway addon) |
+
+> Antes existian servicios separados `realtime-ws`, `worker`,
+> `entrenadorax-admin`, y frontends en Cloudflare Pages (Astro / Vite /
+> Next.js). Todos consolidados en el unico FastAPI con templates Jinja2.
 
 ## Setup inicial Railway
 
 1. Crear proyecto en Railway.
 2. Anadir addons: Postgres + Redis.
-3. Crear 4 servicios:
-   - `bot-api` -> apunta al repo, usa `Dockerfile`
-   - `realtime-ws` -> mismo repo, usa `Dockerfile.realtime`
-   - `worker` -> mismo repo, usa `Dockerfile.worker`
-   - `admin-web` -> mismo repo, root path `frontend/admin/`, usa `Dockerfile`
+3. Crear servicio `EntrenadorPersonal` apuntando al repo (usa `Dockerfile`).
+4. Setear variables (las mas importantes):
 
-4. Setea variables compartidas (mismo Postgres y Redis en los 4):
-   - `DATABASE_URL` -> referencia a la DB de Railway
-   - `REDIS_URL` -> referencia al Redis de Railway
-   - `TELEGRAM_TOKEN`, `OPENAI_API_KEY`, `JWT_SECRET`, `ADMIN_TOKEN`, `WEBHOOK_SECRET`, `FERNET_KEY`
-   - `MINIAPP_URL`, `LANDING_URL`, `ADMIN_URL`, `REALTIME_WS_URL`
+```
+TELEGRAM_TOKEN=...
+OPENAI_API_KEY=sk-proj-...
+DATABASE_URL=postgresql://...   # Railway lo da automatico si haces ref
+REDIS_URL=redis://...           # idem
+JWT_SECRET=...                  # python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+ADMIN_TOKEN=...                 # idem
+WEBHOOK_SECRET=...              # openssl rand -hex 32
+FERNET_KEY=...                  # Fernet.generate_key().decode()
+ENV=prod
 
-5. Variables especificas:
-   - `admin-web`: `NEXT_PUBLIC_API_BASE_URL` = URL publica del bot-api
-   - `realtime-ws`: solo necesita las compartidas
+# URLs (Railway expone *.up.railway.app automaticamente)
+WEBHOOK_BASE_URL=https://entrenadorpersonal-production.up.railway.app
+MINIAPP_URL=https://entrenadorpersonal-production.up.railway.app/app
+LANDING_URL=https://entrenadorpersonal-production.up.railway.app
 
-## Frontends Cloudflare Pages
+# Seed del primer admin (solo en primer deploy)
+ADMIN_SEED_EMAIL=admin@entrenadorax.com
+ADMIN_SEED_PASSWORD=...
 
-```bash
-cd frontend/miniapp
-npm install && npm run build
-wrangler pages deploy dist --project-name entrenadorax-miniapp
+# Pricing
+PRECIO_STARTER_COP=5000
+PRECIO_PRO_COP=14990
+PRECIO_ELITE_COP=39990
+PRECIO_LIFETIME_COP=399000
 
-cd ../landing
-npm install && npm run build
-wrangler pages deploy dist --project-name entrenadorax-landing
+# Opcional: Sentry / Plausible
+SENTRY_DSN=...
+PLAUSIBLE_DOMAIN=entrenadorpersonal-production.up.railway.app
 ```
 
-Dominios actuales (Railway expone `*.up.railway.app` por defecto):
-- Landing + miniapp + API + WS realtime: `entrenadorpersonal-production.up.railway.app`
-- Admin panel: `entrenadorax-admin-production.up.railway.app`
-
-Si en el futuro consigues un dominio propio, lo agregas en Railway >
-Settings > Domains y apuntas el CNAME desde tu proveedor DNS.
-
 ## Migraciones DB
-
-Una vez deployed, ejecuta en bot-api:
 
 ```bash
 railway run alembic upgrade head
 ```
 
+Tambien corren automaticamente al arrancar el contenedor (`start.sh`).
+
 ## Crear primer admin
+
+Si seteas `ADMIN_SEED_EMAIL` + `ADMIN_SEED_PASSWORD`, el bot crea el admin
+en el primer arranque (idempotente). Alternativa manual:
 
 ```bash
 railway run python scripts/crear_admin.py \
@@ -71,56 +73,52 @@ railway run python scripts/crear_admin.py \
 
 ## Configurar webhook Telegram
 
-```bash
-# Obtener el secret token del bot-api
-curl https://entrenadorpersonal-production.up.railway.app/webhook-info \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+El bot setea el webhook automaticamente al arrancar si `WEBHOOK_BASE_URL`
+esta configurado. Si necesitas hacerlo manualmente:
 
-# Setear webhook en Telegram (en cada arranque del bot se hace automatico
-# via auto-setWebhook si WEBHOOK_BASE_URL esta seteada; este curl es manual).
+```bash
 curl -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/setWebhook" \
   -d "url=https://entrenadorpersonal-production.up.railway.app/webhook" \
   -d "secret_token=$WEBHOOK_SECRET" \
   -d "allowed_updates=[\"message\",\"callback_query\",\"poll_answer\",\"message_reaction\",\"successful_payment\",\"pre_checkout_query\",\"inline_query\"]"
 ```
 
-## Health checks
-
-- `https://entrenadorpersonal-production.up.railway.app/health` -> bot-api (DB + Redis + bot + WS realtime)
-- `https://entrenadorax-admin-production.up.railway.app/login` -> admin-web
-
-## Migracion v1 -> v2
+Inspeccionar config actual:
 
 ```bash
-# 1. Backup DB
-railway run pg_dump $DATABASE_URL > backup_v1.sql
-
-# 2. Aplicar migraciones nuevas
-railway run alembic upgrade head
-
-# 3. Migrar suscripciones existentes a tiers
-railway run python scripts/migrar_suscripciones_a_tiers.py             # dry-run
-railway run python scripts/migrar_suscripciones_a_tiers.py --apply    # ejecuta
+curl https://entrenadorpersonal-production.up.railway.app/webhook-info \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
-## Setear menu button Mini App
+## Endpoints publicos del servicio unico
 
-Tras setear `MINIAPP_URL`, reinicia el bot-api. El `post_init` registra
-automaticamente `setChatMenuButton` apuntando a la Mini App.
+- `/` -> landing HTML
+- `/precios`, `/deportes`, `/deportes/{slug}`, `/politicas/*` -> landing
+- `/sitemap.xml`, `/robots.txt` -> SEO
+- `/admin/login` -> panel HTML (Jinja2)
+- `/admin/`, `/admin/usuarios`, `/admin/pagos`, etc. -> panel HTML
+- `/admin/auth/login`, `/admin/usuarios`, ... -> JSON API (X-Admin-Token o JWT)
+- `/app/dashboard`, `/app/llamar`, etc. -> mini app HTML (cookie user_jwt)
+- `/api/me/*`, `/api/auth/*`, `/api/public/*`, `/api/integraciones/*` -> JSON API
+- `/webhook` -> Telegram bot
+- `/ws/realtime` -> WebSocket llamada de voz
+- `/health` -> healthcheck
 
-## Wearables OAuth setup
+## Health checks
 
-Para cada proveedor, registra app en su developer portal:
+```bash
+curl https://entrenadorpersonal-production.up.railway.app/health
+# {"status":"ok","bot":true,"db":true,"redis":true,"db_pool":{...}}
+```
 
-- Whoop: redirect URI = `https://entrenadorpersonal-production.up.railway.app/api/integraciones/whoop/callback`
-- Strava: idem
-- Garmin: idem
-- Google Fit: idem
+## Wearables OAuth
 
-Setea `<PROVEEDOR>_CLIENT_ID` y `<PROVEEDOR>_CLIENT_SECRET` en bot-api y worker.
+Registrar redirect URI en cada developer portal:
+- `https://entrenadorpersonal-production.up.railway.app/api/integraciones/{whoop|strava|garmin|google_fit}/callback`
+
+Setear `<PROVEEDOR>_CLIENT_ID` y `<PROVEEDOR>_CLIENT_SECRET` en el servicio.
 
 ## Cuentas de pago
 
-Crea cuentas Bre-B / Nequi / Daviplata empresariales:
-- `CUENTA_DESTINO_PAGO` -> llave Bre-B principal (ej: 300 123 4567)
+- `CUENTA_DESTINO_PAGO` -> llave Bre-B principal
 - `CUENTA_DESTINO_ALT` -> alternativa Bancolombia

@@ -298,11 +298,23 @@ from src.api.integraciones import router as integraciones_router  # noqa: E402
 from src.api.me import router as me_router  # noqa: E402
 from src.api.public import router as public_router  # noqa: E402
 
+# Routers HTML server-side (Jinja2). Reemplazan los antiguos frontends
+# Next.js / Vite / Astro. Se montan con prioridad mayor que el StaticFiles
+# de la landing para que las rutas dinamicas (/, /admin/*, /app/*) ganen.
+from src.realtime.server import router as realtime_router  # noqa: E402
+from src.web.admin_ui import router as admin_ui_router  # noqa: E402
+from src.web.app_ui import router as app_ui_router  # noqa: E402
+from src.web.landing import router as landing_router  # noqa: E402
+
 app.include_router(auth_router)
 app.include_router(me_router)
 app.include_router(admin_router)
 app.include_router(public_router)
 app.include_router(integraciones_router)
+app.include_router(admin_ui_router)
+app.include_router(app_ui_router)
+app.include_router(realtime_router)
+app.include_router(landing_router)
 
 
 @app.get("/health")
@@ -464,13 +476,26 @@ async def webhook_info(x_admin_token: str = Header(None)) -> dict:
 
 
 @app.get("/admin/stats")
-async def admin_stats(x_admin_token: str = Header(None)) -> dict:
-    """Estadisticas basicas. Protegido por X-Admin-Token."""
+async def admin_stats(
+    request: Request,
+    x_admin_token: str = Header(None),
+) -> dict:
+    """Estadisticas basicas.
+
+    Acepta DOS formas de auth para mantener compatibilidad:
+    1. Header `X-Admin-Token: <ADMIN_TOKEN>` (root, para scripts).
+    2. Cookie HttpOnly `admin_jwt` (set por el panel admin tras login).
+
+    Esto permite que el dashboard HTML del panel (que no tiene como
+    pasarle el ADMIN_TOKEN al fetch del cliente) lo invoque con la
+    cookie de sesion.
+    """
     from datetime import date as date_t
     from datetime import timedelta
 
     from sqlalchemy import func, select
 
+    from src.api.admin_auth import ADMIN_COOKIE_NAME, verify_admin_jwt
     from src.db.connection import async_session_factory
     from src.db.models import (
         CrisisLog,
@@ -479,7 +504,14 @@ async def admin_stats(x_admin_token: str = Header(None)) -> dict:
         Usuario,
     )
 
-    if not hmac.compare_digest(x_admin_token or "", ADMIN_TOKEN):
+    autorizado = False
+    if x_admin_token and hmac.compare_digest(x_admin_token, ADMIN_TOKEN):
+        autorizado = True
+    else:
+        cookie_jwt = request.cookies.get(ADMIN_COOKIE_NAME)
+        if cookie_jwt and verify_admin_jwt(cookie_jwt):
+            autorizado = True
+    if not autorizado:
         raise HTTPException(403, "Acceso denegado")
     hoy = date_t.today()
     hace_30 = hoy - timedelta(days=30)
@@ -536,29 +568,23 @@ async def admin_stats(x_admin_token: str = Header(None)) -> dict:
 
 
 # =============================================================================
-# Servir la landing estatica (Astro build) desde "/"
+# Mount /static para assets compartidos (imagenes, JS de /app/llamar, etc.)
 # =============================================================================
-# El multi-stage Docker build (stage `landing-builder`) genera el directorio
-# `frontend/landing/dist/` con los assets estaticos de la landing publica.
-# Lo montamos al final para que las rutas /api/*, /webhook, /health, /admin/*
-# se resuelvan ANTES y la landing solo capture lo no atrapado por los routers.
-import os  # noqa: E402
+# La landing, el admin panel y el mini app son templates Jinja2 servidos
+# directamente por los routers (`src/web/*.py`). Solo necesitamos servir los
+# archivos estaticos referenciados desde esos templates (/static/img/*,
+# /static/js/llamar.js, etc.). El antiguo mount "/" StaticFiles que servia
+# `frontend/landing/dist/` (Astro) ya no existe: lo reemplaza el router en
+# `src/web/landing.py` que ya esta incluido arriba.
 from pathlib import Path  # noqa: E402
 
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
-_landing_dist = Path(__file__).resolve().parent.parent / "frontend" / "landing" / "dist"
-if _landing_dist.exists():
-    app.mount(
-        "/",
-        StaticFiles(directory=str(_landing_dist), html=True),
-        name="landing",
-    )
-    logger.info("Landing montada desde %s", _landing_dist)
+_static_dir = Path(__file__).resolve().parent.parent / "frontend" / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+    logger.info("Static assets montados desde %s", _static_dir)
 else:
-    logger.warning(
-        "Landing dist no encontrado en %s; '/' devolvera 404. "
-        "Verifica que el stage `landing-builder` del Dockerfile haya corrido.",
-        _landing_dist,
+    logger.info(
+        "frontend/static/ no existe; las paginas funcionan pero sin imgs/js."
     )
-    del os  # silencia ruff F401 si la rama no aplica
