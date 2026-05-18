@@ -1,4 +1,7 @@
-"""post_init callback: configura comandos, nombre, descripcion y menu del bot."""
+"""post_init callback: configura comandos, nombre, descripcion y menu del bot.
+
+Todos los textos vienen de `src.i18n` JSON files (es/en/pt) para mantener una unica fuente.
+"""
 from __future__ import annotations
 
 import logging
@@ -7,94 +10,87 @@ from telegram import BotCommand, MenuButtonCommands, MenuButtonWebApp, WebAppInf
 from telegram.ext import Application
 
 from src.config import settings
+from src.i18n import IDIOMAS_SOPORTADOS, t
 
 logger = logging.getLogger(__name__)
 
-COMANDOS_ES: list[BotCommand] = [
-    BotCommand("start", "Empezar o saludar"),
-    BotCommand("menu", "Acciones rapidas"),
-    BotCommand("hoy", "Plan de entreno de hoy"),
-    BotCommand("peso", "Registrar mi peso"),
-    BotCommand("pr", "Mis Personal Records"),
-    BotCommand("reporte", "Mi semana"),
-    BotCommand("compromiso", "Ver/firmar compromiso"),
-    BotCommand("tono", "Cambiar tono del coach"),
-    BotCommand("pausa", "Pausar recordatorios"),
-    BotCommand("dia_libre", "Usar un freeze (no rompes streak)"),
-    BotCommand("presumir", "Compartir mi PR a un grupo"),
-    BotCommand("porque_me_escribiste", "Ver por que te escribi"),
-    BotCommand("quiet_hours", "Cambiar mis horas de silencio"),
-    BotCommand("apagar_firme", "Bajar tono a amigable"),
-    BotCommand("salir", "Salir del modo accountability"),
-    BotCommand("feedback", "Calificarme del 1 al 5"),
-    BotCommand("grafico", "Ver charts (peso/volumen/macros/streak/resumen)"),
-    BotCommand("exportar_csv", "Descargar mis entrenos en CSV"),
-    BotCommand("llamar", "Llamar al coach por voz (Pro)"),
-    BotCommand("pagar", "Ver planes y pagar (desde $5.000)"),
-    BotCommand("agua", "Registrar agua / ver hidratacion"),
-    BotCommand("calma", "Sesion de mindfulness"),
-    BotCommand("desafios", "Desafios semanales de la comunidad"),
-    BotCommand("invitar", "Invitar amigos (referido)"),
-    BotCommand("ayuda", "Como funciono"),
-    BotCommand("reset", "Reiniciar conversacion"),
-    BotCommand("borrar_datos", "Eliminar todos mis datos"),
+# Lista canonica de comandos del bot. La descripcion se traduce via i18n key `cmd_<name>`.
+# Cada lang puede omitir comandos avanzados (ej: en/pt solo muestran los basicos).
+COMANDOS_CORE = [
+    "start",
+    "menu",
+    "hoy",
+    "peso",
+    "pr",
+    "reporte",
+    "compromiso",
+    "tono",
+    "pausa",
+    "dia_libre",
+    "pagar",
+    "llamar",
+    "ayuda",
+    "salir",
 ]
 
-COMANDOS_EN: list[BotCommand] = [
-    BotCommand("start", "Start or say hi"),
-    BotCommand("menu", "Quick actions"),
-    BotCommand("hoy", "Today's plan"),
-    BotCommand("peso", "Log my weight"),
-    BotCommand("pr", "My Personal Records"),
-    BotCommand("reporte", "Weekly report"),
-    BotCommand("tono", "Change coach tone"),
-    BotCommand("pausa", "Pause reminders"),
-    BotCommand("llamar", "Voice call coach (Pro)"),
-    BotCommand("pagar", "Plans (from COP 5,000)"),
-    BotCommand("ayuda", "Help"),
-    BotCommand("borrar_datos", "Delete all my data"),
+# Set extendido solo para ES (locale principal).
+COMANDOS_EXTRA_ES = [
+    "presumir",
+    "porque_me_escribiste",
+    "quiet_hours",
+    "apagar_firme",
+    "feedback",
+    "grafico",
+    "exportar_csv",
+    "agua",
+    "calma",
+    "desafios",
+    "invitar",
+    "reset",
+    "borrar_datos",
 ]
-
-COMANDOS_PT: list[BotCommand] = [
-    BotCommand("start", "Comecar ou cumprimentar"),
-    BotCommand("menu", "Acoes rapidas"),
-    BotCommand("hoy", "Plano de hoje"),
-    BotCommand("peso", "Registrar peso"),
-    BotCommand("pr", "Meus PRs"),
-    BotCommand("reporte", "Relatorio semanal"),
-    BotCommand("tono", "Mudar tom do coach"),
-    BotCommand("pagar", "Planos (desde R$ poucos)"),
-    BotCommand("ayuda", "Como funciono"),
-]
-
 
 BOT_NAME = "EntrenadorAX"
-BOT_SHORT_DESC = "Coach AI que no te deja excusas. Entreno, comida, sueno, peso."
-BOT_DESC = (
-    "Soy EntrenadorAX, tu coach personal con IA dentro de Telegram.\n\n"
-    "Te ayudo a:\n"
-    "- Registrar entrenamientos, comidas, sueno y peso conversando.\n"
-    "- Trackear tus PRs y volumen semanal.\n"
-    "- Firmar un compromiso contigo mismo y NO dejarte fallarlo.\n"
-    "- Recordarte con el tono que elijas (amigable, firme o militar).\n\n"
-    "Solo escribeme, no llenes formularios. /start para empezar."
-)
+
+
+def _build_commands(lang: str, include_extra: bool = False) -> list[BotCommand]:
+    """Construye lista de BotCommand desde i18n keys."""
+    nombres = list(COMANDOS_CORE)
+    if include_extra:
+        nombres.extend(COMANDOS_EXTRA_ES)
+    out: list[BotCommand] = []
+    for nombre in nombres:
+        descripcion = t(f"cmd_{nombre}", lang=lang)
+        if not descripcion or descripcion == f"cmd_{nombre}":
+            continue
+        if len(descripcion) > 256:
+            descripcion = descripcion[:253] + "..."
+        out.append(BotCommand(nombre, descripcion))
+    return out
 
 
 async def setup_bot(app: Application) -> None:
-    """Se ejecuta una sola vez al inicio (post_init). Configura identidad del bot."""
+    """Se ejecuta una sola vez al inicio (post_init). Configura identidad del bot por idioma."""
+    bot = app.bot
     try:
-        await app.bot.set_my_commands(COMANDOS_ES, language_code="es")
-        await app.bot.set_my_commands(COMANDOS_EN, language_code="en")
-        await app.bot.set_my_commands(COMANDOS_PT, language_code="pt")
-        await app.bot.set_my_commands(COMANDOS_ES)
-        await app.bot.set_my_name(BOT_NAME, language_code="es")
-        await app.bot.set_my_short_description(BOT_SHORT_DESC, language_code="es")
-        await app.bot.set_my_description(BOT_DESC, language_code="es")
+        comandos_es = _build_commands("es", include_extra=True)
+        await bot.set_my_commands(comandos_es, language_code="es")
+        await bot.set_my_commands(comandos_es)
+        await bot.set_my_commands(_build_commands("en"), language_code="en")
+        await bot.set_my_commands(_build_commands("pt"), language_code="pt")
+        logger.info("setMyCommands aplicado a 3 idiomas (es=%d cmds)", len(comandos_es))
+
+        for lang in IDIOMAS_SOPORTADOS:
+            try:
+                await bot.set_my_name(BOT_NAME, language_code=lang)
+                await bot.set_my_short_description(t("bot_short_desc", lang=lang), language_code=lang)
+                await bot.set_my_description(t("bot_descripcion", lang=lang), language_code=lang)
+            except Exception:
+                logger.warning("No pude setear nombre/desc para lang=%s", lang, exc_info=True)
 
         if settings.miniapp_url:
             try:
-                await app.bot.set_chat_menu_button(
+                await bot.set_chat_menu_button(
                     menu_button=MenuButtonWebApp(
                         text="App",
                         web_app=WebAppInfo(url=str(settings.miniapp_url)),
@@ -103,9 +99,10 @@ async def setup_bot(app: Application) -> None:
                 logger.info("Menu button -> Mini App %s", settings.miniapp_url)
             except Exception:
                 logger.exception("Error seteando menu button Mini App")
-                await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+                await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
         else:
-            await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-        logger.info("Bot identity (commands/name/description) configurada")
+            await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+
+        logger.info("Bot identity completa configurada para %d idiomas", len(IDIOMAS_SOPORTADOS))
     except Exception:
         logger.exception("Error configurando identidad del bot")

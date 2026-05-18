@@ -50,6 +50,198 @@ COOLDOWN_HARD_HOURS = 4
 MAX_MENSAJES_DIA = 4
 
 
+ESCALADO_COPY_EN: dict[str, dict[str, list[str]]] = {
+    "entreno": {
+        "amigable": [
+            "",
+            "Hi {nombre}, training day per your plan. <i>How are you feeling?</i>",
+            "{nombre}, afternoon's here. If not today, when? Drop me a line.",
+            "It's been days without a log. <b>Are you ok?</b> If you need a break, /pausa.",
+            "{nombre}, I care. Your commitment needs you. If not today, tomorrow we start fresh together.",
+        ],
+        "firme": [
+            "",
+            "{nombre}, training today. <b>Confirm when done.</b>",
+            "{nombre}, half the day gone. <b>Haven't trained yet?</b>",
+            "<b>{nombre}, real talk.</b> {dias} days in a row without training. Your commitment says {freq} days/week. <b>What's up?</b>",
+            "Last one today, {nombre}. If you don't train you <b>break</b> the {streak}-day streak.",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Training today.</b> 7am tomorrow confirm.",
+            "{nombre}. <b>Noon.</b> No movement yet. Report.",
+            "<b>{nombre}. {dias} DAYS.</b> Commitment broken. <b>Today. No excuses.</b>",
+            "{nombre}. Final warning. Tomorrow 7am you train. <b>Confirm or I stop.</b>",
+        ],
+    },
+    "comida": {
+        "amigable": [
+            "",
+            "Hi {nombre}, how's nutrition going today? <i>What did you eat?</i>",
+            "{nombre}, haven't seen meal logs. Happy to help with macros.",
+            "Day's almost over and I don't know what you ate, {nombre}. Tell me so I can support you.",
+            "{nombre}, no nutrition = no results. Tomorrow we start with breakfast tracked, ok?",
+        ],
+        "firme": [
+            "",
+            "{nombre}, no food logged today. <b>What have you had?</b>",
+            "{nombre}, {dias} days without meal logs. <b>Goal is {objetivo}.</b> No tracking, no control.",
+            "{dias} days no nutrition tracked, {nombre}. Your commitment demands consistency.",
+            "Last one, {nombre}. Tomorrow you start tracking breakfast. <b>Confirm.</b>",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Today's meals.</b> Report.",
+            "{nombre}. <b>{dias} days no tracking.</b> Unacceptable for your goal {objetivo}.",
+            "<b>{nombre}. Zero nutrition logged.</b> Your commitment demands it. Today you report or you report.",
+            "Final nutrition warning, {nombre}. Tomorrow breakfast tracked. <b>Confirm.</b>",
+        ],
+    },
+    "sueno": {
+        "amigable": [
+            "",
+            "Good morning {nombre}! <i>How did you sleep?</i> Hours and quality 1-5.",
+            "{nombre}, I don't know how you slept. No sleep = stalled progress. Tell me.",
+            "{dias} days no sleep logged, {nombre}. Recovery is training too.",
+            "{nombre}, without sleep tracked I can't tell if you're recovering. Tomorrow we start, ok?",
+        ],
+        "firme": [
+            "",
+            "{nombre}, how many hours and quality (1-5)?",
+            "{nombre}, {dias} days no sleep logs. <b>It's 30% of your progress.</b>",
+            "{dias} days no sleep tracked, {nombre}. Without recovery, no supercompensation.",
+            "Tomorrow on wake, {nombre}, first message: <b>hours and quality</b>. No excuses.",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Last night's sleep?</b> Hours and quality 1-5.",
+            "{nombre}. <b>{dias} days no sleep reported.</b> Your physiology depends on it.",
+            "<b>{nombre}. Sleep = recovery = progress.</b> No report no plan.",
+            "Tomorrow 8am report sleep, {nombre}. <b>Confirm.</b>",
+        ],
+    },
+    "peso": {
+        "amigable": [
+            "",
+            "{nombre}, {dias} days without weighing in. <i>How's it going?</i>",
+            "Almost 2 weeks no weight logged, {nombre}. Without data I can't tell.",
+            "{nombre}, no weighing means no progress visible. Which day works best weekly?",
+            "{nombre}, weigh tomorrow fasted. No pressure. It's your baseline for {objetivo}.",
+        ],
+        "firme": [
+            "",
+            "{nombre}, {dias} days no weight. <b>Weigh tomorrow fasted.</b>",
+            "{nombre}, no weekly weight means I can't verify your plan works. Tomorrow, scale.",
+            "<b>{dias} days no weight, {nombre}.</b> Your commitment requires tracking. Today or tomorrow.",
+            "Final weight warning, {nombre}. Tomorrow fasted or Monday <b>mandatory</b>.",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Weekly weigh-in.</b> Tomorrow fasted report.",
+            "{nombre}. <b>{dias} days no weight.</b> Unacceptable for serious tracking.",
+            "<b>{nombre}. No weight = no data = no plan.</b> Tomorrow scale. No excuses.",
+            "Final weight warning, {nombre}. Tomorrow or Monday you report. <b>Confirm.</b>",
+        ],
+    },
+}
+
+
+ESCALADO_COPY_PT: dict[str, dict[str, list[str]]] = {
+    "entreno": {
+        "amigable": [
+            "",
+            "Oi {nombre}, hoje e dia de treino segundo seu plano. <i>Como esta se sentindo?</i>",
+            "{nombre}, ja e tarde. Se nao for hoje, quando? Me manda uma mensagem.",
+            "Faz dias sem registro. <b>Esta bem?</b> Se precisa de pausa, /pausa.",
+            "{nombre}, te quero bem. Seu compromisso precisa de voce. Se hoje nao, amanha comecamos juntos.",
+        ],
+        "firme": [
+            "",
+            "{nombre}, treino hoje. <b>Confirma quando terminar.</b>",
+            "{nombre}, meio-dia ja. <b>Ainda nao treinou?</b>",
+            "<b>{nombre}, vamos falar serio.</b> {dias} dias seguidos sem treinar. Seu compromisso diz {freq} dias por semana. <b>O que houve?</b>",
+            "Ultima do dia, {nombre}. Se nao treinar hoje <b>quebra</b> a sequencia de {streak} dias.",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Treino hoje.</b> 7h da manha confirma.",
+            "{nombre}. <b>Meio-dia.</b> Sem movimento ainda. Reporte.",
+            "<b>{nombre}. {dias} DIAS.</b> Compromisso quebrado. <b>Hoje. Sem desculpas.</b>",
+            "{nombre}. Ultimo aviso. Amanha 7h voce treina. <b>Confirma ou paro.</b>",
+        ],
+    },
+    "comida": {
+        "amigable": [
+            "",
+            "Oi {nombre}, como vai a nutricao hoje? <i>O que comeu?</i>",
+            "{nombre}, nao vi registros de comida. Te ajudo com macros se quiser.",
+            "O dia ta acabando e nao sei o que voce comeu, {nombre}. Me conta.",
+            "{nombre}, sem nutricao nao tem resultados. Amanha comecamos pelo cafe da manha tracked, ta?",
+        ],
+        "firme": [
+            "",
+            "{nombre}, sem comida registrada hoje. <b>O que comeu?</b>",
+            "{nombre}, {dias} dias sem registros de comida. <b>Objetivo: {objetivo}.</b> Sem tracking nao tem controle.",
+            "{dias} dias sem nutricao registrada, {nombre}. Seu compromisso pede consistencia.",
+            "Ultima, {nombre}. Amanha voce comeca tracking do cafe. <b>Confirma.</b>",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Refeicoes do dia.</b> Reporte.",
+            "{nombre}. <b>{dias} dias sem tracking.</b> Inaceitavel para {objetivo}.",
+            "<b>{nombre}. Zero registro de nutricao.</b> Seu compromisso exige. Hoje voce reporta ou reporta.",
+            "Ultimo aviso nutricao, {nombre}. Amanha cafe tracked. <b>Confirma.</b>",
+        ],
+    },
+    "sueno": {
+        "amigable": [
+            "",
+            "Bom dia {nombre}! <i>Como dormiu?</i> Horas e qualidade 1-5.",
+            "{nombre}, nao sei como dormiu. Sem sono seu progresso trava. Me conta.",
+            "{dias} dias sem registro de sono, {nombre}. Recuperacao tambem e treino.",
+            "{nombre}, sem sono tracked nao entendo se voce se recupera. Amanha comecamos, ta?",
+        ],
+        "firme": [
+            "",
+            "{nombre}, quantas horas dormiu e qualidade (1-5)?",
+            "{nombre}, {dias} dias sem registrar sono. <b>E 30% do seu progresso.</b>",
+            "{dias} dias sem sono tracked, {nombre}. Sem recuperacao nao tem supercompensacao.",
+            "Amanha ao acordar, {nombre}, primeira mensagem: <b>horas e qualidade</b>. Sem desculpas.",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Sono de ontem?</b> Horas e qualidade 1-5.",
+            "{nombre}. <b>{dias} dias sem sono reportado.</b> Sua fisiologia depende disso.",
+            "<b>{nombre}. Sono = recuperacao = progresso.</b> Sem reporte sem plano.",
+            "Amanha 8h reporta sono, {nombre}. <b>Confirma.</b>",
+        ],
+    },
+    "peso": {
+        "amigable": [
+            "",
+            "{nombre}, {dias} dias sem se pesar. <i>Como vai?</i>",
+            "Quase 2 semanas sem peso registrado, {nombre}. Sem dados nao consigo te acompanhar.",
+            "{nombre}, sem se pesar nao vejo seu progresso. Que dia te serve melhor pra fazer semanal?",
+            "{nombre}, se pese amanha em jejum. Sem pressao. E sua base pro objetivo {objetivo}.",
+        ],
+        "firme": [
+            "",
+            "{nombre}, {dias} dias sem se pesar. <b>Se pese amanha em jejum.</b>",
+            "{nombre}, sem peso semanal nao sei se funciona seu plano. Amanha, balanca.",
+            "<b>{dias} dias sem peso, {nombre}.</b> Seu compromisso pede tracking. Hoje ou amanha.",
+            "Ultima do peso, {nombre}. Amanha em jejum ou segunda <b>obrigatorio</b>.",
+        ],
+        "militar": [
+            "",
+            "{nombre}. <b>Peso semanal.</b> Amanha em jejum reporte.",
+            "{nombre}. <b>{dias} dias sem peso.</b> Inaceitavel para tracking serio.",
+            "<b>{nombre}. Sem peso = sem dados = sem plano.</b> Amanha balanca. Sem desculpas.",
+            "Ultimo aviso peso, {nombre}. Amanha ou segunda voce reporta. <b>Confirma.</b>",
+        ],
+    },
+}
+
+
 ESCALADO_COPY: dict[str, dict[str, list[str]]] = {
     "entreno": {
         "amigable": [
@@ -227,6 +419,13 @@ async def _dias_consecutivos_sin(usuario_id: int, tipo_accion: str) -> int:
         return (date.today() - ultima).days
 
 
+_COPY_POR_LANG: dict[str, dict[str, dict[str, list[str]]]] = {
+    "es": ESCALADO_COPY,
+    "en": ESCALADO_COPY_EN,
+    "pt": ESCALADO_COPY_PT,
+}
+
+
 def _formatear_copy(
     nombre: str | None,
     tono: str,
@@ -236,20 +435,27 @@ def _formatear_copy(
     streak: int = 0,
     objetivo: str = "tu objetivo",
     freq: int = 3,
+    lang: str = "es",
+    pais: str | None = None,
 ) -> str:
-    """Resuelve el template para (level, tono, tipo_accion)."""
-    plantillas = ESCALADO_COPY.get(tipo_accion, {}).get(tono)
+    """Resuelve el template para (level, tono, tipo_accion, lang) y aplica jerga regional."""
+    fuente = _COPY_POR_LANG.get(lang, ESCALADO_COPY)
+    plantillas = fuente.get(tipo_accion, {}).get(tono)
     if not plantillas:
-        plantillas = ESCALADO_COPY[tipo_accion]["firme"]
+        plantillas = fuente.get(tipo_accion, {}).get("firme") or ESCALADO_COPY[tipo_accion]["firme"]
     level = max(0, min(level, MAX_LEVEL))
     template = plantillas[level] if level < len(plantillas) else plantillas[-1]
-    return template.format(
+    texto = template.format(
         nombre=nombre or "crack",
         dias=max(1, dias),
         streak=streak,
         objetivo=objetivo,
         freq=freq,
     )
+    if pais and tono != "militar":
+        from src.i18n import aplicar_jerga
+        texto = aplicar_jerga(texto, pais)
+    return texto
 
 
 async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -322,6 +528,8 @@ async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         streak=streak,
         objetivo=objetivo,
         freq=freq,
+        lang=(u.idioma or "es"),
+        pais=u.pais,
     )
 
     silent = next_level <= 1
