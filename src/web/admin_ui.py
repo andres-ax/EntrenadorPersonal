@@ -14,11 +14,15 @@ Patrones:
 """
 from __future__ import annotations
 
+import csv
+import io
 import logging
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from sqlalchemy import func, select
 
 from src.api import admin as admin_api
 from src.api.admin_auth import (
@@ -444,4 +448,174 @@ async def admin_crear_form(
         request,
         "admin/admins.html",
         {"admin": admin, "items": items, "active": "admins", "error": error, "ok": ok},
+    )
+
+
+# ============================================================================
+# Costos API
+# ============================================================================
+
+
+@router.get("/costos", response_class=HTMLResponse)
+async def costos_dashboard(
+    request: Request,
+    admin: dict = Depends(get_admin_from_cookie),
+    dias: int = Query(30),
+    servicio: str = Query(""),
+):
+    from src.db.connection import async_session_factory
+    from src.db.models import LlmUsage, Usuario
+
+    desde = datetime.utcnow() - timedelta(days=dias)
+    async with async_session_factory() as session:
+        base_filter = [LlmUsage.creado_en >= desde]
+        if servicio:
+            base_filter.append(LlmUsage.servicio == servicio)
+
+        tot = await session.execute(
+            select(
+                func.count(LlmUsage.id),
+                func.coalesce(func.sum(LlmUsage.input_tokens), 0),
+                func.coalesce(func.sum(LlmUsage.output_tokens), 0),
+                func.coalesce(func.sum(LlmUsage.costo_estimado_usd), 0.0),
+            ).where(*base_filter)
+        )
+        row = tot.one()
+        totales = {"llamadas": row[0], "input": row[1], "output": row[2], "costo": row[3]}
+
+        srv_q = await session.execute(
+            select(
+                LlmUsage.servicio,
+                func.count(LlmUsage.id),
+                func.sum(LlmUsage.input_tokens),
+                func.sum(LlmUsage.output_tokens),
+                func.sum(LlmUsage.costo_estimado_usd),
+            ).where(*base_filter).group_by(LlmUsage.servicio).order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
+        )
+        por_servicio = [
+            {"servicio": r[0], "llamadas": r[1], "input": r[2] or 0, "output": r[3] or 0, "costo": r[4] or 0}
+            for r in srv_q
+        ]
+
+        mod_q = await session.execute(
+            select(
+                LlmUsage.modelo,
+                func.count(LlmUsage.id),
+                func.sum(LlmUsage.input_tokens),
+                func.sum(LlmUsage.output_tokens),
+                func.sum(LlmUsage.costo_estimado_usd),
+            ).where(*base_filter).group_by(LlmUsage.modelo).order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
+        )
+        por_modelo = [
+            {"modelo": r[0], "llamadas": r[1], "input": r[2] or 0, "output": r[3] or 0, "costo": r[4] or 0}
+            for r in mod_q
+        ]
+
+        top_q = await session.execute(
+            select(
+                LlmUsage.telegram_id,
+                func.count(LlmUsage.id),
+                func.sum(LlmUsage.input_tokens),
+                func.sum(LlmUsage.output_tokens),
+                func.sum(LlmUsage.costo_estimado_usd),
+            ).where(*base_filter, LlmUsage.telegram_id.isnot(None))
+            .group_by(LlmUsage.telegram_id)
+            .order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
+            .limit(10)
+        )
+        top_rows = top_q.all()
+        tg_ids = [r[0] for r in top_rows]
+        nombres = {}
+        if tg_ids:
+            n_q = await session.execute(
+                select(Usuario.telegram_id, Usuario.nombre).where(Usuario.telegram_id.in_(tg_ids))
+            )
+            nombres = {r[0]: r[1] for r in n_q}
+        top_usuarios = [
+            {"telegram_id": r[0], "nombre": nombres.get(r[0], ""), "llamadas": r[1], "input": r[2] or 0, "output": r[3] or 0, "costo": r[4] or 0}
+            for r in top_rows
+        ]
+
+        dia_q = await session.execute(
+            select(
+                func.date(LlmUsage.creado_en).label("dia"),
+                func.sum(LlmUsage.costo_estimado_usd),
+            ).where(*base_filter)
+            .group_by(func.date(LlmUsage.creado_en))
+            .order_by(func.date(LlmUsage.creado_en))
+        )
+        serie_diaria = [{"fecha": str(r[0]), "costo": r[1] or 0} for r in dia_q]
+
+        srv_list_q = await session.execute(
+            select(LlmUsage.servicio).distinct()
+        )
+        servicios_disponibles = sorted([r[0] for r in srv_list_q])
+
+    return render(
+        request,
+        "admin/costos.html",
+        {
+            "admin": admin,
+            "active": "costos",
+            "dias": dias,
+            "servicio_filtro": servicio,
+            "servicios_disponibles": servicios_disponibles,
+            "totales": totales,
+            "por_servicio": por_servicio,
+            "por_modelo": por_modelo,
+            "top_usuarios": top_usuarios,
+            "serie_diaria": serie_diaria,
+        },
+    )
+
+
+@router.get("/costos/csv")
+async def costos_csv(
+    admin: dict = Depends(get_admin_from_cookie),
+    dias: int = Query(30),
+    servicio: str = Query(""),
+):
+    from src.db.connection import async_session_factory
+    from src.db.models import LlmUsage, Usuario
+
+    desde = datetime.utcnow() - timedelta(days=dias)
+    async with async_session_factory() as session:
+        q = select(
+            LlmUsage.creado_en,
+            LlmUsage.telegram_id,
+            Usuario.nombre,
+            LlmUsage.servicio,
+            LlmUsage.modelo,
+            LlmUsage.input_tokens,
+            LlmUsage.output_tokens,
+            LlmUsage.costo_estimado_usd,
+            LlmUsage.rounds,
+        ).outerjoin(Usuario, Usuario.id == LlmUsage.usuario_id).where(
+            LlmUsage.creado_en >= desde
+        ).order_by(LlmUsage.creado_en.desc())
+        if servicio:
+            q = q.where(LlmUsage.servicio == servicio)
+        rows = (await session.execute(q)).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["fecha", "telegram_id", "usuario", "servicio", "modelo", "input_tokens", "output_tokens", "costo_usd", "rounds"])
+    for r in rows:
+        writer.writerow([
+            r[0].strftime("%Y-%m-%d %H:%M:%S") if r[0] else "",
+            r[1] or "",
+            r[2] or "",
+            r[3],
+            r[4],
+            r[5],
+            r[6],
+            f"{r[7]:.6f}",
+            r[8],
+        ])
+    buf.seek(0)
+    filename = f"costos_api_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        buf,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

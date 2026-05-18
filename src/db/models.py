@@ -805,6 +805,25 @@ class Recordatorio(Base):
     ultimo_envio = Column(DateTime, nullable=True)
 
 
+class LlmUsage(Base):
+    """Registro de uso de API OpenAI por servicio para tracking de costos."""
+
+    __tablename__ = "llm_usage"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    telegram_id = Column(BigInteger, nullable=True, index=True)
+    servicio = Column(String(32), nullable=False, index=True)
+    modelo = Column(String(64), nullable=False)
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    costo_estimado_usd = Column(Float, default=0.0)
+    rounds = Column(Integer, default=1)
+    creado_en = Column(DateTime, server_default=func.now(), index=True)
+
+
 class DeporteCatalogo(Base):
     """Catalogo maestro de los 67+ deportes soportados en Colombia.
 

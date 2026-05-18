@@ -13,6 +13,7 @@ from io import BytesIO
 from openai import AsyncOpenAI
 
 from src.config import settings
+from src.db.repository import log_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,11 @@ async def analizar_comida(
             max_tokens=500,
             temperature=0.3,
         )
+        if response.usage:
+            try:
+                await log_llm_usage(None, "vision", settings.vision_model, response.usage.prompt_tokens, response.usage.completion_tokens)
+            except Exception:
+                pass
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
         elapsed_ms = (time.perf_counter() - t0) * 1000

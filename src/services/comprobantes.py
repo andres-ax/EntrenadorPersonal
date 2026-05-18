@@ -16,6 +16,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 from src.config import settings
+from src.db.repository import log_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,11 @@ async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
             max_tokens=600,
             temperature=0.0,
         )
+        if response.usage:
+            try:
+                await log_llm_usage(None, "comprobante", settings.comprobante_model, response.usage.prompt_tokens, response.usage.completion_tokens)
+            except Exception:
+                pass
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
     except json.JSONDecodeError:

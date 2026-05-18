@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 
 from src.config import settings
 from src.db.connection import async_session_factory
+from src.db.repository import log_llm_usage
 from src.db.models import (
     Comida,
     MetricaCorporal,
@@ -155,6 +156,11 @@ async def _generar_narrativa(datos: dict) -> str:
             max_tokens=600,
             temperature=0.5,
         )
+        if response.usage:
+            try:
+                await log_llm_usage(None, "analisis", "gpt-4o-mini", response.usage.prompt_tokens, response.usage.completion_tokens)
+            except Exception:
+                pass
         return response.choices[0].message.content or ""
     except Exception:
         logger.exception("Error generando narrativa mensual")

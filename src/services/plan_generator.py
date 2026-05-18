@@ -14,7 +14,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from src.config import settings
-from src.db.repository import obtener_usuario
+from src.db.repository import log_llm_usage, obtener_usuario
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,11 @@ async def generar_plan_semanal_para(telegram_id: int) -> dict:
             max_tokens=2000,
             temperature=0.4,
         )
+        if response.usage:
+            try:
+                await log_llm_usage(telegram_id, "plan", "gpt-4o-mini", response.usage.prompt_tokens, response.usage.completion_tokens)
+            except Exception:
+                pass
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
     except Exception:

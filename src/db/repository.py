@@ -32,6 +32,7 @@ from src.db.models import (
     MetricaCorporal,
     MetricaSueno,
     PagoComprobante,
+    LlmUsage,
     PersonalRecord,
     PlanDefinicion,
     PlanSuscripcion,
@@ -2345,3 +2346,52 @@ async def marcar_recordatorio_enviado(recordatorio_id: int) -> None:
         if rec.fecha_unica is not None and not rec.dias_semana:
             rec.activo = False
         await session.commit()
+
+
+# ============================================================================
+# LLM Usage (tracking de costos API)
+# ============================================================================
+
+PRECIOS_POR_MILLON: dict[str, tuple[float, float]] = {
+    "gpt-4.1": (2.00, 8.00),
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1-nano": (0.10, 0.40),
+    "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4o": (2.50, 10.00),
+}
+
+
+def _estimar_costo(modelo: str, input_tokens: int, output_tokens: int) -> float:
+    precio_in, precio_out = PRECIOS_POR_MILLON.get(modelo, (0.40, 1.60))
+    return (input_tokens / 1_000_000) * precio_in + (output_tokens / 1_000_000) * precio_out
+
+
+async def log_llm_usage(
+    telegram_id: Optional[int],
+    servicio: str,
+    modelo: str,
+    input_tokens: int,
+    output_tokens: int,
+    rounds: int = 1,
+) -> None:
+    """Persiste registro de uso de API OpenAI para tracking de costos."""
+    try:
+        costo = _estimar_costo(modelo, input_tokens, output_tokens)
+        async with async_session_factory() as session:
+            uid = None
+            if telegram_id is not None:
+                uid = await _get_usuario_id(session, telegram_id)
+            row = LlmUsage(
+                usuario_id=uid,
+                telegram_id=telegram_id,
+                servicio=servicio,
+                modelo=modelo,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                costo_estimado_usd=costo,
+                rounds=rounds,
+            )
+            session.add(row)
+            await session.commit()
+    except Exception:
+        logger.warning("Error guardando llm_usage servicio=%s", servicio, exc_info=True)

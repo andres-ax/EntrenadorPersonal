@@ -64,6 +64,7 @@ from src.db.repository import (
     guardar_feedback_comida,
     log_crisis,
     log_evento,
+    log_llm_usage,
     marcar_bot_bloqueado,
     marcar_comprobante_duplicado,
     obtener_compromiso_activo,
@@ -332,7 +333,7 @@ async def _procesar(
             try:
                 total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
                 total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
-                logger.info("LLM usage uid=%s in=%d out=%d rounds=%d", uid, total_in, total_out, len(result.raw_responses))
+                await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
             except Exception:
                 pass
 

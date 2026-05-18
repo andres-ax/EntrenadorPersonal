@@ -11,6 +11,7 @@ from openai import AsyncOpenAI
 from telegram.constants import ChatAction, ParseMode
 
 from src.config import settings
+from src.db.repository import log_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,12 @@ async def transcribir_audio(
             file=(filename, file_bytes),
             language=language,
         )
-        return (response.text or "").strip()
+        text = (response.text or "").strip()
+        try:
+            await log_llm_usage(None, "whisper", settings.transcription_model, 0, 0)
+        except Exception:
+            pass
+        return text
     except Exception:
         logger.exception("Error transcribiendo audio (%d bytes)", len(file_bytes))
         return ""
@@ -83,6 +89,10 @@ async def generar_voz(texto: str, voice: str = "alloy") -> BytesIO | None:
         )
         audio_bytes = response.read()
         cache_path.write_bytes(audio_bytes)
+        try:
+            await log_llm_usage(None, "tts", "tts-1", len(texto), 0)
+        except Exception:
+            pass
         return BytesIO(audio_bytes)
     except Exception:
         logger.exception("Error generando TTS")
