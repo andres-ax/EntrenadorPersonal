@@ -24,6 +24,7 @@ from src.api.auth import JWT_TTL_SECONDS, _sign_jwt
 from src.config import settings
 from src.data.deportes import DEPORTES, deporte_por_slug
 from src.services.codigo_web import validar_y_consumir
+from src.telegram.middlewares import check_rate_limit_ip
 from src.web.templates import render
 
 router = APIRouter(tags=["landing"], include_in_schema=False)
@@ -150,6 +151,9 @@ async def login_deportista_submit(
     request: Request, codigo: str = Form(...)
 ):
     """Valida el codigo de 6 digitos generado por /codigo_web en el bot."""
+    ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit_ip(ip, max_per_minute=5):
+        raise HTTPException(429, "Demasiados intentos. Espera un momento.")
     uid = await validar_y_consumir(codigo.strip())
     if uid is None:
         return render(
@@ -181,6 +185,9 @@ async def login_admin_submit(
     password: str = Form(...),
 ):
     """Login admin via email + password (mismo backend que /admin/login)."""
+    ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit_ip(ip, max_per_minute=5):
+        raise HTTPException(429, "Demasiados intentos. Espera un momento.")
     try:
         resp_login = await autenticar_admin(
             LoginRequest(email=email, password=password)

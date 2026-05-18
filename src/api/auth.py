@@ -17,10 +17,11 @@ import logging
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import APIRouter, Cookie, Header, HTTPException, Response
+from fastapi import APIRouter, Cookie, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from src.config import settings
+from src.telegram.middlewares import check_rate_limit_ip
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ class CodigoWebReq(BaseModel):
 
 
 @router.post("/codigo", response_model=TokenResp)
-async def validar_codigo_web(req: CodigoWebReq, response: Response) -> TokenResp:
+async def validar_codigo_web(req: CodigoWebReq, request: Request, response: Response) -> TokenResp:
     """Login web del deportista via codigo de 6 digitos generado por el bot.
 
     Flujo:
@@ -141,6 +142,9 @@ async def validar_codigo_web(req: CodigoWebReq, response: Response) -> TokenResp
     app desde Telegram con `initData`). El codigo permite entrar desde
     cualquier navegador.
     """
+    ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit_ip(ip, max_per_minute=5):
+        raise HTTPException(429, "Demasiados intentos. Espera un momento.")
     from src.services.codigo_web import validar_y_consumir
 
     uid = await validar_y_consumir(req.codigo)
@@ -240,8 +244,11 @@ class MagicLinkResp(BaseModel):
 
 
 @router.post("/magic-link", response_model=MagicLinkResp)
-async def crear_magic_link(req: MagicLinkReq) -> MagicLinkResp:
+async def crear_magic_link(req: MagicLinkReq, request: Request) -> MagicLinkResp:
     """Genera magic link + envia por Resend (si key seteada) o log."""
+    ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit_ip(ip, max_per_minute=3):
+        raise HTTPException(429, "Demasiados intentos. Espera un momento.")
     token = _secrets.token_urlsafe(48)
     expires_at = _dt.utcnow() + _td(minutes=15)
     email = req.email.lower().strip()

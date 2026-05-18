@@ -43,6 +43,28 @@ async def check_rate_limit(
         return True
 
 
+async def check_rate_limit_ip(ip: str, max_per_minute: int = 5) -> bool:
+    """Rate limit por IP para endpoints HTTP (auth, magic-link, etc.).
+
+    Misma logica Redis sliding window que check_rate_limit.
+    Fail-open si Redis falla.
+    """
+    try:
+        client = await get_redis()
+        key = f"ratelimit:ip:{ip}"
+        now = time.time()
+        pipe = client.pipeline()
+        pipe.zremrangebyscore(key, "-inf", now - 60)
+        pipe.zcard(key)
+        pipe.zadd(key, {f"{now}": now})
+        pipe.expire(key, 61)
+        results = await pipe.execute()
+        return results[1] < max_per_minute
+    except Exception as e:
+        logger.warning("IP rate limit check failed: %s", e)
+        return True
+
+
 async def check_daily_quota(
     telegram_id: int,
 ) -> tuple[bool, int, int]:

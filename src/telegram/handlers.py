@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import html as _html
 import logging
 import re
 from datetime import date, datetime
@@ -168,6 +169,21 @@ async def _enviar_con_retry(message, texto: str, intentos: int = 3, **kwargs) ->
             return
 
 
+_SAFE_TAGS_RE = re.compile(r'</?(?:b|i|code|pre|blockquote)(?:\s[^>]*)?>')
+
+
+def _sanitize_telegram_html(text: str) -> str:
+    """Escapa HTML del output LLM, preservando solo tags seguros de Telegram."""
+    parts: list[str] = []
+    last = 0
+    for m in _SAFE_TAGS_RE.finditer(text):
+        parts.append(_html.escape(text[last:m.start()]))
+        parts.append(m.group())
+        last = m.end()
+    parts.append(_html.escape(text[last:]))
+    return "".join(parts)
+
+
 async def _build_prompt(texto: str, uid: int) -> str:
     """Construye el prompt con perfil + tono + compromiso + streak inyectados.
 
@@ -199,9 +215,12 @@ async def _build_prompt(texto: str, uid: int) -> str:
     if cached_static is not None:
         return f"[{' | '.join(dinamicos)} | {cached_static}] {texto}"
 
+    def _sanitize(v: str) -> str:
+        return re.sub(r'[\[\]|{}<>]', '', v)[:80]
+
     estaticos = []
     if user.nombre:
-        estaticos.append(f"nombre={user.nombre}")
+        estaticos.append(f"nombre={_sanitize(user.nombre)}")
     if user.peso_kg:
         estaticos.append(f"peso={user.peso_kg}kg")
     if user.altura_cm:
@@ -209,17 +228,17 @@ async def _build_prompt(texto: str, uid: int) -> str:
     if user.edad:
         estaticos.append(f"edad={user.edad}")
     if user.objetivo:
-        estaticos.append(f"objetivo={user.objetivo}")
+        estaticos.append(f"objetivo={_sanitize(user.objetivo)}")
     if user.nivel:
-        estaticos.append(f"nivel={user.nivel}")
+        estaticos.append(f"nivel={_sanitize(user.nivel)}")
     if user.dias_entreno:
         estaticos.append(f"dias_entreno={user.dias_entreno}")
     if user.deporte_principal:
-        estaticos.append(f"deporte={user.deporte_principal}")
+        estaticos.append(f"deporte={_sanitize(user.deporte_principal)}")
     if user.categoria_deporte:
         estaticos.append(f"categoria_deporte={user.categoria_deporte.value}")
     if user.modalidad_deporte:
-        estaticos.append(f"modalidad={user.modalidad_deporte}")
+        estaticos.append(f"modalidad={_sanitize(user.modalidad_deporte)}")
     if user.es_competitivo:
         estaticos.append("competitivo=si")
     estaticos.append(
@@ -327,6 +346,7 @@ async def _procesar(
             )
             await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
 
+        output = _sanitize_telegram_html(output)
         chunks = [output[i : i + 4000] for i in range(0, len(output), 4000)] or [""]
         for i, chunk in enumerate(chunks):
             kwargs = {}

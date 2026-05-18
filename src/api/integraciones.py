@@ -4,6 +4,7 @@ Despues del OAuth dance, guarda tokens cifrados y dispara primer sync.
 """
 from __future__ import annotations
 
+import html as _html
 import logging
 import os
 from datetime import datetime, timedelta
@@ -93,7 +94,7 @@ async def oauth_callback(
         raise HTTPException(404, "proveedor invalido")
     if error:
         return HTMLResponse(
-            f"<h2>Error: {error}</h2><p>Cierra esta ventana y reintenta.</p>",
+            f"<h2>Error: {_html.escape(error)}</h2><p>Cierra esta ventana y reintenta.</p>",
             status_code=400,
         )
     if not code:
@@ -134,7 +135,7 @@ async def oauth_callback(
         f"<!doctype html><html><head><title>Conectado</title>"
         f"<meta name='viewport' content='width=device-width, initial-scale=1'></head>"
         f"<body style='font-family: system-ui; max-width: 480px; margin: 40px auto; padding: 24px;'>"
-        f"<h1>{proveedor.title()} conectado</h1>"
+        f"<h1>{_html.escape(proveedor.title())} conectado</h1>"
         f"<p>Tus datos se sincronizaran en los proximos minutos.</p>"
         f"<p>Cierra esta pestana y vuelve a Telegram.</p>"
         f"</body></html>"

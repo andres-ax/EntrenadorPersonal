@@ -194,21 +194,39 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="EntrenadorAX", lifespan=lifespan)
 
-allowed_origins = [
-    str(settings.miniapp_url).rstrip("/") if settings.miniapp_url else "*",
-    str(settings.admin_url).rstrip("/") if settings.admin_url else "",
-    str(settings.landing_url).rstrip("/") if settings.landing_url else "",
-]
-allowed_origins = [o for o in allowed_origins if o]
-if not allowed_origins:
-    allowed_origins = ["*"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+allowed_origins = []
+if settings.miniapp_url:
+    allowed_origins.append(str(settings.miniapp_url).rstrip("/"))
+if settings.admin_url:
+    allowed_origins.append(str(settings.admin_url).rstrip("/"))
+if settings.landing_url:
+    allowed_origins.append(str(settings.landing_url).rstrip("/"))
+if allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
+    )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
 
 
 _ACCESS_LOG_SKIP_PATHS = {"/health"}
@@ -332,21 +350,8 @@ async def health() -> dict:
     db_ok = await ping_db()
     redis_ok = await ping_redis()
     status_ok = bot_ok and db_ok and redis_ok
-    pool_info = {}
-    try:
-        pool_info = {
-            "size": engine.pool.size(),
-            "checked_out": engine.pool.checkedout(),
-            "overflow": engine.pool.overflow(),
-        }
-    except Exception:
-        pass
     return {
         "status": "ok" if status_ok else "degraded",
-        "bot": bot_ok,
-        "db": db_ok,
-        "redis": redis_ok,
-        "db_pool": pool_info,
     }
 
 
