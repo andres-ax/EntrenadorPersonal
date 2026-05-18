@@ -188,6 +188,13 @@ async def guardar_sesion(
     rpe: Optional[float] = None,
     notas: str = "",
 ) -> SesionEntrenamiento:
+    """Guarda sesion de entreno (fuerza, cardio, movilidad, deporte generico).
+
+    Dedup: si hay sesion abierta del mismo dia + tipo creada hace <2h,
+    UPDATE acumulando ejercicios y notas. INSERT nueva en caso contrario.
+    """
+    fecha_obj = date.fromisoformat(fecha_str)
+    tipo_enum = TipoEjercicio(tipo)
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -196,13 +203,55 @@ async def guardar_sesion(
             await session.flush()
             uid = usuario.id
 
+        umbral = datetime.utcnow() - VENTANA_SESION_ABIERTA
+        result = await session.execute(
+            select(SesionEntrenamiento)
+            .options(selectinload(SesionEntrenamiento.ejercicios))
+            .where(
+                SesionEntrenamiento.usuario_id == uid,
+                SesionEntrenamiento.fecha == fecha_obj,
+                SesionEntrenamiento.tipo == tipo_enum,
+                SesionEntrenamiento.cerrada == False,  # noqa: E712
+                SesionEntrenamiento.updated_at >= umbral,
+            )
+            .order_by(SesionEntrenamiento.updated_at.desc())
+            .limit(1)
+        )
+        existente = result.scalar_one_or_none()
+        if existente is not None:
+            existente.duracion_min = max(existente.duracion_min or 0, duracion_min)
+            if rpe is not None:
+                existente.rpe_promedio = rpe
+            if notas:
+                prefix = (existente.notas + "\n[+] ") if existente.notas else ""
+                existente.notas = f"{prefix}{notas}"
+            for ej in ejercicios:
+                nuevo_ej = EjercicioRealizado(
+                    sesion_id=existente.id,
+                    nombre=ej.get("nombre", ""),
+                    series=ej.get("series"),
+                    reps=ej.get("reps"),
+                    peso_kg=ej.get("peso_kg"),
+                    rpe=ej.get("rpe"),
+                )
+                session.add(nuevo_ej)
+            existente.updated_at = datetime.utcnow()
+            await session.commit()
+            await session.refresh(existente, ["ejercicios"])
+            logger.info(
+                "guardar_sesion UPDATE uid=%s sesion_id=%s tipo=%s ejercicios+=%d",
+                telegram_id, existente.id, tipo, len(ejercicios),
+            )
+            return existente
+
         sesion_entreno = SesionEntrenamiento(
             usuario_id=uid,
-            fecha=date.fromisoformat(fecha_str),
-            tipo=TipoEjercicio(tipo),
+            fecha=fecha_obj,
+            tipo=tipo_enum,
             duracion_min=duracion_min,
             rpe_promedio=rpe,
             notas=notas,
+            cerrada=False,
         )
         session.add(sesion_entreno)
         await session.flush()
@@ -1782,6 +1831,9 @@ async def guardar_pr_tiempo(
         return pr
 
 
+VENTANA_SESION_ABIERTA = timedelta(hours=2)
+
+
 async def guardar_sesion_skill(
     telegram_id: int,
     deporte: str,
@@ -1796,8 +1848,17 @@ async def guardar_sesion_skill(
     notas: str = "",
     fecha: Optional[date] = None,
 ) -> SesionEntrenamiento:
-    """Sesion skill urbano (skate/BMX/rollers/parkour/escalada)."""
+    """Sesion skill urbano (skate/BMX/rollers/parkour/escalada).
+
+    Dedup: si hay una sesion abierta (`cerrada=False`) del mismo
+    `usuario + fecha + deporte_slug` con `updated_at >= now - 2h`,
+    hacemos UPDATE acumulando contadores y reemplazando duracion por
+    max(actual, nueva). Si no hay, INSERT con `cerrada=False`.
+    """
     from src.db.models import TipoEjercicio
+
+    fecha_use = fecha or date.today()
+    sensacion_norm = max(1, min(5, sensacion_1_5))
 
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
@@ -1807,9 +1868,60 @@ async def guardar_sesion_skill(
             await session.flush()
             uid = usuario.id
 
+        # Buscar sesion abierta reciente del mismo dia+deporte
+        umbral = datetime.utcnow() - VENTANA_SESION_ABIERTA
+        result = await session.execute(
+            select(SesionEntrenamiento)
+            .where(
+                SesionEntrenamiento.usuario_id == uid,
+                SesionEntrenamiento.fecha == fecha_use,
+                SesionEntrenamiento.deporte_slug == deporte,
+                SesionEntrenamiento.cerrada == False,  # noqa: E712
+                SesionEntrenamiento.updated_at >= umbral,
+            )
+            .order_by(SesionEntrenamiento.updated_at.desc())
+            .limit(1)
+        )
+        existente = result.scalar_one_or_none()
+
+        if existente is not None:
+            # UPDATE acumulando datos. NO sumamos duracion (sería incorrecto
+            # tratar 3 mensajes del mismo entreno como 3*duracion); usamos
+            # max() para tomar el valor mas alto reportado.
+            existente.duracion_min = max(existente.duracion_min or 0, duracion_min)
+            existente.trucos_intentados = (
+                (existente.trucos_intentados or 0) + trucos_intentados
+            )
+            existente.trucos_aterrizados = (
+                (existente.trucos_aterrizados or 0) + trucos_aterrizados
+            )
+            existente.num_caidas = (existente.num_caidas or 0) + num_caidas
+            existente.sensacion_1_5 = sensacion_norm
+            if foco_sesion:
+                existente.foco_sesion = foco_sesion
+            if spot:
+                existente.spot = spot
+            if co_riders:
+                existente.co_riders = co_riders
+            if notas:
+                prefix = (existente.notas + "\n[+] ") if existente.notas else ""
+                existente.notas = f"{prefix}{notas}"
+            existente.updated_at = datetime.utcnow()
+            await session.commit()
+            await session.refresh(existente)
+            logger.info(
+                "guardar_sesion_skill UPDATE uid=%s sesion_id=%s deporte=%s "
+                "duracion=%d trucos+=%d caidas+=%d",
+                telegram_id, existente.id, deporte,
+                existente.duracion_min,
+                trucos_intentados, num_caidas,
+            )
+            return existente
+
+        # No hay sesion abierta: INSERT nueva, abierta.
         sesion = SesionEntrenamiento(
             usuario_id=uid,
-            fecha=fecha or date.today(),
+            fecha=fecha_use,
             tipo=TipoEjercicio.DEPORTE,
             subtipo=SubtipoSesion.SKILL,
             duracion_min=duracion_min,
@@ -1819,14 +1931,69 @@ async def guardar_sesion_skill(
             trucos_intentados=trucos_intentados,
             trucos_aterrizados=trucos_aterrizados,
             num_caidas=num_caidas,
-            sensacion_1_5=max(1, min(5, sensacion_1_5)),
+            sensacion_1_5=sensacion_norm,
             co_riders=co_riders or None,
             notas=notas or None,
+            cerrada=False,  # nace abierta para que mensajes posteriores la actualicen
         )
         session.add(sesion)
         await session.commit()
         await session.refresh(sesion)
-        return sesion
+    # Solo en INSERT real (no en UPDATE) incrementamos streak.
+    await _auto_streak_safe(telegram_id, "entreno")
+    logger.info(
+        "guardar_sesion_skill INSERT uid=%s sesion_id=%s deporte=%s duracion=%d",
+        telegram_id, sesion.id, deporte, duracion_min,
+    )
+    return sesion
+
+
+async def cerrar_sesion_abierta(
+    telegram_id: int, sesion_id: Optional[int] = None
+) -> Optional[SesionEntrenamiento]:
+    """Marca cerrada=True una sesion del usuario.
+
+    Si `sesion_id` se pasa, cierra esa especificamente (validando ownership).
+    Si es None, cierra la ultima sesion abierta del usuario hoy.
+
+    Retorna la sesion cerrada o None si no habia ninguna.
+    """
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return None
+        if sesion_id is not None:
+            result = await session.execute(
+                select(SesionEntrenamiento).where(
+                    SesionEntrenamiento.id == sesion_id,
+                    SesionEntrenamiento.usuario_id == uid,
+                )
+            )
+        else:
+            result = await session.execute(
+                select(SesionEntrenamiento)
+                .where(
+                    SesionEntrenamiento.usuario_id == uid,
+                    SesionEntrenamiento.fecha == date.today(),
+                    SesionEntrenamiento.cerrada == False,  # noqa: E712
+                )
+                .order_by(SesionEntrenamiento.updated_at.desc())
+                .limit(1)
+            )
+        sesion = result.scalar_one_or_none()
+        if sesion is None:
+            return None
+        if sesion.cerrada:
+            return sesion
+        sesion.cerrada = True
+        sesion.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(sesion)
+    logger.info(
+        "cerrar_sesion_abierta uid=%s sesion_id=%s cerrada",
+        telegram_id, sesion.id,
+    )
+    return sesion
 
 
 async def guardar_sesion_sparring(

@@ -245,6 +245,14 @@ class SesionEntrenamiento(Base):
         Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
     )
     fecha = Column(Date, nullable=False, default=date.today, index=True)
+    # `cerrada` = False mientras la sesion sigue "en curso" y subsecuentes
+    # mensajes del usuario del mismo deporte/dia hacen UPDATE en vez de
+    # INSERT. Una vez el usuario dice "termine" pasa a True via
+    # `cerrar_sesion_entrenamiento` (o expira a las 2h por timeout).
+    cerrada = Column(Boolean, default=True, nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
     tipo = Column(Enum(TipoEjercicio))
     subtipo = Column(Enum(SubtipoSesion), default=SubtipoSesion.SETS, nullable=False)
     duracion_min = Column(Integer)

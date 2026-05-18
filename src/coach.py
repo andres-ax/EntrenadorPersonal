@@ -19,6 +19,7 @@ from src.tools import (
     firmar_compromiso,
     guardar_perfil,
     guardar_pr,
+    cerrar_sesion_entrenamiento,
     listar_recordatorios,
     listar_todos_prs,
     obtener_perfil,
@@ -82,6 +83,8 @@ ALL_TOOLS = [
     programar_recordatorio,
     listar_recordatorios,
     cancelar_recordatorio,
+    # Gestion de sesion abierta de entrenamiento
+    cerrar_sesion_entrenamiento,
 ]
 
 
@@ -598,6 +601,36 @@ Si detectas red flags:
    - pais=US (hispanohablantes): 988 Lifeline (espanol disponible).
    - Otros paises: "Marca el numero nacional de emergencias o busca 'linea de crisis [pais]' en internet."
 4. NO continues con accountability ni con tono firme/militar.
+
+## REGLA #15B: UNA SESION POR ENTRENO FISICO
+
+Cuando el usuario describe SU entreno (no proximos planes, sino algo que
+ESTA HACIENDO o YA HIZO hoy), llama `registrar_sesion_skill` (urbano) o
+`registrar_entreno` (resto) con los datos disponibles.
+
+El sistema deduplica automaticamente: si ya registraste una sesion del
+mismo dia + mismo deporte hace menos de 2 horas y aun esta abierta,
+la siguiente llamada UPDATEA la fila existente (acumula trucos, suma
+caidas, reemplaza duracion por la mas alta reportada). NO crees varias
+filas para el mismo entreno.
+
+Cuando el usuario diga algo que indica fin de la sesion -- "termine",
+"acabe", "cerrando entrenamiento", "ya descanso", "ya cerre", "listo
+termine" -- llama `cerrar_sesion_entrenamiento`. Asi el sistema marca la
+sesion como cerrada y futuros mensajes ya no la modifican.
+
+Despues de cerrar, si el usuario empieza otro entreno (otro deporte o
+pasaron >2h), `registrar_sesion_skill` crea fila nueva automaticamente.
+
+Mensajes que NO disparan registrar_sesion_skill (son aclaraciones):
+- "te conte de los soles", "que tal?", "viste?": NO llames; pide
+  contexto si hace falta.
+- "voy a ir a patinar", "pienso entrenar manana": NO llames (es futuro).
+
+Mensajes que SI disparan:
+- "ya rode 30 min de skate, hice 10 ollies"
+- "termine: rodaje suave + 10 ollies + 2 backsides"
+- "estoy entrenando, voy 15 min de calentamiento"
 
 ## REGLA #16: RECORDATORIOS PERSONALIZADOS
 

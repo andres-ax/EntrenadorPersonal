@@ -24,6 +24,7 @@ from src.db.repository import (
     crear_compromiso,
     crear_recordatorio as repo_crear_recordatorio,
     buscar_comida_similar as repo_buscar_comida_similar,
+    cerrar_sesion_abierta as repo_cerrar_sesion_abierta,
     desactivar_recordatorio as repo_desactivar_recordatorio,
     guardar_comida as repo_guardar_comida,
     guardar_metrica_corporal,
@@ -1900,3 +1901,50 @@ async def cancelar_recordatorio(telegram_id: int, recordatorio_id: int) -> str:
     except Exception:
         logger.exception("Error en cancelar_recordatorio")
         return _error("no pude cancelar el recordatorio")
+
+
+@function_tool
+@_log_tool
+async def cerrar_sesion_entrenamiento(
+    telegram_id: int,
+    sesion_id: int = 0,
+) -> str:
+    """Cierra una sesion de entrenamiento "en curso" del usuario.
+
+    Llamala cuando el usuario diga "termine", "acabe", "cerrando
+    entrenamiento", "ya descanso", o cuando un periodo de tiempo razonable
+    haya pasado y quieras marcar la sesion como definitiva.
+
+    Mientras una sesion esta abierta (`cerrada=False`), mensajes posteriores
+    del mismo dia + deporte hacen UPDATE en vez de crear nueva fila. Esto
+    evita los duplicados como cuando el usuario describe el entreno en
+    3-4 mensajes seguidos.
+
+    Args:
+        telegram_id: ID de Telegram del usuario (valida ownership).
+        sesion_id: id especifico a cerrar. 0 (default) = la ultima sesion
+            abierta del usuario hoy.
+    """
+    try:
+        sid = sesion_id if sesion_id > 0 else None
+        sesion = await repo_cerrar_sesion_abierta(telegram_id, sid)
+        if sesion is None:
+            return _error("no hay sesion abierta para cerrar")
+        await log_evento(
+            telegram_id,
+            "sesion_cerrada",
+            {
+                "sesion_id": sesion.id,
+                "duracion_min": sesion.duracion_min,
+                "deporte": sesion.deporte_slug,
+            },
+        )
+        return _ok({
+            "sesion_id": sesion.id,
+            "cerrada": True,
+            "duracion_min": sesion.duracion_min,
+            "deporte": sesion.deporte_slug,
+        })
+    except Exception:
+        logger.exception("Error en cerrar_sesion_entrenamiento")
+        return _error("no pude cerrar la sesion")
