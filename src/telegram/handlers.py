@@ -1876,17 +1876,25 @@ async def _procesar_comprobante(
         datos_para_guardar["vision_rechazado"] = False
 
     # GUARDAR SIEMPRE en DB (antes solo se guardaba si Vision decia OK)
-    comprobante = await guardar_comprobante(
-        telegram_id=uid,
-        foto_file_id=photo.file_id,
-        foto_sha256=sha,
-        plan_solicitado=plan_solicitado,
-        duracion=duracion,
-        monto_esperado_cop=monto_esperado,
-        dias_otorgados=dias_otorgados,
-        vision_payload=datos_para_guardar,
-        referido_codigo=pendiente.get("referido_codigo"),
-    )
+    try:
+        comprobante = await guardar_comprobante(
+            telegram_id=uid,
+            foto_file_id=photo.file_id,
+            foto_sha256=sha,
+            plan_solicitado=plan_solicitado,
+            duracion=duracion,
+            monto_esperado_cop=monto_esperado,
+            dias_otorgados=dias_otorgados,
+            vision_payload=datos_para_guardar,
+            referido_codigo=pendiente.get("referido_codigo"),
+        )
+    except Exception:
+        logger.exception("Error guardando comprobante uid=%s sha=%s", uid, sha[:12])
+        await update.message.reply_text(
+            "Hubo un error guardando tu comprobante. "
+            "Intenta de nuevo en un momento o contacta soporte."
+        )
+        return
     logger.info(
         "comprobante guardado uid=%s comp_id=%s vision_ok=%s",
         uid, comprobante.id, vision_reconocio,

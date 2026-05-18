@@ -564,7 +564,7 @@ class PagoComprobante(Base):
         Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
     )
     foto_file_id = Column(String(256))
-    foto_sha256 = Column(String(64), unique=True, index=True)
+    foto_sha256 = Column(String(64), index=True)
 
     monto_cop = Column(Integer, nullable=True)
     monto_extraido_raw = Column(String(64), default="")
