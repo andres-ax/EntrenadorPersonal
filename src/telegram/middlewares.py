@@ -12,13 +12,7 @@ from src.db.repository import obtener_plan_actual
 
 logger = logging.getLogger(__name__)
 
-MENSAJES_DIA_POR_PLAN: dict[PlanSuscripcion, int] = {
-    PlanSuscripcion.FREE: settings.free_daily_msg_limit,
-    PlanSuscripcion.STARTER: settings.starter_daily_msg_limit,
-    PlanSuscripcion.PRO: settings.pro_daily_msg_limit,
-    PlanSuscripcion.ELITE: 0,
-    PlanSuscripcion.LIFETIME: 0,
-}
+FREE_DAILY_LIMIT = settings.free_daily_msg_limit
 
 
 async def check_rate_limit(
@@ -52,7 +46,9 @@ async def check_rate_limit(
 async def check_daily_quota(
     telegram_id: int,
 ) -> tuple[bool, int, int]:
-    """Verifica cuota diaria de mensajes segun plan del usuario.
+    """Verifica cuota diaria de mensajes solo para usuarios FREE.
+
+    Planes pagos no tienen limite diario.
 
     Returns:
         (puede_continuar, mensajes_usados, limite)
@@ -60,8 +56,7 @@ async def check_daily_quota(
     """
     try:
         plan = await obtener_plan_actual(telegram_id)
-        limite = MENSAJES_DIA_POR_PLAN.get(plan, settings.free_daily_msg_limit)
-        if limite == 0:
+        if plan != PlanSuscripcion.FREE:
             return True, 0, 0
 
         client = await get_redis()
@@ -74,7 +69,7 @@ async def check_daily_quota(
         results = await pipe.execute()
         usado = results[0]
 
-        return usado <= limite, usado, limite
+        return usado <= FREE_DAILY_LIMIT, usado, FREE_DAILY_LIMIT
     except Exception as e:
         logger.warning("Daily quota check failed: %s", e)
         return True, 0, 0

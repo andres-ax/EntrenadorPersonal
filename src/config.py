@@ -47,8 +47,6 @@ class Settings(BaseSettings):
     max_webhook_payload_bytes: int = 1_000_000
 
     free_daily_msg_limit: int = 25
-    starter_daily_msg_limit: int = 100
-    pro_daily_msg_limit: int = 300
 
     default_timezone: str = "America/Bogota"
 
