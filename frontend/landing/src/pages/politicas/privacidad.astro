@@ -1,0 +1,57 @@
+---
+import Base from "../../layouts/Base.astro";
+import Navbar from "../../components/Navbar.astro";
+---
+<Base title="Politica de privacidad - EntrenadorAX" canonical="https://entrenadorax.com/politicas/privacidad">
+  <Navbar />
+  <main class="mx-auto max-w-3xl px-4 py-12 prose prose-slate">
+    <h1>Politica de privacidad</h1>
+    <p><strong>Ultima actualizacion:</strong> 17 de mayo de 2026</p>
+
+    <h2>1. Quienes somos</h2>
+    <p>EntrenadorAX es un coach IA personal accesible via Telegram y web,
+    operado desde Colombia bajo la Ley 1581 de 2012 (Habeas Data) y normativa
+    GDPR aplicable a usuarios europeos.</p>
+
+    <h2>2. Que datos recogemos</h2>
+    <ul>
+      <li>Telegram ID y nombre publico (al usar /start).</li>
+      <li>Email (si registras para version web).</li>
+      <li>Datos de entrenamiento, comida, sueno, peso que TU registras.</li>
+      <li>Fotos de comida y comprobantes de pago que envias al bot.</li>
+      <li>Mensajes conversacionales con el coach (procesados por OpenAI).</li>
+      <li>Datos de wearables (si conectas Whoop/Garmin/Strava/Google Fit).</li>
+    </ul>
+
+    <h2>3. Donde se guardan</h2>
+    <p>Postgres + Redis administrados en Railway (servidor US Este o EU
+    segun region). Tokens OAuth de wearables se cifran con Fernet.
+    JWT de sesion vive 1h y no contiene datos sensibles.</p>
+
+    <h2>4. Tus derechos</h2>
+    <ul>
+      <li><strong>Acceso:</strong> ver tus datos via Mini App o /reporte.</li>
+      <li><strong>Rectificacion:</strong> editar via Mini App o conversando con el bot.</li>
+      <li><strong>Borrado:</strong> usa <code>/borrar_datos</code> en el bot. Eliminacion total e irreversible.</li>
+      <li><strong>Portabilidad:</strong> exporta tus entrenos con <code>/exportar_csv</code>.</li>
+      <li><strong>Oposicion:</strong> pausa todos los recordatorios con <code>/pausa</code> o <code>/salir</code>.</li>
+    </ul>
+
+    <h2>5. Procesadores externos</h2>
+    <ul>
+      <li><strong>OpenAI:</strong> mensajes y fotos para procesamiento IA. No usa tus datos para entrenamiento.</li>
+      <li><strong>Telegram:</strong> mensajes y archivos durante transito.</li>
+      <li><strong>Railway:</strong> hosting backend y DB.</li>
+      <li><strong>Cloudflare:</strong> CDN para Mini App y landing.</li>
+      <li><strong>Resend:</strong> emails de auth web (si usas magic link).</li>
+      <li><strong>Wearables:</strong> Whoop/Garmin/Strava si los conectas (con tu autorizacion OAuth).</li>
+    </ul>
+
+    <h2>6. No vendemos tus datos</h2>
+    <p>Nunca venderemos ni compartiremos tus datos personales con terceros
+    para marketing. Punto.</p>
+
+    <h2>7. Contacto</h2>
+    <p>Para cualquier consulta sobre privacidad: <a href="mailto:privacidad@entrenadorax.com">privacidad@entrenadorax.com</a>.</p>
+  </main>
+</Base>

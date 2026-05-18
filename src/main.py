@@ -61,6 +61,13 @@ async def lifespan(app: FastAPI):
     global telegram_app, pubsub_task
 
     await init_db()
+    try:
+        from src.db.repository import cargar_catalog_en_cache
+
+        n = await cargar_catalog_en_cache()
+        logger.info("Cargados %s deportes en cache", n)
+    except Exception:
+        logger.exception("No pude precargar catalog de deportes")
     logger.info("Base de datos inicializada")
 
     defaults = Defaults(

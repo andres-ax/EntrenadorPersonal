@@ -47,6 +47,13 @@ async def _stop_when_signaled() -> None:
 async def main() -> None:
     logger.info("Inicializando base de datos...")
     await init_db()
+    try:
+        from src.db.repository import cargar_catalog_en_cache
+
+        n = await cargar_catalog_en_cache()
+        logger.info("Cargados %s deportes en cache", n)
+    except Exception:
+        logger.exception("No pude precargar catalog de deportes")
     logger.info("Base de datos lista.")
 
     defaults = Defaults(

@@ -26,13 +26,21 @@ ADMIN_JWT_TTL = 8 * 3600  # 8 horas
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def _truncate(plain: str) -> str:
+    """bcrypt limita a 72 bytes. Truncamos para evitar ValueError."""
+    encoded = plain.encode("utf-8")
+    if len(encoded) <= 72:
+        return plain
+    return encoded[:72].decode("utf-8", "ignore")
+
+
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    return _pwd_context.hash(_truncate(plain))
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
-        return _pwd_context.verify(plain, hashed)
+        return _pwd_context.verify(_truncate(plain), hashed)
     except Exception:
         return False
 

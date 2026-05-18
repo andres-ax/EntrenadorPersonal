@@ -95,7 +95,9 @@ fpdf2>=2.7,<3.0
 # Seguridad y cifrado
 # -----------------------------------------------------------------------------
 # Password hashing para admin panel (bcrypt via passlib).
-passlib[bcrypt]>=1.7,<2.0
+# bcrypt pinned a 4.x porque passlib<2 no soporta 5.x (cambio de API __about__).
+passlib>=1.7,<2.0
+bcrypt>=4.0,<5.0
 
 # Cifrado simetrico de tokens OAuth de wearables (Fernet).
 cryptography>=42.0,<46.0
@@ -116,3 +118,10 @@ websockets>=13.0,<16.0
 # -----------------------------------------------------------------------------
 # Cliente HTTP de Resend para enviar magic links de auth web.
 # (httpx ya viene como dep transitiva de openai, no se vuelve a declarar)
+
+
+# -----------------------------------------------------------------------------
+# Observabilidad
+# -----------------------------------------------------------------------------
+# Sentry para tracking de errores en bot-api, realtime-ws y worker.
+sentry-sdk[fastapi]>=2.0,<3.0

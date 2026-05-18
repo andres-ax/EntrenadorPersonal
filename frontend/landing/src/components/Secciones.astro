@@ -1,0 +1,200 @@
+---
+const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
+---
+
+<section id="problema" class="mx-auto max-w-6xl px-4 py-20">
+  <h2 class="text-3xl font-bold text-center">El problema</h2>
+  <div class="mt-8 grid md:grid-cols-3 gap-4">
+    <div class="rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold">Las apps tradicionales te dejan solo</h3>
+      <p class="text-slate-600 mt-2 text-sm">MyFitnessPal, Strava, etc. registran datos pero NO te empujan cuando fallas tu compromiso.</p>
+    </div>
+    <div class="rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold">Cal AI cuenta calorias pero no te conoce</h3>
+      <p class="text-slate-600 mt-2 text-sm">Photo meal sin contexto. Sin recordatorios. Sin compromiso firmado.</p>
+    </div>
+    <div class="rounded-xl border border-slate-200 p-6">
+      <h3 class="font-semibold">Un coach humano cuesta $200K/mes</h3>
+      <p class="text-slate-600 mt-2 text-sm">Y no esta disponible 24/7. EntrenadorAX si.</p>
+    </div>
+  </div>
+</section>
+
+<section id="solucion" class="bg-slate-50 py-20">
+  <div class="mx-auto max-w-6xl px-4">
+    <h2 class="text-3xl font-bold text-center">La solucion</h2>
+    <div class="mt-10 grid md:grid-cols-3 gap-6">
+      <div class="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+        <div class="text-brand-600 text-2xl">[1]</div>
+        <h3 class="font-semibold mt-2">Coach IA proactivo 24/7</h3>
+        <p class="text-sm text-slate-600 mt-2">Te escribe primero. No esperas. Escalation creciente si fallas tu compromiso.</p>
+      </div>
+      <div class="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+        <div class="text-brand-600 text-2xl">[2]</div>
+        <h3 class="font-semibold mt-2">Personalizable</h3>
+        <p class="text-sm text-slate-600 mt-2">Tres tonos: amigable, firme, militar. Cambialo cuando quieras con /tono.</p>
+      </div>
+      <div class="rounded-xl bg-white p-6 shadow-sm border border-slate-100">
+        <div class="text-brand-600 text-2xl">[3]</div>
+        <h3 class="font-semibold mt-2">60+ deportes</h3>
+        <p class="text-sm text-slate-600 mt-2">BMX, skate, rollers, climbing, padel, MMA, cycling, natacion, trail y mas.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="como-funciona" class="mx-auto max-w-6xl px-4 py-20">
+  <h2 class="text-3xl font-bold text-center">Como funciona</h2>
+  <ol class="mt-10 grid md:grid-cols-3 gap-6">
+    <li class="rounded-xl border border-slate-200 p-6">
+      <div class="text-xs text-brand-600 font-semibold">PASO 1</div>
+      <h3 class="font-semibold mt-1">Abre Telegram y dale /start</h3>
+      <p class="text-sm text-slate-600 mt-2">El bot te hace onboarding conversacional. No formularios.</p>
+    </li>
+    <li class="rounded-xl border border-slate-200 p-6">
+      <div class="text-xs text-brand-600 font-semibold">PASO 2</div>
+      <h3 class="font-semibold mt-1">Firmas un compromiso</h3>
+      <p class="text-sm text-slate-600 mt-2">Objetivo concreto + deadline. Lo pin a tu chat para que siempre lo veas.</p>
+    </li>
+    <li class="rounded-xl border border-slate-200 p-6">
+      <div class="text-xs text-brand-600 font-semibold">PASO 3</div>
+      <h3 class="font-semibold mt-1">Cumple o te perseguira</h3>
+      <p class="text-sm text-slate-600 mt-2">Con respeto, sin shaming. Pero firme.</p>
+    </li>
+  </ol>
+</section>
+
+<section id="deportes" class="bg-slate-50 py-20">
+  <div class="mx-auto max-w-6xl px-4">
+    <h2 class="text-3xl font-bold text-center">60+ deportes soportados</h2>
+    <p class="text-center text-slate-600 mt-2">
+      No solo gym. BMX, skate, rollers, climbing, padel, MMA, surf, trail running...
+    </p>
+    <div class="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      {[
+        "BMX","Skate","Rollers","Climbing","Padel",
+        "MMA","Boxeo","BJJ","Muay Thai","Karate",
+        "Futbol","Basquetbol","Voleibol","Rugby","Tenis",
+        "Natacion","Surf","Kitesurf","Apnea","Buceo",
+        "Trail","Triatlon","MTB","Ciclismo","OCR",
+        "CrossFit","Powerlifting","Halterofilia","Pilates","Yoga"
+      ].map((d) => (
+        <div class="rounded-lg bg-white p-3 text-center text-sm border border-slate-200 hover:border-brand-500 transition">
+          {d}
+        </div>
+      ))}
+    </div>
+    <p class="text-center mt-6 text-sm text-slate-500">
+      Y mas en <a href="/deportes" class="text-brand-600 underline">/deportes</a>.
+    </p>
+  </div>
+</section>
+
+<section id="features" class="mx-auto max-w-6xl px-4 py-20">
+  <h2 class="text-3xl font-bold text-center">Features</h2>
+  <div class="mt-10 grid md:grid-cols-3 gap-4">
+    {[
+      ["Escalation que persigue", "Te escribe mas frecuente si fallas. Para si pides /pausa."],
+      ["Mini App propia", "Calendario, charts, PRs, plan generator. Todo dentro de Telegram."],
+      ["Voz del coach", "OpenAI Realtime. Conversa con el coach en vivo. Desde plan Pro."],
+      ["Wearables sync", "Whoop, Garmin, Strava, Google Fit. Tus entrenos se importan solos."],
+      ["PDFs mensuales", "Analisis narrativo de tu mes con LLM. Imprimible y compartible."],
+      ["Photo meal", "Analiza fotos de comida con Vision. Macros + feedback."],
+      ["Comunidad CO", "Desafios semanales, ranking, kudos entre atletas."],
+      ["Crisis detection", "Si detecta red flags emocionales, baja tono y deriva a profesional."],
+      ["Pagos por Bre-B", "Sin tarjeta. Sube foto del comprobante. Validacion en horas."]
+    ].map(([t, d]) => (
+      <div class="rounded-xl border border-slate-200 p-6">
+        <h3 class="font-semibold">{t}</h3>
+        <p class="text-sm text-slate-600 mt-2">{d}</p>
+      </div>
+    ))}
+  </div>
+</section>
+
+<section id="precios" class="bg-slate-900 text-white py-20">
+  <div class="mx-auto max-w-6xl px-4">
+    <h2 class="text-3xl font-bold text-center">Precios desde $5.000 COP</h2>
+    <p class="text-center text-slate-300 mt-2">Pagos por Bre-B/Nequi/Daviplata/Bancolombia.</p>
+    <div class="mt-10 grid md:grid-cols-4 gap-4">
+      {[
+        {n:"Free", p:"$0", x:"Gratis", desc:"Bot conversacional, 1 foto/dia, charts basicos."},
+        {n:"Starter", p:"$5.000", x:"/mes", desc:"Photo ilimitado, charts avanzados, Mini App, 5min Realtime trial."},
+        {n:"Pro", p:"$14.990", x:"/mes", desc:"+ voz + 30min Realtime + 1 wearable + plan generator. Popular.", popular:true},
+        {n:"Elite", p:"$39.990", x:"/mes", desc:"+ 120min Realtime + wearables ilimitados + PDFs ilimitados."}
+      ].map((plan) => (
+        <div class={`rounded-xl p-6 border ${plan.popular ? "border-brand-400 bg-brand-900/60" : "border-slate-700 bg-slate-800"}`}>
+          {plan.popular && <div class="text-xs uppercase text-brand-400 font-semibold">Mas popular</div>}
+          <h3 class="text-xl font-bold mt-1">{plan.n}</h3>
+          <div class="mt-2">
+            <span class="text-3xl font-bold">{plan.p}</span>
+            <span class="text-slate-400 text-sm">{plan.x}</span>
+          </div>
+          <p class="text-sm text-slate-300 mt-3">{plan.desc}</p>
+          <a
+            href={`https://t.me/${botUsername}?start=ref_landing_${plan.n.toLowerCase()}`}
+            class="mt-4 block text-center rounded-lg bg-brand-600 px-3 py-2 text-sm hover:bg-brand-700"
+          >
+            Elegir {plan.n}
+          </a>
+        </div>
+      ))}
+    </div>
+    <div class="mt-6 rounded-xl bg-brand-700/40 border border-brand-500 p-4 text-center">
+      <p class="text-sm">
+        <b>Lifetime $399.000</b> unico - Elite para siempre. Solo 100 cupos en launch.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="mx-auto max-w-6xl px-4 py-20">
+  <h2 class="text-3xl font-bold text-center">Preguntas frecuentes</h2>
+  <div class="mt-10 max-w-3xl mx-auto space-y-2">
+    {[
+      ["Es seguro pagar por comprobante?","Si. El bot extrae datos con Vision, detecta duplicados, y un admin valida cada pago manualmente. La activacion es provisional inmediata."],
+      ["Que pasa si rompi mi compromiso?","El bot escala los recordatorios. Pero respeta tus quiet hours y pausas. Puedes apagarlo cuando quieras con /pausa N."],
+      ["Funciona si no uso Telegram?","Si. Tenemos web alternativa con magic link. Mismo coach, mismo backend."],
+      ["Modo militar es agresivo?","Si, pero nunca cruzamos a insultos personales. Reconsent mensual obligatorio. Si detectamos red flags, bajamos a amigable automaticamente."],
+      ["Puedo cancelar?","Si, en cualquier momento con /salir. Sin friccion. Tus datos se borran con /borrar_datos."],
+      ["Que pasa con mis datos?","Tu informacion se guarda cifrada. Tienes derecho a exportar y borrar (Ley 1581 Colombia, GDPR ready)."]
+    ].map(([q, a]) => (
+      <details class="rounded-lg border border-slate-200 bg-white p-4">
+        <summary class="cursor-pointer font-semibold">{q}</summary>
+        <p class="mt-2 text-sm text-slate-600">{a}</p>
+      </details>
+    ))}
+  </div>
+</section>
+
+<footer class="bg-slate-900 text-slate-400 py-12">
+  <div class="mx-auto max-w-6xl px-4 grid md:grid-cols-4 gap-6 text-sm">
+    <div>
+      <h3 class="text-white font-semibold">EntrenadorAX</h3>
+      <p class="mt-2">Made in Medellin, Colombia.</p>
+    </div>
+    <div>
+      <h3 class="text-white font-semibold">Producto</h3>
+      <ul class="mt-2 space-y-1">
+        <li><a href="/#features" class="hover:text-white">Features</a></li>
+        <li><a href="/#precios" class="hover:text-white">Precios</a></li>
+        <li><a href="/deportes" class="hover:text-white">Deportes</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="text-white font-semibold">Legal</h3>
+      <ul class="mt-2 space-y-1">
+        <li><a href="/politicas/privacidad" class="hover:text-white">Privacidad</a></li>
+        <li><a href="/politicas/terminos" class="hover:text-white">Terminos</a></li>
+        <li><a href="/politicas/manejo-datos-tca" class="hover:text-white">Politica TCA</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="text-white font-semibold">Contacto</h3>
+      <p class="mt-2">soporte@entrenadorax.com</p>
+    </div>
+  </div>
+  <div class="mt-8 text-center text-xs">
+    (c) {new Date().getFullYear()} EntrenadorAX. No reemplaza atencion medica/psicologica profesional.
+  </div>
+</footer>

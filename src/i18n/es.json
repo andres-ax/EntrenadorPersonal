@@ -1,0 +1,16 @@
+{
+  "saludo_inicial": "Hola {nombre}, listo para entrenar?",
+  "recordatorio_entreno": "Hey {nombre}, hoy toca entrenar segun tu plan. <i>Como te sientes?</i>",
+  "recordatorio_comida": "Que almorzaste hoy, {nombre}?",
+  "recordatorio_sueno": "Buenos dias {nombre}, como dormiste anoche?",
+  "compromiso_recordatorio": "Hace {dias} dias firmaste: <i>{objetivo}</i>. Recuerdalo.",
+  "pago_aprobado": "Pago aprobado! Plan {plan} activo hasta {fecha}. Gracias.",
+  "pago_rechazado": "Tu pago fue rechazado: {motivo}. Contacta soporte si crees que es un error.",
+  "sin_cuota_realtime": "Sin minutos de voz este mes. Mejora tu plan en /pagar.",
+  "dias_sin_entrenar.one": "{count} dia sin entrenar",
+  "dias_sin_entrenar.other": "{count} dias sin entrenar",
+  "felicitacion_pr": "Nuevo PR! {ejercicio} {peso}kg x{reps}. Sigue asi.",
+  "boton_pagar": "Pagar plan",
+  "boton_llamar": "Llamar al coach",
+  "boton_inscribirme": "Inscribirme"
+}

@@ -102,6 +102,25 @@ class RolAdmin(str, enum.Enum):
     SOPORTE = "soporte"
 
 
+class CategoriaDeporte(str, enum.Enum):
+    """Categoria del deporte que determina el modelo de coaching aplicado.
+
+    Cada categoria tiene un sub-prompt en REGLA #11 del coach con vocabulario
+    nativo, metricas correctas y framework de periodizacion adecuado.
+    """
+    URBANO = "urbano"
+    COMBATE = "combate"
+    ESCALADA = "escalada"
+    ACUATICO = "acuatico"
+    EQUIPO = "equipo"
+    OUTDOOR_ENDURANCE = "outdoor_endurance"
+    INDOOR_FUERZA = "indoor_fuerza"
+    ECUESTRE = "ecuestre"
+    MOTOR = "motor"
+    TRADICIONAL_CO = "tradicional_co"
+    OTRO = "otro"
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -120,6 +139,15 @@ class Usuario(Base):
     timezone = Column(String(64), default="America/Bogota", nullable=False)
     tono = Column(Enum(TonoCoach), default=TonoCoach.FIRME, nullable=False)
     idioma = Column(String(8), default="es", nullable=False)
+    categoria_deporte = Column(
+        Enum(CategoriaDeporte),
+        default=CategoriaDeporte.INDOOR_FUERZA,
+        nullable=False,
+        index=True,
+    )
+    modalidad_deporte = Column(String(64), nullable=True)
+    anos_practica = Column(Integer, nullable=True)
+    es_competitivo = Column(Boolean, default=False, nullable=False)
     modo_militar_aceptado_en = Column(DateTime)
     bot_bloqueado = Column(Boolean, default=False, nullable=False)
     pausado_hasta = Column(Date)
@@ -638,23 +666,6 @@ class MagicLink(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
-class DeporteCatalogo(Base):
-    """Catalogo de deportes soportados (60+ del research)."""
-
-    __tablename__ = "deportes_catalogo"
-
-    id = Column(Integer, primary_key=True)
-    slug = Column(String(64), unique=True, nullable=False, index=True)
-    nombre_es = Column(String(120), nullable=False)
-    nombre_en = Column(String(120), default="")
-    categoria = Column(String(32), nullable=False, index=True)
-    metricas = Column(JSON, default=dict)
-    vocabulario = Column(JSON, default=list)
-    plataforma_externa = Column(String(32), default="")
-    equipamiento = Column(JSON, default=list)
-    escena_co = Column(Text, default="")
-
-
 class RealtimeSesion(Base):
     """Sesion de llamada con coach via OpenAI Realtime API."""
 
@@ -672,3 +683,30 @@ class RealtimeSesion(Base):
     tokens_output = Column(Integer, default=0)
     costo_estimado_usd = Column(Float, default=0.0)
     transcript = Column(Text, default="")
+
+
+class DeporteCatalogo(Base):
+    """Catalogo maestro de los 67+ deportes soportados en Colombia.
+
+    Seed inicial via alembic 0005. Permite agregar deportes nuevos sin
+    redeploys (admin via /admin/stats o script). Cada deporte mapea a
+    una CategoriaDeporte que determina el sub-prompt del coach (REGLA #11).
+    """
+
+    __tablename__ = "deportes_catalogo"
+
+    id = Column(Integer, primary_key=True)
+    slug = Column(String(48), unique=True, nullable=False, index=True)
+    nombre_es = Column(String(80), nullable=False)
+    nombre_en = Column(String(80), default="")
+    categoria = Column(String(32), nullable=False, index=True)
+    escena_co = Column(String(200), default="")
+    plataforma_externa = Column(String(32), default="")
+    vocabulario = Column(JSON, default=list)
+    metricas = Column(JSON, default=list)
+    equipamiento = Column(JSON, default=list)
+    spots_colombia = Column(JSON, default=list)
+    referentes_colombia = Column(JSON, default=list)
+    federacion = Column(String(120), default="")
+    activo = Column(Boolean, default=True, nullable=False)
+    creado_en = Column(DateTime, server_default=func.now())

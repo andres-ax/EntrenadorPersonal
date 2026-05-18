@@ -11,7 +11,9 @@ from sqlalchemy.orm import selectinload
 from src.db.connection import async_session_factory
 from src.db.models import (
     Admin,
+    CategoriaDeporte,
     CheckinNocturno,
+    DeporteCatalogo,
     Comida,
     Compromiso,
     CrisisLog,
@@ -1328,4 +1330,94 @@ async def set_quiet_hours(
         telegram_id,
         quiet_hours_inicio=time_t(h_inicio, m_inicio),
         quiet_hours_fin=time_t(h_fin, m_fin),
+    )
+
+
+# ============================================================================
+# PR2 - Deporte catalog helpers
+# ============================================================================
+
+
+_CATALOG_CACHE: dict[str, str] = {}
+_CATALOG_FULL_CACHE: dict[str, dict] = {}
+
+
+async def cargar_catalog_en_cache() -> int:
+    """Carga catalog de deportes a cache en memoria. Llamar al startup.
+
+    Returns:
+        Numero de deportes cargados.
+    """
+    global _CATALOG_CACHE, _CATALOG_FULL_CACHE
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(DeporteCatalogo).where(DeporteCatalogo.activo == True)  # noqa: E712
+        )
+        deportes = list(result.scalars().all())
+    _CATALOG_CACHE = {d.slug: d.categoria for d in deportes}
+    _CATALOG_FULL_CACHE = {
+        d.slug: {
+            "slug": d.slug,
+            "nombre_es": d.nombre_es,
+            "nombre_en": d.nombre_en,
+            "categoria": d.categoria,
+            "vocabulario": d.vocabulario or [],
+            "metricas": d.metricas or [],
+            "spots_colombia": d.spots_colombia or [],
+            "referentes_colombia": d.referentes_colombia or [],
+            "escena_co": d.escena_co or "",
+            "federacion": d.federacion or "",
+        }
+        for d in deportes
+    }
+    return len(deportes)
+
+
+def get_categoria_deporte(deporte_slug: str | None) -> str:
+    """Devuelve la categoria de un deporte (slug) desde cache.
+
+    Si el slug no existe, devuelve 'indoor_fuerza' como fallback seguro
+    (vocabulario de gimnasio aplica a la mayoria de cosas).
+    """
+    if not deporte_slug:
+        return "indoor_fuerza"
+    return _CATALOG_CACHE.get(deporte_slug.lower().strip(), "indoor_fuerza")
+
+
+def get_deporte_info(deporte_slug: str | None) -> dict:
+    """Devuelve metadata completa del deporte desde cache."""
+    if not deporte_slug:
+        return {}
+    return _CATALOG_FULL_CACHE.get(deporte_slug.lower().strip(), {})
+
+
+async def listar_deportes_por_categoria(categoria: str) -> list[dict]:
+    """Devuelve todos los deportes de una categoria."""
+    if not _CATALOG_FULL_CACHE:
+        await cargar_catalog_en_cache()
+    return [d for d in _CATALOG_FULL_CACHE.values() if d["categoria"] == categoria]
+
+
+async def slugs_disponibles() -> set[str]:
+    """Devuelve set de todos los slugs activos. Util para validar guardar_perfil."""
+    if not _CATALOG_CACHE:
+        await cargar_catalog_en_cache()
+    return set(_CATALOG_CACHE.keys())
+
+
+async def actualizar_categoria_usuario(
+    telegram_id: int, deporte_slug: str | None
+) -> Optional[Usuario]:
+    """Cuando se setea deporte_principal, actualiza categoria_deporte segun catalog."""
+    if not deporte_slug:
+        return None
+    categoria = get_categoria_deporte(deporte_slug)
+    try:
+        cat_enum = CategoriaDeporte(categoria)
+    except ValueError:
+        cat_enum = CategoriaDeporte.INDOOR_FUERZA
+    return await actualizar_usuario(
+        telegram_id,
+        deporte_principal=deporte_slug,
+        categoria_deporte=cat_enum,
     )

@@ -1,0 +1,47 @@
+---
+import Base from "../../layouts/Base.astro";
+import Navbar from "../../components/Navbar.astro";
+
+const deportes = [
+  { slug: "bmx", nombre: "BMX" },
+  { slug: "skate", nombre: "Skate" },
+  { slug: "rollers", nombre: "Patinaje rollers" },
+  { slug: "climbing", nombre: "Climbing / escalada" },
+  { slug: "surf", nombre: "Surf" },
+  { slug: "boxeo", nombre: "Boxeo" },
+  { slug: "bjj", nombre: "BJJ" },
+  { slug: "muay-thai", nombre: "Muay Thai" },
+  { slug: "mma", nombre: "MMA" },
+  { slug: "padel", nombre: "Padel" },
+  { slug: "trail", nombre: "Trail running" },
+  { slug: "triatlon", nombre: "Triatlon" },
+  { slug: "mtb", nombre: "Mountain bike" },
+  { slug: "ciclismo", nombre: "Ciclismo de ruta" },
+  { slug: "natacion", nombre: "Natacion" },
+  { slug: "apnea", nombre: "Apnea / freediving" },
+  { slug: "crossfit", nombre: "CrossFit" },
+  { slug: "powerlifting", nombre: "Powerlifting" },
+  { slug: "halterofilia", nombre: "Halterofilia" },
+  { slug: "yoga", nombre: "Yoga" },
+];
+---
+<Base title="60+ deportes soportados - EntrenadorAX" canonical="https://entrenadorax.com/deportes">
+  <Navbar />
+  <main class="mx-auto max-w-6xl px-4 py-12">
+    <h1 class="text-3xl font-bold">60+ deportes soportados</h1>
+    <p class="mt-2 text-slate-600">
+      EntrenadorAX se adapta a tu deporte. No solo gym. Elige el tuyo:
+    </p>
+    <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+      {deportes.map((d) => (
+        <a
+          href={`/deportes/${d.slug}`}
+          class="rounded-xl border border-slate-200 p-4 hover:border-brand-500 hover:bg-brand-50 transition"
+        >
+          <div class="font-semibold">{d.nombre}</div>
+          <div class="text-xs text-slate-500 mt-1">EntrenadorAX para {d.nombre}</div>
+        </a>
+      ))}
+    </div>
+  </main>
+</Base>

@@ -1,0 +1,21 @@
+---
+const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
+---
+<header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-100">
+  <div class="mx-auto max-w-6xl flex items-center justify-between px-4 py-3">
+    <a href="/" class="font-bold text-lg text-brand-700">EntrenadorAX</a>
+    <nav class="hidden md:flex gap-6 text-sm">
+      <a href="/#problema" class="hover:text-brand-600">Problema</a>
+      <a href="/#deportes" class="hover:text-brand-600">Deportes</a>
+      <a href="/#features" class="hover:text-brand-600">Features</a>
+      <a href="/#precios" class="hover:text-brand-600">Precios</a>
+      <a href="/#faq" class="hover:text-brand-600">FAQ</a>
+    </nav>
+    <a
+      href={`https://t.me/${botUsername}?start=ref_landing_nav`}
+      class="rounded-lg bg-brand-600 px-3 py-1.5 text-sm text-white hover:bg-brand-700"
+    >
+      Empezar gratis
+    </a>
+  </div>
+</header>

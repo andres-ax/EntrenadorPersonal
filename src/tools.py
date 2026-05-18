@@ -46,16 +46,33 @@ TIPOS_COMIDA_VALIDOS = {"desayuno", "almuerzo", "cena", "snack", "post_entreno"}
 TONOS_VALIDOS = {"amigable", "firme", "militar"}
 TIPOS_COMPROMISO_VALIDOS = {"entreno", "comida", "peso", "general"}
 DEPORTES_VALIDOS = {
-    "gimnasio",
-    "crossfit",
-    "running",
-    "futbol",
-    "calistenia",
-    "natacion",
-    "ciclismo",
-    "yoga",
-    "boxeo",
-    "tenis",
+    # urbano
+    "bmx", "skate", "rollers", "patinaje_velocidad", "patinaje_artistico",
+    "scooter", "parkour", "surf", "kitesurf", "sup", "slacklining",
+    # escalada
+    "climbing",
+    # combate
+    "boxeo", "muay_thai", "bjj", "mma", "karate", "taekwondo", "judo",
+    "kickboxing", "wrestling", "capoeira", "krav_maga", "esgrima",
+    # equipo
+    "futbol", "baloncesto", "voley", "voley_playa", "beisbol", "softbol",
+    "rugby", "hockey", "ultimate", "padel", "tenis",
+    # outdoor endurance
+    "running", "trail", "triatlon", "duatlon", "ocr", "mtb", "ciclismo",
+    "atletismo",
+    # indoor fuerza
+    "gimnasio", "crossfit", "calistenia", "powerlifting", "halterofilia",
+    "funcional", "pilates", "yoga", "pole", "aerial",
+    # acuatico
+    "natacion", "waterpolo", "apnea", "buceo",
+    # ecuestre
+    "equitacion", "polo", "caballo_paso",
+    # motor
+    "karting", "motocross", "enduro_moto",
+    # tradicional CO
+    "tejo", "coleo",
+    # alias comunes (preservar back-compat)
+    "rolling", "patinaje", "escalada", "soccer", "basket", "volley",
 }
 
 
@@ -149,7 +166,7 @@ async def guardar_perfil(
         objetivo: ganar musculo, perder grasa, mantenerse, mejorar rendimiento
         nivel: principiante, intermedio, avanzado
         dias_entreno: dias por semana que entrena (1-7)
-        deporte_principal: gimnasio, crossfit, running, futbol, calistenia, natacion, ciclismo, yoga, boxeo, tenis
+        deporte_principal: slug del deporte (acepta 67 deportes: bmx, skate, rollers, climbing, boxeo, bjj, mma, futbol, padel, trail, mtb, ciclismo, gimnasio, crossfit, natacion, apnea, equitacion, karting, tejo, etc). Lista completa en DeporteCatalogo.
         timezone: zona horaria IANA (ej: America/Bogota, America/Mexico_City, Europe/Madrid)
         pais: codigo ISO de 2 letras (CO, MX, AR, ES)
         onboarding_completo: True cuando tengas peso, altura, objetivo, nivel y dias_entreno
@@ -171,7 +188,18 @@ async def guardar_perfil(
         if dias_entreno > 0:
             kwargs["dias_entreno"] = dias_entreno
         if deporte_principal:
-            kwargs["deporte_principal"] = deporte_principal
+            slug = deporte_principal.lower().strip()
+            kwargs["deporte_principal"] = slug
+            # Auto-derivar categoria desde el catalog para el sub-prompt
+            from src.db.models import CategoriaDeporte
+            from src.db.repository import get_categoria_deporte
+
+            try:
+                kwargs["categoria_deporte"] = CategoriaDeporte(
+                    get_categoria_deporte(slug)
+                )
+            except ValueError:
+                kwargs["categoria_deporte"] = CategoriaDeporte.INDOOR_FUERZA
         if timezone:
             kwargs["timezone"] = timezone
         if pais:

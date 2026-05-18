@@ -273,6 +273,60 @@ async def checkin_nocturno(context) -> None:
         logger.exception("Error en checkin_nocturno")
 
 
+async def recordatorio_hidratacion(context) -> None:
+    """Cada 2h en horas activas: avisa si va atras del objetivo."""
+    from src.services.hidratacion import consumo_hoy_ml, objetivo_ml
+
+    async def _build(u: Usuario) -> str | None:
+        consumido = await consumo_hoy_ml(u.telegram_id)
+        objetivo = await objetivo_ml(u.telegram_id)
+        if objetivo <= 0:
+            return None
+        pct = consumido / objetivo
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo as _ZI
+
+        ahora = _dt.now(_ZI(u.timezone or "America/Bogota"))
+        if ahora.hour < 8 or ahora.hour >= 21:
+            return None
+        horas_dia = max(1, ahora.hour - 7)
+        pct_esperado = horas_dia / 13
+        if pct >= pct_esperado * 0.85:
+            return None
+        return (
+            f"<b>{u.nombre or 'Crack'}</b>, vas en {consumido}ml de "
+            f"{objetivo}ml. Tomate <b>500ml</b> de agua."
+        )
+
+    try:
+        usuarios = await listar_usuarios_activos()
+        await _broadcast(context.bot, usuarios, _build, silent=True)
+    except Exception:
+        logger.exception("Error en recordatorio_hidratacion")
+
+
+async def reconsent_militar_mensual(context) -> None:
+    """Dia 1 de cada mes: pide reconfirmacion del modo militar a quienes lo tienen."""
+    from src.db.models import TonoCoach as _Tono
+
+    async def _build(u: Usuario) -> str | None:
+        if not u.tono or u.tono != _Tono.MILITAR:
+            return None
+        return (
+            "<b>Reconsent mensual modo militar</b>\n\n"
+            "Llevas un mes en modo militar. Como te sentaste? "
+            "Responde <b>sigo</b> para mantener, <b>suavizar</b> para bajar a "
+            "firme, o usa /pausa N para pausar N dias. "
+            "Si no respondes en 7 dias, bajo automaticamente a firme."
+        )
+
+    try:
+        usuarios = await listar_usuarios_activos()
+        await _broadcast(context.bot, usuarios, _build, silent=False)
+    except Exception:
+        logger.exception("Error en reconsent_militar_mensual")
+
+
 def registrar_jobs(app: Application) -> None:
     """Registra los jobs recurrentes en el JobQueue de la app."""
     jq = app.job_queue
@@ -309,7 +363,20 @@ def registrar_jobs(app: Application) -> None:
         days=(6,),
         name="resumen_semanal",
     )
+    jq.run_repeating(
+        recordatorio_hidratacion,
+        interval=2 * 3600,
+        first=time(10, 0),
+        name="recordatorio_hidratacion",
+    )
+    jq.run_monthly(
+        reconsent_militar_mensual,
+        when=time(10, 0),
+        day=1,
+        name="reconsent_militar",
+    )
 
     logger.info(
-        "4 jobs registrados: escalation_diaria, checkin_nocturno, recordatorio_peso, resumen_semanal"
+        "8 jobs registrados: escalation, quiz_nocturno, quiz_sabado, checkin, "
+        "peso_lunes, resumen_domingo, hidratacion_2h, reconsent_militar"
     )

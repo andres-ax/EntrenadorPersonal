@@ -137,6 +137,12 @@ async def _build_prompt(texto: str, uid: int) -> str:
         perfil_parts.append(f"dias_entreno={user.dias_entreno}")
     if user.deporte_principal:
         perfil_parts.append(f"deporte={user.deporte_principal}")
+    if user.categoria_deporte:
+        perfil_parts.append(f"categoria_deporte={user.categoria_deporte.value}")
+    if user.modalidad_deporte:
+        perfil_parts.append(f"modalidad={user.modalidad_deporte}")
+    if user.es_competitivo:
+        perfil_parts.append("competitivo=si")
     if user.timezone:
         perfil_parts.append(f"tz={user.timezone}")
     perfil_parts.append(
@@ -917,6 +923,60 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    if q.data.startswith("agua:"):
+        from src.services.hidratacion import (
+            consumo_hoy_ml,
+            objetivo_ml,
+            registrar_agua,
+        )
+
+        try:
+            ml = int(q.data.split(":", 1)[1])
+        except ValueError:
+            return
+        await registrar_agua(uid, ml)
+        await log_evento(uid, "agua_registrada", {"ml": ml})
+        consumido = await consumo_hoy_ml(uid)
+        objetivo = await objetivo_ml(uid)
+        pct = int(consumido / objetivo * 100) if objetivo else 0
+        keyboard = [
+            [
+                InlineKeyboardButton("+250ml", callback_data="agua:250"),
+                InlineKeyboardButton("+500ml", callback_data="agua:500"),
+                InlineKeyboardButton("+750ml", callback_data="agua:750"),
+            ]
+        ]
+        await q.edit_message_text(
+            f"<b>Hidratacion hoy</b>\n{consumido}ml / {objetivo}ml ({pct}%)",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        return
+
+    if q.data.startswith("calma:"):
+        from io import BytesIO
+
+        from src.services.mindfulness import obtener_audio, SESIONES
+
+        slug = q.data.split(":", 1)[1]
+        sesion = SESIONES.get(slug)
+        if sesion is None:
+            return
+        await q.message.chat.send_action(ChatAction.RECORD_VOICE)
+        audio = await obtener_audio(slug)
+        if audio is None:
+            await q.edit_message_text("No pude generar el audio ahora.")
+            return
+        try:
+            await ctx.bot.send_voice(
+                chat_id=uid,
+                voice=BytesIO(audio),
+                caption=f"<b>{sesion['titulo']}</b>",
+            )
+            await q.delete_message()
+        except Exception:
+            logger.exception("Error enviando mindfulness uid=%s", uid)
+        return
+
     if q.data.startswith("desafio_inscribir:"):
         from src.services.comunidad import inscribir_en_desafio
 
@@ -1340,6 +1400,55 @@ async def cmd_llamar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def cmd_agua(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Registra agua o consulta consumo del dia. /agua [ml]."""
+    from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
+
+    uid = update.effective_user.id
+    args = ctx.args or []
+    if args:
+        try:
+            ml = int(args[0])
+            ml = max(50, min(2000, ml))
+        except ValueError:
+            await update.message.reply_text("Uso: <code>/agua 500</code> (en ml)")
+            return
+        await registrar_agua(uid, ml)
+        await log_evento(uid, "agua_registrada", {"ml": ml})
+    consumido = await consumo_hoy_ml(uid)
+    objetivo = await objetivo_ml(uid)
+    pct = int(consumido / objetivo * 100) if objetivo else 0
+    bar_full = min(10, pct // 10)
+    bar = "*" * bar_full + "-" * (10 - bar_full)
+    keyboard = [
+        [
+            InlineKeyboardButton("+250ml", callback_data="agua:250"),
+            InlineKeyboardButton("+500ml", callback_data="agua:500"),
+            InlineKeyboardButton("+750ml", callback_data="agua:750"),
+        ]
+    ]
+    await update.message.reply_text(
+        f"<b>Hidratacion hoy</b>\n"
+        f"{consumido}ml / {objetivo}ml ({pct}%)\n"
+        f"<code>[{bar}]</code>",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def cmd_calma(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lista sesiones de mindfulness disponibles."""
+    from src.services.mindfulness import listar_sesiones
+
+    keyboard = [
+        [InlineKeyboardButton(s["titulo"], callback_data=f"calma:{s['slug']}")]
+        for s in listar_sesiones()
+    ]
+    await update.message.reply_text(
+        "<b>Sesiones de calma</b>\n\nElige una:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
 async def cmd_desafios(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Lista desafios activos + boton inscribirse."""
     from src.services.comunidad import listar_desafios_activos
@@ -1472,6 +1581,8 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("desafios", cmd_desafios))
     app.add_handler(CommandHandler("ranking", cmd_ranking))
     app.add_handler(CommandHandler("kudos", cmd_kudos))
+    app.add_handler(CommandHandler("agua", cmd_agua))
+    app.add_handler(CommandHandler("calma", cmd_calma))
     app.add_handler(CommandHandler("invitar", cmd_invitar))
     app.add_handler(InlineQueryHandler(inline_query))
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))

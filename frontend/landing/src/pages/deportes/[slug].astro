@@ -1,0 +1,67 @@
+---
+import Base from "../../layouts/Base.astro";
+import Navbar from "../../components/Navbar.astro";
+
+export async function getStaticPaths() {
+  const deportes = [
+    { slug: "bmx", nombre: "BMX", metricas: "sesiones, trucos aterrizados, alturas (m), gates ganadas", escena: "Bogota (El Salitre), Medellin, Cali (Pance)" },
+    { slug: "skate", nombre: "Skate", metricas: "sesiones, trucos aterrizados, lineas filmadas, make rate", escena: "Bogota, Medellin, Cali, Envigado" },
+    { slug: "rollers", nombre: "Patinaje rollers", metricas: "tiempos por vuelta, distancia, trucos aterrizados", escena: "Bogota (Patinodromo Salitre), Cali, Pereira" },
+    { slug: "climbing", nombre: "Climbing", metricas: "vias enviadas, grado max, sesiones (h)", escena: "Suesca, San Gil, Macheta, Mongui" },
+    { slug: "surf", nombre: "Surf", metricas: "sesiones (h), olas surfeadas, swell maximo (ft)", escena: "Nuqui, Cabo de la Vela, Palomino" },
+    { slug: "boxeo", nombre: "Boxeo", metricas: "rounds, sparring, peleas, peso peleado", escena: "Todo el pais" },
+    { slug: "bjj", nombre: "Brazilian Jiu-Jitsu", metricas: "rolls, cinturon, sumisiones, torneos", escena: "Medellin, Bogota" },
+    { slug: "muay-thai", nombre: "Muay Thai", metricas: "rounds, sparring, peleas, combos", escena: "Bogota, Medellin, Cali" },
+    { slug: "mma", nombre: "MMA", metricas: "rounds, peleas, sumisiones, KOs, weight cuts", escena: "Medellin, Bogota" },
+    { slug: "padel", nombre: "Padel", metricas: "partidos, sets/games, ranking nacional", escena: "53 ciudades, 687 pistas (2026)" },
+    { slug: "trail", nombre: "Trail running", metricas: "distancia (km), desnivel (m+), tiempo, ritmo", escena: "Cundinamarca, Boyaca, paramo" },
+    { slug: "triatlon", nombre: "Triatlon", metricas: "tiempos por segmento, T1/T2, volumen semanal", escena: "Cartagena, Bogota" },
+    { slug: "mtb", nombre: "Mountain bike", metricas: "distancia, desnivel, ritmo, segmentos Strava", escena: "Boyaca, Antioquia" },
+    { slug: "ciclismo", nombre: "Ciclismo de ruta", metricas: "distancia, FTP, desnivel, KOM Strava", escena: "Boyaca, Antioquia, Cundinamarca" },
+    { slug: "natacion", nombre: "Natacion", metricas: "tiempos por prueba, splits, SWOLF, distancia semanal", escena: "Medellin, Cali, Bogota" },
+    { slug: "apnea", nombre: "Apnea / freediving", metricas: "profundidad max (m), tiempo apnea (min:seg)", escena: "San Andres, Santa Marta, Providencia" },
+    { slug: "crossfit", nombre: "CrossFit", metricas: "WODs firmados, 1RM, gimnastica, AMRAP", escena: "Bogota, Medellin, Cali, Monteria" },
+    { slug: "powerlifting", nombre: "Powerlifting", metricas: "Squat/Bench/Deadlift max (kg), Total, Wilks", escena: "Todo el pais" },
+    { slug: "halterofilia", nombre: "Halterofilia", metricas: "Snatch max, C&J max, Total", escena: "Colombia campeon mundial 2022" },
+    { slug: "yoga", nombre: "Yoga", metricas: "sesiones (min), posturas dominadas, tiempo en hold", escena: "Todo el pais" },
+  ];
+  return deportes.map((d) => ({ params: { slug: d.slug }, props: d }));
+}
+
+const { nombre, metricas, escena, slug } = Astro.props;
+const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
+---
+<Base
+  title={`EntrenadorAX para ${nombre} - Coach IA personalizado`}
+  description={`Coach IA en Telegram especializado en ${nombre}. Trackea ${metricas}. Escena en ${escena}. Empieza gratis.`}
+  canonical={`https://entrenadorax.com/deportes/${slug}`}
+>
+  <Navbar />
+  <main class="mx-auto max-w-3xl px-4 py-12">
+    <a href="/deportes" class="text-sm text-brand-600">&larr; Todos los deportes</a>
+    <h1 class="mt-4 text-4xl font-bold">EntrenadorAX para {nombre}</h1>
+    <p class="mt-4 text-lg text-slate-600">
+      Tu coach IA personalizado para {nombre}. Trackea lo que importa, recibe
+      recordatorios proactivos y firma un compromiso real con tu progreso.
+    </p>
+
+    <div class="mt-8 rounded-xl border border-slate-200 p-6">
+      <h2 class="text-xl font-semibold">Que registra el bot para {nombre}</h2>
+      <p class="mt-2 text-slate-700">{metricas}.</p>
+    </div>
+
+    <div class="mt-4 rounded-xl border border-slate-200 p-6">
+      <h2 class="text-xl font-semibold">Escena en Colombia</h2>
+      <p class="mt-2 text-slate-700">{escena}.</p>
+    </div>
+
+    <div class="mt-8 text-center">
+      <a
+        href={`https://t.me/${botUsername}?start=ref_landing_${slug}`}
+        class="rounded-lg bg-brand-600 text-white px-6 py-3 font-semibold hover:bg-brand-700"
+      >
+        Probar EntrenadorAX gratis para {nombre}
+      </a>
+    </div>
+  </main>
+</Base>
