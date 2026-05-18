@@ -17,9 +17,13 @@ from sqlalchemy import func, select
 from src.config import settings
 from src.db.connection import async_session_factory
 from src.db.models import (
+    Comida,
+    DeporteCatalogo,
     EventoBot,
+    PersonalRecord,
     PlanSuscripcion,
     SesionEntrenamiento,
+    Streak,
     Usuario,
 )
 
@@ -72,6 +76,31 @@ async def stats_publicas() -> dict:
                 )
             )
         ).scalar() or 0
+        sesiones_totales = (
+            await session.execute(select(func.count(SesionEntrenamiento.id)))
+        ).scalar() or 0
+        comidas_totales = (
+            await session.execute(select(func.count(Comida.id)))
+        ).scalar() or 0
+        prs_totales = (
+            await session.execute(select(func.count(PersonalRecord.id)))
+        ).scalar() or 0
+        interacciones_totales = (
+            await session.execute(select(func.count(EventoBot.id)))
+        ).scalar() or 0
+        paises_distintos = (
+            await session.execute(
+                select(func.count(func.distinct(Usuario.pais))).where(
+                    Usuario.pais.isnot(None)
+                )
+            )
+        ).scalar() or 0
+        racha_max = (
+            await session.execute(select(func.max(Streak.max_historico)))
+        ).scalar() or 0
+        deportes_count = (
+            await session.execute(select(func.count(DeporteCatalogo.id)))
+        ).scalar() or 0
         paises_q = await session.execute(
             select(Usuario.pais, func.count(Usuario.id))
             .group_by(Usuario.pais)
@@ -86,6 +115,13 @@ async def stats_publicas() -> dict:
         "usuarios_totales": total_usuarios,
         "usuarios_activos": onboarded,
         "sesiones_registradas_30d": sesiones_30d,
+        "sesiones_totales": sesiones_totales,
+        "comidas_registradas": comidas_totales,
+        "prs_registrados": prs_totales,
+        "interacciones_totales": interacciones_totales,
+        "paises_count": paises_distintos,
+        "racha_max_global": racha_max,
+        "deportes_count": deportes_count or 71,
         "paises_top": paises_top,
         "actualizado_en": datetime.utcnow().isoformat(),
     }

@@ -159,36 +159,102 @@
       </script>
     </div>
 
-    {# Social proof stats #}
-    <div class="mt-16 pt-8 border-t border-white/10">
-      <div class="grid grid-cols-3 gap-4 max-w-lg mx-auto text-center" id="stats-counters">
-        <div>
-          <div class="text-2xl md:text-3xl font-bold" id="stat-deportes">71</div>
-          <div class="text-xs text-slate-400 mt-1">deportes</div>
+  </div>
+</section>
+
+{# ============ Social proof stats (franja separada) ============ #}
+<section class="relative bg-slate-900/80 backdrop-blur border-y border-white/5 py-10" id="stats-section">
+  <div class="max-w-6xl mx-auto px-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 text-center" id="stats-counters">
+      <div class="group">
+        <div class="flex justify-center mb-2">
+          <svg class="w-6 h-6 text-brand-400 group-hover:text-brand-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
         </div>
-        <div>
-          <div class="text-2xl md:text-3xl font-bold" id="stat-usuarios">--</div>
-          <div class="text-xs text-slate-400 mt-1">usuarios activos</div>
+        <div class="text-2xl md:text-3xl font-bold text-white" data-stat="usuarios_activos">--</div>
+        <div class="text-xs text-slate-400 mt-1">deportistas activos</div>
+      </div>
+      <div class="group">
+        <div class="flex justify-center mb-2">
+          <svg class="w-6 h-6 text-brand-400 group-hover:text-brand-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
         </div>
-        <div>
-          <div class="text-2xl md:text-3xl font-bold" id="stat-entrenos">--</div>
-          <div class="text-xs text-slate-400 mt-1">entrenos registrados</div>
+        <div class="text-2xl md:text-3xl font-bold text-white" data-stat="sesiones_totales">--</div>
+        <div class="text-xs text-slate-400 mt-1">entrenos registrados</div>
+      </div>
+      <div class="group">
+        <div class="flex justify-center mb-2">
+          <svg class="w-6 h-6 text-brand-400 group-hover:text-brand-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.625v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12M12.265 3.11a.375.375 0 11-.53 0L12 2.845l.265.265z"/></svg>
         </div>
+        <div class="text-2xl md:text-3xl font-bold text-white" data-stat="comidas_registradas">--</div>
+        <div class="text-xs text-slate-400 mt-1">comidas registradas</div>
+      </div>
+      <div class="group">
+        <div class="flex justify-center mb-2">
+          <svg class="w-6 h-6 text-brand-400 group-hover:text-brand-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0016.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.023 6.023 0 01-4.27 1.772 6.023 6.023 0 01-4.27-1.772"/></svg>
+        </div>
+        <div class="text-2xl md:text-3xl font-bold text-white" data-stat="prs_registrados">--</div>
+        <div class="text-xs text-slate-400 mt-1">records personales</div>
+      </div>
+      <div class="group">
+        <div class="flex justify-center mb-2">
+          <svg class="w-6 h-6 text-brand-400 group-hover:text-brand-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.893 13.393l-1.135-1.135a2.252 2.252 0 01-.421-.585l-1.08-2.16a.414.414 0 00-.663-.107.827.827 0 01-.812.21l-1.273-.363a.89.89 0 00-.738 1.595l.587.39c.59.395.674 1.23.172 1.732l-.2.2c-.212.212-.33.498-.33.796v.41c0 .409-.11.809-.32 1.158l-1.315 2.191a2.11 2.11 0 01-1.81 1.025 1.055 1.055 0 01-1.055-1.055v-1.172c0-.92-.56-1.747-1.414-2.089l-.655-.261a2.25 2.25 0 01-1.383-2.46l.007-.042a2.25 2.25 0 01.29-.787l.09-.15a2.25 2.25 0 012.37-1.048l1.178.236a1.125 1.125 0 001.302-.795l.208-.73a1.125 1.125 0 00-.578-1.315l-.665-.332-.091.091a2.25 2.25 0 01-1.591.659h-.18a.94.94 0 00-.662.274.931.931 0 01-1.458-1.137l1.411-2.353a2.25 2.25 0 00.286-.76M11.25 2.25c1.477 0 2.916.195 4.284.553M12.75 21h-1.5m0 0H9.375a1.125 1.125 0 01-1.125-1.125V18m3.75 3v-3.375"/></svg>
+        </div>
+        <div class="text-2xl md:text-3xl font-bold text-white" data-stat="paises_count">--</div>
+        <div class="text-xs text-slate-400 mt-1">paises</div>
+      </div>
+      <div class="group">
+        <div class="flex justify-center mb-2">
+          <svg class="w-6 h-6 text-brand-400 group-hover:text-brand-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/></svg>
+        </div>
+        <div class="text-2xl md:text-3xl font-bold text-white" data-stat="interacciones_totales">--</div>
+        <div class="text-xs text-slate-400 mt-1">conversaciones</div>
       </div>
     </div>
   </div>
 </section>
 
-{# Carga stats reales via fetch #}
 <script>
 (function(){
-  fetch('/api/public/stats').then(function(r){ return r.json(); }).then(function(d){
-    var u = document.getElementById('stat-usuarios');
-    var e = document.getElementById('stat-entrenos');
-    if(u && d.usuarios) u.textContent = d.usuarios.total || '--';
-    if(e && d.entrenos_esta_semana !== undefined) e.textContent = d.entrenos_esta_semana;
-    else if(e && d.sesiones_semana !== undefined) e.textContent = d.sesiones_semana;
-  }).catch(function(){});
+  function formatNum(n){
+    if(n>=1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'')+'M';
+    if(n>=10000) return (n/1000).toFixed(1).replace(/\.0$/,'')+'K';
+    if(n>=1000) return (n/1000).toFixed(1).replace(/\.0$/,'')+'K';
+    return String(n);
+  }
+  function animateCount(el,target,duration){
+    var start=0,startTime=null;
+    function step(ts){
+      if(!startTime) startTime=ts;
+      var progress=Math.min((ts-startTime)/duration,1);
+      var eased=1-Math.pow(1-progress,3);
+      var current=Math.round(eased*target);
+      el.textContent=formatNum(current);
+      if(progress<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function fillStats(d){
+    var fields=['usuarios_activos','sesiones_totales','comidas_registradas','prs_registrados','paises_count','interacciones_totales'];
+    var section=document.getElementById('stats-section');
+    var animated=false;
+    function doAnimate(){
+      if(animated) return;
+      animated=true;
+      fields.forEach(function(f){
+        var el=document.querySelector('[data-stat="'+f+'"]');
+        if(el && typeof d[f]==='number' && d[f]>0){
+          animateCount(el,d[f],1800);
+        }
+      });
+    }
+    if(window.IntersectionObserver && section){
+      new IntersectionObserver(function(entries){
+        if(entries[0].isIntersecting) doAnimate();
+      },{threshold:0.2}).observe(section);
+    }else{
+      doAnimate();
+    }
+  }
+  fetch('/api/public/stats').then(function(r){return r.json();}).then(fillStats).catch(function(){});
 })();
 </script>
 
