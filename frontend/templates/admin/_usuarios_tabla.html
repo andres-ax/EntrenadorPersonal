@@ -5,7 +5,8 @@
       mostrando {{ data["items"]|length }} (offset {{ filtros.offset }})
     </div>
   </div>
-  <table class="w-full text-sm">
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm min-w-[700px]">
     <thead class="bg-slate-50 text-xs uppercase text-slate-500">
       <tr>
         <th class="px-4 py-2 text-left">UID</th>
@@ -53,6 +54,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 
   {% if data.total > filtros.limit %}
     <div class="px-5 py-3 border-t border-slate-100 flex justify-between items-center text-sm">

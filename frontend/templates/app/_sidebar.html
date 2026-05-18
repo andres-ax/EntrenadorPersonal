@@ -1,4 +1,6 @@
-{# Sidebar fijo del panel deportista. `active` selecciona item. #}
+{# Sidebar fijo del panel deportista (desktop) + tabbar + drawer mobile. #}
+
+{# Desktop sidebar #}
 <aside class="w-60 hidden md:flex flex-col bg-slate-900 text-slate-100 min-h-screen sticky top-0">
   <div class="p-4 border-b border-slate-800">
     <a href="/app/dashboard" class="block">
@@ -39,20 +41,21 @@
     {% endfor %}
   </nav>
   <footer class="p-3 border-t border-slate-800 text-xs text-slate-500">
-    <a href="/" class="hover:text-slate-300">Volver al sitio</a>
+    <a href="/" class="hover:text-slate-300">Sitio</a>
+    <span class="mx-2">-</span>
+    <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener" class="hover:text-slate-300">Bot</a>
     <span class="mx-2">-</span>
     <a href="/logout" class="hover:text-rose-400">Salir</a>
   </footer>
 </aside>
 
-{# Mobile: tabbar inferior con items principales #}
+{# Mobile: tabbar inferior con 5 items + boton "Mas" que abre drawer #}
 <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-5 text-xs z-20">
   {% set mobile_items = [
     ("dashboard", "/app/dashboard", "Hoy"),
     ("calendario", "/app/calendario", "Calend"),
     ("plan", "/app/plan", "Plan"),
     ("prs", "/app/prs", "PRs"),
-    ("settings", "/app/settings", "Mas"),
   ] %}
   {% for key, url, label in mobile_items %}
     <a href="{{ url }}"
@@ -60,4 +63,47 @@
       {{ label }}
     </a>
   {% endfor %}
+  <button id="app-more-btn" class="py-3 text-center text-slate-500" aria-label="Mas opciones">
+    Mas
+  </button>
 </nav>
+
+{# Drawer mobile "Mas opciones" #}
+<div id="app-more-drawer" class="hidden md:hidden fixed inset-0 z-30">
+  <div id="app-more-overlay" class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-xl p-5 pb-8 animate-slide-up">
+    <div class="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
+    <nav class="grid grid-cols-3 gap-3 text-center text-sm">
+      {% set more_items = [
+        ("historial", "/app/historial", "Historial"),
+        ("graficos", "/app/graficos", "Graficos"),
+        ("llamar", "/app/llamar", "Llamar"),
+        ("wearables", "/app/wearables", "Wearables"),
+        ("pagar", "/app/pagar", "Pagar"),
+        ("settings", "/app/settings", "Config"),
+      ] %}
+      {% for key, url, label in more_items %}
+        <a href="{{ url }}"
+           class="py-3 px-2 rounded-xl {% if active == key %}bg-brand-50 text-brand-700 font-semibold{% else %}bg-slate-50 text-slate-700 hover:bg-slate-100{% endif %}">
+          {{ label }}
+        </a>
+      {% endfor %}
+    </nav>
+    <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-500">
+      <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener" class="hover:text-slate-800">Abrir bot</a>
+      <a href="/" class="hover:text-slate-800">Sitio web</a>
+      <a href="/logout" class="hover:text-rose-600">Cerrar sesion</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('app-more-btn');
+  var drawer = document.getElementById('app-more-drawer');
+  var overlay = document.getElementById('app-more-overlay');
+  if (!btn || !drawer) return;
+  btn.addEventListener('click', function(){ drawer.classList.toggle('hidden'); });
+  overlay.addEventListener('click', function(){ drawer.classList.add('hidden'); });
+})();
+</script>

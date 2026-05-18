@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 
 {% block head_extra %}
-{# Telegram WebApp SDK (opcional: si el panel se abre desde el bot, se
-   inicializa). En desktop fallback a Cookie HttpOnly user_jwt. #}
+<script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   body { background: #f1f5f9; }
@@ -36,7 +35,7 @@
         <a href="/logout" class="text-slate-500 hover:text-rose-600">Salir</a>
       </div>
     </header>
-    <div class="flex-1 p-6 overflow-y-auto">
+    <div class="flex-1 p-6 pb-24 md:pb-6 overflow-y-auto">
       {% block app_content %}{% endblock %}
     </div>
   </main>

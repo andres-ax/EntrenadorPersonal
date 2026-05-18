@@ -66,7 +66,7 @@
           <li class="py-2 flex items-center justify-between">
             <div>
               <span class="font-medium text-slate-800">Nivel {{ c.nivel }}</span>
-              <span class="ml-2 text-xs text-slate-500">UID {{ c.usuario_id }}</span>
+              <a href="/admin/usuarios/{{ c.usuario_id }}" class="ml-2 text-xs text-brand-600 hover:underline">UID {{ c.usuario_id }}</a>
             </div>
             <div class="text-xs text-slate-500">{{ c.creado_en|humano }}</div>
           </li>
@@ -81,10 +81,16 @@
 <div class="bg-white rounded-xl shadow-sm p-5 mt-6">
   <h2 class="font-semibold text-slate-800 mb-3">Usuarios por plan</h2>
   <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+    {% set total_usuarios = finanzas.usuarios_por_plan.values()|sum or 1 %}
     {% for plan, count in finanzas.usuarios_por_plan.items() %}
+      {% set pct = (count / total_usuarios * 100)|int %}
       <div class="p-3 rounded-lg bg-slate-50">
         <div class="text-xs uppercase text-slate-500">{{ plan }}</div>
         <div class="text-xl font-bold text-slate-800">{{ count }}</div>
+        <div class="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div class="h-full bg-brand-500 rounded-full" style="width: {{ pct }}%"></div>
+        </div>
+        <div class="text-xs text-slate-500 mt-0.5">{{ pct }}%</div>
       </div>
     {% endfor %}
   </div>

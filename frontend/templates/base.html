@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ lang|default('es') }}">
+<html lang="{{ lang|default('es') }}" class="scroll-smooth">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,16 +31,18 @@
 <meta name="twitter:description" content="{% block twitter_description %}{{ self.og_description() }}{% endblock %}" />
 <meta name="twitter:image" content="{% block twitter_image %}{{ base_url }}/static/img/og-image.png{% endblock %}" />
 
-{# Tailwind via CDN (sin build, sin Node). Para produccion con mayor performance
-   se podria cambiar a un CSS estatico generado por Tailwind CLI standalone,
-   pero el overhead del CDN JIT (~250KB) es aceptable para este proyecto. #}
+{# Google Fonts: Inter (la fuente declarada en tailwind.config) #}
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+{# Tailwind via CDN (sin build, sin Node) #}
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
     theme: {
       extend: {
         colors: {
-          // Paleta EntrenadorAX (navy/teal)
           brand: {
             50: "#eef7ff",
             100: "#d9eaff",
@@ -57,13 +59,25 @@
         fontFamily: {
           sans: ['Inter', 'system-ui', 'sans-serif'],
         },
+        animation: {
+          'fade-in': 'fadeIn 0.3s ease-out',
+          'slide-up': 'slideUp 0.3s ease-out',
+          'pulse-slow': 'pulse 3s infinite',
+        },
+        keyframes: {
+          fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+          slideUp: { '0%': { opacity: '0', transform: 'translateY(12px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        },
       },
     },
   };
 </script>
 
-{# HTMX para interactividad sin SPA. Usado por admin y miniapp. #}
-<script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+<style>
+  ::selection { background: #bbd9ff; color: #1c356d; }
+  * { transition-property: color, background-color, border-color, opacity, box-shadow; transition-duration: 150ms; transition-timing-function: ease-in-out; }
+  .no-transition, .no-transition * { transition: none !important; }
+</style>
 
 <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml" />
 {% block head_extra %}{% endblock %}

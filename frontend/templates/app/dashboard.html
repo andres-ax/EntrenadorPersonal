@@ -41,21 +41,48 @@
       <h2 class="font-semibold text-slate-800">Macros de hoy</h2>
       <a href="/app/graficos" class="text-sm text-brand-600 hover:underline">Ver graficos</a>
     </div>
+    {% set prot = nutricion.proteinas_g|default(0) %}
+    {% set carbs = nutricion.carbohidratos_g|default(0) %}
+    {% set fat = nutricion.grasas_g|default(0) %}
+    {% set prot_goal = 150 %}
+    {% set carbs_goal = 250 %}
+    {% set fat_goal = 70 %}
     <div class="grid grid-cols-3 gap-3 text-center">
       <div class="p-3 bg-slate-50 rounded-lg">
         <div class="text-xs text-slate-500">Proteinas</div>
-        <div class="text-xl font-bold text-slate-900">{{ nutricion.proteinas_g|default(0) }}g</div>
+        <div class="text-xl font-bold text-slate-900">{{ prot }}g</div>
+        <div class="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div class="h-full bg-emerald-500 rounded-full" style="width: {{ [prot / prot_goal * 100, 100]|min|int }}%"></div>
+        </div>
+        <div class="text-xs text-slate-400 mt-0.5">meta ~{{ prot_goal }}g</div>
       </div>
       <div class="p-3 bg-slate-50 rounded-lg">
         <div class="text-xs text-slate-500">Carbos</div>
-        <div class="text-xl font-bold text-slate-900">{{ nutricion.carbohidratos_g|default(0) }}g</div>
+        <div class="text-xl font-bold text-slate-900">{{ carbs }}g</div>
+        <div class="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div class="h-full bg-amber-500 rounded-full" style="width: {{ [carbs / carbs_goal * 100, 100]|min|int }}%"></div>
+        </div>
+        <div class="text-xs text-slate-400 mt-0.5">meta ~{{ carbs_goal }}g</div>
       </div>
       <div class="p-3 bg-slate-50 rounded-lg">
         <div class="text-xs text-slate-500">Grasas</div>
-        <div class="text-xl font-bold text-slate-900">{{ nutricion.grasas_g|default(0) }}g</div>
+        <div class="text-xl font-bold text-slate-900">{{ fat }}g</div>
+        <div class="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div class="h-full bg-rose-500 rounded-full" style="width: {{ [fat / fat_goal * 100, 100]|min|int }}%"></div>
+        </div>
+        <div class="text-xs text-slate-400 mt-0.5">meta ~{{ fat_goal }}g</div>
       </div>
     </div>
-    {% if nutricion.comidas_totales|default(0) == 0 %}
+    {% if nutricion.comidas_totales|default(0) == 0 and reporte.dias_unicos_entreno|default(0) == 0 %}
+      <div class="mt-6 p-5 bg-brand-50 border border-brand-200 rounded-xl">
+        <h3 class="font-semibold text-brand-800 mb-2">Primeros pasos</h3>
+        <ul class="text-sm text-brand-700 space-y-2">
+          <li>1. <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener" class="underline">Hablale al bot</a> y dile que deporte practicas.</li>
+          <li>2. Registra tu primer entreno: "hice pierna hoy, sentadilla 4x8".</li>
+          <li>3. Registra una comida: "almorce pollo con arroz".</li>
+        </ul>
+      </div>
+    {% elif nutricion.comidas_totales|default(0) == 0 %}
       <p class="text-sm text-slate-500 mt-4">
         Aun no registraste comidas hoy. Hablale al bot: "almorce pollo con arroz".
       </p>

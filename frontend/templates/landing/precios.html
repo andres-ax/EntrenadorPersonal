@@ -10,32 +10,41 @@
     <p class="text-slate-600 text-center mb-12">Sin tarjetas. Pagas por Bre-B / Nequi / Daviplata cuando quieras.</p>
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
-      <div class="bg-white border border-slate-200 rounded-2xl p-6">
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col">
         <div class="text-xs uppercase text-slate-500">Free</div>
         <div class="text-3xl font-bold mt-2">$0</div>
         <p class="text-sm text-slate-600 mt-1">Probar 7 dias</p>
-        <ul class="text-sm space-y-2 mt-4 text-slate-700">
+        <ul class="text-sm space-y-2 mt-4 text-slate-700 flex-1">
           <li>Registro de entrenos, comida, sueno</li>
           <li>Recordatorios basicos</li>
           <li>1 tono (amigable)</li>
         </ul>
+        <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
+           class="mt-6 block text-center bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl">
+          Probar gratis
+        </a>
       </div>
-      <div class="bg-white border border-slate-200 rounded-2xl p-6">
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col">
         <div class="text-xs uppercase text-slate-500">Starter</div>
         <div class="text-3xl font-bold mt-2">{{ precios.starter|cop }}<span class="text-base font-normal text-slate-500">/mes</span></div>
         <p class="text-sm text-slate-600 mt-1">Para empezar firme</p>
-        <ul class="text-sm space-y-2 mt-4 text-slate-700">
+        <ul class="text-sm space-y-2 mt-4 text-slate-700 flex-1">
           <li>Todo lo de Free</li>
           <li>3 tonos (amigable / firme / militar)</li>
           <li>Reportes semanales</li>
           <li>PRs ilimitados</li>
         </ul>
+        <a href="https://t.me/EntrenadorAX_bot?start=pagar" target="_blank" rel="noopener"
+           class="mt-6 block text-center bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-xl shadow-sm">
+          Elegir Starter
+        </a>
       </div>
-      <div class="bg-brand-600 text-white rounded-2xl p-6 ring-4 ring-brand-200">
-        <div class="text-xs uppercase opacity-80">Pro - mas popular</div>
+      <div class="bg-brand-600 text-white rounded-2xl p-6 ring-4 ring-brand-200 flex flex-col relative">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-brand-400 text-white text-xs font-bold rounded-full shadow">Mas popular</div>
+        <div class="text-xs uppercase opacity-80">Pro</div>
         <div class="text-3xl font-bold mt-2">{{ precios.pro|cop }}<span class="text-base font-normal opacity-80">/mes</span></div>
         <p class="text-sm opacity-90 mt-1">Coach completo</p>
-        <ul class="text-sm space-y-2 mt-4">
+        <ul class="text-sm space-y-2 mt-4 flex-1">
           <li>Todo lo de Starter</li>
           <li>Plan semanal automatico</li>
           <li>Macros automaticos de fotos</li>
@@ -43,17 +52,25 @@
           <li>PDF mensual</li>
           <li>Deportes urbanos completos</li>
         </ul>
+        <a href="https://t.me/EntrenadorAX_bot?start=pagar" target="_blank" rel="noopener"
+           class="mt-6 block text-center bg-white text-brand-700 hover:bg-slate-100 font-semibold py-2.5 rounded-xl shadow-sm">
+          Elegir Pro
+        </a>
       </div>
-      <div class="bg-white border border-slate-200 rounded-2xl p-6">
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col">
         <div class="text-xs uppercase text-slate-500">Elite</div>
         <div class="text-3xl font-bold mt-2">{{ precios.elite|cop }}<span class="text-base font-normal text-slate-500">/mes</span></div>
         <p class="text-sm text-slate-600 mt-1">Llamadas de voz</p>
-        <ul class="text-sm space-y-2 mt-4 text-slate-700">
+        <ul class="text-sm space-y-2 mt-4 text-slate-700 flex-1">
           <li>Todo lo de Pro</li>
           <li>Llamadas de voz (Realtime API)</li>
           <li>Wearables: Whoop, Strava, Garmin</li>
           <li>Soporte prioritario</li>
         </ul>
+        <a href="https://t.me/EntrenadorAX_bot?start=pagar" target="_blank" rel="noopener"
+           class="mt-6 block text-center bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-xl shadow-sm">
+          Elegir Elite
+        </a>
       </div>
     </div>
 

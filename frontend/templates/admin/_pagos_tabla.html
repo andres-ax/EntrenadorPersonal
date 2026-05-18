@@ -1,5 +1,6 @@
 <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-  <table class="w-full text-sm">
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm min-w-[650px]">
     <thead class="bg-slate-50 text-xs uppercase text-slate-500">
       <tr>
         <th class="px-4 py-2 text-left">#</th>
@@ -43,4 +44,21 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
+
+  {% if data.total > filtros.limit %}
+    <div class="px-5 py-3 border-t border-slate-100 flex justify-between items-center text-sm">
+      {% set prev_off = (filtros.offset - filtros.limit) %}
+      {% set next_off = filtros.offset + filtros.limit %}
+      {% if prev_off >= 0 %}
+        <a href="?estado={{ filtros.estado or '' }}&offset={{ prev_off }}&limit={{ filtros.limit }}"
+           class="text-brand-600 hover:underline">&larr; Anterior</a>
+      {% else %}<span></span>{% endif %}
+      <span class="text-xs text-slate-500">{{ filtros.offset + 1 }}-{{ filtros.offset + data["items"]|length }} de {{ data.total }}</span>
+      {% if next_off < data.total %}
+        <a href="?estado={{ filtros.estado or '' }}&offset={{ next_off }}&limit={{ filtros.limit }}"
+           class="text-brand-600 hover:underline">Siguiente &rarr;</a>
+      {% else %}<span></span>{% endif %}
+    </div>
+  {% endif %}
 </div>

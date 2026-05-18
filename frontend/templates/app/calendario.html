@@ -6,9 +6,9 @@
   <a href="/app/historial?tipo=entrenos" class="text-sm text-brand-600 hover:underline">Ver historial completo</a>
 </div>
 
-<div class="grid grid-cols-7 gap-3">
+<div class="flex md:grid md:grid-cols-7 gap-2 md:gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible">
   {% for d in dias %}
-    <div class="bg-white rounded-xl shadow-sm p-4 text-center
+    <div class="snap-center flex-shrink-0 w-28 md:w-auto bg-white rounded-xl shadow-sm p-3 md:p-4 text-center
                 {% if d.realizado %}ring-2 ring-emerald-500{% endif %}
                 {% if d.es_hoy %}border-2 border-brand-600{% endif %}">
       <div class="text-xs uppercase text-slate-500">{{ d.nombre }}</div>

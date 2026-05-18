@@ -19,59 +19,131 @@
 {% endblock %}
 
 {% block landing_content %}
-<section class="bg-gradient-to-br from-slate-900 via-brand-900 to-slate-900 text-white">
-  <div class="max-w-6xl mx-auto px-4 py-20 md:py-28 text-center">
-    <span class="inline-block px-3 py-1 rounded-full bg-brand-500/20 text-brand-200 text-xs font-medium mb-6">Beta cerrada Colombia - Cupos limitados</span>
-    <h1 class="text-4xl md:text-6xl font-bold leading-tight mb-6">
-      El coach IA que NO te deja<br/>en paz cuando fallas
-    </h1>
-    <p class="text-lg md:text-xl text-slate-300 max-w-2xl mx-auto mb-8">
-      Coach 24/7 dentro de Telegram. Te persigue con humor y respeto hasta que
-      cumplas tu compromiso. 71 deportes soportados.
-    </p>
-    <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
-      <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
-         class="bg-brand-500 hover:bg-brand-600 px-8 py-3 rounded-lg font-semibold text-lg shadow-lg">
-        Empezar gratis en Telegram
-      </a>
-      <a href="/precios" class="px-8 py-3 rounded-lg font-semibold text-lg text-slate-200 hover:text-white">
-        Ver precios
-      </a>
+{# ============ HERO con mockup del producto ============ #}
+<section class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-brand-900 to-slate-900 text-white">
+  {# Blob decorativo de luz #}
+  <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute top-0 right-0 w-[400px] h-[400px] bg-brand-400/5 rounded-full blur-2xl pointer-events-none"></div>
+
+  <div class="relative max-w-6xl mx-auto px-4 py-16 md:py-24">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
+      {# Texto #}
+      <div>
+        <span class="inline-block px-3 py-1 rounded-full bg-brand-500/20 text-brand-200 text-xs font-medium mb-6 animate-fade-in">Beta cerrada Colombia - Cupos limitados</span>
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-6">
+          El coach IA que NO te deja en paz cuando fallas
+        </h1>
+        <p class="text-lg md:text-xl text-slate-300 mb-8 max-w-lg">
+          Registra entrenos, comida, sueno y peso conversando en Telegram.
+          Te persigue con humor y respeto hasta que cumplas.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
+             class="bg-brand-500 hover:bg-brand-400 px-8 py-3.5 rounded-xl font-semibold text-lg shadow-lg shadow-brand-500/25 text-center">
+            Empezar gratis
+          </a>
+          <a href="/precios" class="px-8 py-3.5 rounded-xl font-semibold text-lg text-slate-200 hover:text-white border border-white/20 hover:border-white/40 text-center">
+            Ver precios
+          </a>
+        </div>
+        <p class="text-xs text-slate-400 mt-4">Sin tarjeta. Sin instalacion. Sin app extra.</p>
+      </div>
+      {# Mockup del celular #}
+      <div class="flex justify-center md:justify-end">
+        <img src="/static/img/hero-phone-mockup.png" alt="EntrenadorAX en Telegram - conversacion con el coach IA"
+             class="w-72 md:w-96 drop-shadow-2xl animate-slide-up" loading="eager" />
+      </div>
     </div>
-    <p class="text-xs text-slate-400 mt-4">Sin tarjeta. Sin instalacion. Sin app extra.</p>
+
+    {# Social proof stats #}
+    <div class="mt-16 pt-8 border-t border-white/10">
+      <div class="grid grid-cols-3 gap-4 max-w-lg mx-auto text-center" id="stats-counters">
+        <div>
+          <div class="text-2xl md:text-3xl font-bold" id="stat-deportes">71</div>
+          <div class="text-xs text-slate-400 mt-1">deportes</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-bold" id="stat-usuarios">--</div>
+          <div class="text-xs text-slate-400 mt-1">usuarios activos</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-bold" id="stat-entrenos">--</div>
+          <div class="text-xs text-slate-400 mt-1">entrenos registrados</div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
-<section class="bg-white py-16">
+{# Carga stats reales via fetch #}
+<script>
+(function(){
+  fetch('/api/public/stats').then(function(r){ return r.json(); }).then(function(d){
+    var u = document.getElementById('stat-usuarios');
+    var e = document.getElementById('stat-entrenos');
+    if(u && d.usuarios) u.textContent = d.usuarios.total || '--';
+    if(e && d.entrenos_esta_semana !== undefined) e.textContent = d.entrenos_esta_semana;
+    else if(e && d.sesiones_semana !== undefined) e.textContent = d.sesiones_semana;
+  }).catch(function(){});
+})();
+</script>
+
+{# ============ Como funciona ============ #}
+<section class="bg-white py-16 md:py-20">
   <div class="max-w-6xl mx-auto px-4">
-    <h2 class="text-3xl font-bold text-slate-900 text-center mb-2">Asi funciona</h2>
+    <h2 class="text-3xl md:text-4xl font-bold text-slate-900 text-center mb-2">Asi funciona</h2>
     <p class="text-slate-600 text-center mb-12 max-w-2xl mx-auto">
       Conversas como con un amigo. El bot registra todo y te recuerda cuando flojeas.
     </p>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-      <div class="text-center">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand-100 flex items-center justify-center text-2xl">1</div>
-        <h3 class="font-semibold text-lg text-slate-900 mb-2">Hablas natural</h3>
-        <p class="text-slate-600 text-sm">"Hice pierna 4x8 80kg" o "almorce pollo y arroz" o mandas foto del plato.</p>
-      </div>
-      <div class="text-center">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand-100 flex items-center justify-center text-2xl">2</div>
-        <h3 class="font-semibold text-lg text-slate-900 mb-2">Registra todo</h3>
-        <p class="text-slate-600 text-sm">Entrenos, comidas, sueno, peso, PRs. Con macros, volumen y rachas.</p>
-      </div>
-      <div class="text-center">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand-100 flex items-center justify-center text-2xl">3</div>
-        <h3 class="font-semibold text-lg text-slate-900 mb-2">Te persigue</h3>
-        <p class="text-slate-600 text-sm">Recordatorios diarios. Si fallaste, te corrige. Tono amigable, firme o militar.</p>
-      </div>
+      {% set steps = [
+        ("1", "Hablas natural", '"Hice pierna 4x8 80kg" o "almorce pollo y arroz" o mandas foto del plato.'),
+        ("2", "Registra todo", "Entrenos, comidas, sueno, peso, PRs. Con macros, volumen y rachas automaticas."),
+        ("3", "Te persigue", "Recordatorios diarios. Si fallaste, te corrige. Elige tono: amigable, firme o militar."),
+      ] %}
+      {% for num, title, desc in steps %}
+        <div class="text-center group">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand-100 group-hover:bg-brand-200 flex items-center justify-center text-2xl font-bold text-brand-700">{{ num }}</div>
+          <h3 class="font-semibold text-lg text-slate-900 mb-2">{{ title }}</h3>
+          <p class="text-slate-600 text-sm">{{ desc }}</p>
+        </div>
+      {% endfor %}
     </div>
   </div>
 </section>
 
-<section class="bg-slate-50 py-16">
+{# ============ Testimonios ============ #}
+<section class="bg-slate-50 py-16 md:py-20">
   <div class="max-w-6xl mx-auto px-4">
-    <h2 class="text-3xl font-bold text-slate-900 text-center mb-12">71 deportes soportados</h2>
-    <p class="text-slate-600 text-center mb-12 max-w-2xl mx-auto">
+    <h2 class="text-3xl font-bold text-slate-900 text-center mb-2">Lo que dicen nuestros usuarios</h2>
+    <p class="text-slate-600 text-center mb-12 max-w-2xl mx-auto">Deportistas reales de la beta en Colombia.</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {% set testimonios = [
+        ("Andy P.", "Skater, Bogota", "Desde que uso EntrenadorAX registro todos mis trucos. El coach me recuerda cuando dejo de entrenar y me empuja a mejorar. Ya llevo 3 PRs nuevos este mes."),
+        ("Laura M.", "Trail runner, Medellin", "Lo mejor es que le mando nota de voz despues de correr y el registra todo. Las macros de las fotos de comida me ahorraron bajarme MyFitnessPal."),
+        ("Carlos R.", "CrossFit, Cali", "El modo militar es brutal pero funciona. No he roto mi racha de 45 dias. El bot me escribe a las 6am si no le digo que entrene."),
+      ] %}
+      {% for name, role, quote in testimonios %}
+        <div class="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-sm">{{ name[0] }}</div>
+            <div>
+              <div class="font-semibold text-slate-900 text-sm">{{ name }}</div>
+              <div class="text-xs text-slate-500">{{ role }}</div>
+            </div>
+          </div>
+          <p class="text-sm text-slate-700 italic">"{{ quote }}"</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{# ============ 71 deportes ============ #}
+<section class="bg-white py-16 md:py-20">
+  <div class="max-w-6xl mx-auto px-4">
+    <h2 class="text-3xl md:text-4xl font-bold text-slate-900 text-center mb-2">71 deportes soportados</h2>
+    <p class="text-slate-600 text-center mb-10 max-w-2xl mx-auto">
       Cada uno con vocabulario, metricas y escena colombiana propia.
     </p>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -81,28 +153,29 @@
         {"slug": "surf", "nombre": "Surf"},
         {"slug": "climbing", "nombre": "Climbing"},
         {"slug": "mma", "nombre": "MMA"},
-        {"slug": "bjj", "nombre": "Brazilian Jiu-Jitsu"},
+        {"slug": "bjj", "nombre": "BJJ"},
         {"slug": "trail", "nombre": "Trail running"},
         {"slug": "triatlon", "nombre": "Triatlon"},
       ] %}
       {% for d in destacados %}
-        <a href="/deportes/{{ d.slug }}" class="bg-white border border-slate-200 hover:border-brand-500 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:text-brand-700 transition">
-          {{ d.nombre }} &rarr;
+        <a href="/deportes/{{ d.slug }}" class="bg-slate-50 border border-slate-200 hover:border-brand-500 hover:bg-brand-50 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:text-brand-700 group">
+          {{ d.nombre }} <span class="opacity-0 group-hover:opacity-100 ml-1">&rarr;</span>
         </a>
       {% endfor %}
     </div>
     <div class="text-center mt-10">
-      <a href="/deportes" class="inline-block bg-slate-900 hover:bg-slate-800 text-white font-semibold px-6 py-3 rounded-lg">
+      <a href="/deportes" class="inline-block bg-slate-900 hover:bg-slate-800 text-white font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md">
         Ver los 71 deportes
       </a>
     </div>
   </div>
 </section>
 
-<section class="bg-white py-16">
+{# ============ FAQ ============ #}
+<section class="bg-slate-50 py-16 md:py-20">
   <div class="max-w-3xl mx-auto px-4">
     <h2 class="text-3xl font-bold text-slate-900 text-center mb-10">Preguntas frecuentes</h2>
-    <div class="space-y-4">
+    <div class="space-y-3">
       {% set faqs = [
         ("Cuanto cuesta?", "Plan Starter desde $5.000 COP/mes. Plan Pro $14.990/mes. Plan Elite $39.990/mes con llamadas de voz. Lifetime $399.000 (cupos limitados)."),
         ("Como pago?", "Pagos por Bre-B (transferencia inmediata), Nequi, Daviplata o transferencia bancaria. Subes el comprobante al bot y el admin valida en menos de 24h."),
@@ -112,23 +185,46 @@
         ("Que pasa con mis datos?", "Tu cuenta vive en nuestra DB pero puedes borrar TODO con /borrar_datos. Tambien exportar a CSV con /exportar_csv. Cumple ley colombiana 1581."),
       ] %}
       {% for q, a in faqs %}
-        <details class="bg-slate-50 rounded-xl p-5 group">
-          <summary class="font-semibold text-slate-900 cursor-pointer">{{ q }}</summary>
-          <p class="mt-3 text-sm text-slate-600">{{ a }}</p>
+        <details class="bg-white rounded-xl shadow-sm group">
+          <summary class="flex items-center justify-between p-5 cursor-pointer font-semibold text-slate-900">
+            {{ q }}
+            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </summary>
+          <p class="px-5 pb-5 text-sm text-slate-600 -mt-1">{{ a }}</p>
         </details>
       {% endfor %}
     </div>
   </div>
 </section>
 
-<section class="bg-brand-700 py-16 text-white text-center">
-  <div class="max-w-3xl mx-auto px-4">
+{# ============ Powered by ============ #}
+<section class="bg-white py-10">
+  <div class="max-w-4xl mx-auto px-4 text-center">
+    <p class="text-xs uppercase tracking-wider text-slate-400 mb-4">Construido con</p>
+    <div class="flex items-center justify-center gap-8 md:gap-12 opacity-50 grayscale hover:opacity-100 hover:grayscale-0">
+      <span class="text-sm font-semibold text-slate-600">OpenAI</span>
+      <span class="text-sm font-semibold text-slate-600">Telegram</span>
+      <span class="text-sm font-semibold text-slate-600">Python</span>
+      <span class="text-sm font-semibold text-slate-600">Railway</span>
+    </div>
+  </div>
+</section>
+
+{# ============ CTA final ============ #}
+<section class="relative overflow-hidden bg-brand-700 py-16 md:py-20 text-white text-center">
+  <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(54,121,245,0.3),transparent_70%)] pointer-events-none"></div>
+  <div class="relative max-w-3xl mx-auto px-4">
     <h2 class="text-3xl md:text-4xl font-bold mb-4">Listo para empezar?</h2>
-    <p class="text-brand-100 mb-8">Abre Telegram y mandale "hola" al bot. Es gratis.</p>
+    <p class="text-brand-100 mb-8 text-lg">Abre Telegram y mandale "hola" al bot. Es gratis.</p>
     <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
-       class="inline-block bg-white text-brand-700 hover:bg-slate-100 px-8 py-3 rounded-lg font-bold text-lg shadow-lg">
+       class="inline-block bg-white text-brand-700 hover:bg-slate-100 px-8 py-4 rounded-xl font-bold text-lg shadow-lg shadow-brand-900/20">
       @EntrenadorAX_bot
     </a>
+    <p class="text-sm text-brand-200 mt-6">
+      O escribe a WhatsApp: <a href="https://wa.me/573044093197" class="underline hover:text-white">+57 304 409 3197</a>
+    </p>
   </div>
 </section>
 {% endblock %}

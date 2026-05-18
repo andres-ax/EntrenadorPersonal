@@ -142,6 +142,31 @@ async def newsletter_signup(req: NewsletterReq, request: Request) -> dict:
     return {"ok": True, "ya_inscrito": False}
 
 
+# --- Chat demo (widget landing) ---
+
+
+class ChatDemoReq(BaseModel):
+    mensaje: str
+    session_id: str | None = None
+
+
+@router.post("/chat-demo")
+async def chat_demo_endpoint(req: ChatDemoReq, request: Request) -> dict:
+    """Widget de chat demo en la landing. Rate limited por IP."""
+    ip = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(f"chat_demo:{ip}", limit=10):
+        raise HTTPException(429, "Demasiados mensajes. Espera un momento.")
+    if not req.mensaje or not req.mensaje.strip():
+        raise HTTPException(400, "Mensaje vacio")
+    if len(req.mensaje) > 500:
+        raise HTTPException(400, "Mensaje muy largo (max 500 chars)")
+
+    from src.services.chat_demo import chat_demo
+
+    result = await chat_demo(req.session_id, req.mensaje.strip())
+    return result
+
+
 @router.get("/precios")
 async def precios_publicos() -> dict:
     """Precios actuales por tier para que la landing los muestre dinamicamente."""

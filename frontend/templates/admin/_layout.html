@@ -2,19 +2,43 @@
 
 {% block title %}{{ page_title|default("Admin") }} - EntrenadorAX{% endblock %}
 
+{% block head_extra %}
+<script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+<style>
+  .htmx-request .htmx-indicator { opacity: 1; }
+  .htmx-indicator { opacity: 0; transition: opacity 0.2s; }
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="min-h-screen flex bg-slate-100">
   {% include "admin/_sidebar.html" %}
-  <main class="flex-1 p-6 overflow-y-auto">
-    <header class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-slate-800">{{ page_title|default("Panel") }}</h1>
-      <div class="text-sm text-slate-500">
+  <main class="flex-1 flex flex-col min-w-0">
+    {# Barra de progreso HTMX global #}
+    <div class="htmx-indicator fixed top-0 left-0 right-0 h-0.5 bg-brand-500 z-50 animate-pulse"></div>
+
+    <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+      <h1 class="text-xl md:text-2xl font-bold text-slate-800">{{ page_title|default("Panel") }}</h1>
+      <div class="text-sm text-slate-500 hidden sm:block">
         Conectado como <strong>{{ admin.email }}</strong>
         <span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-brand-100 text-brand-700">{{ admin.rol }}</span>
         <a href="/admin/logout" class="ml-4 text-slate-500 hover:text-rose-600">Cerrar sesion</a>
       </div>
+      <a href="/admin/logout" class="sm:hidden text-slate-500 hover:text-rose-600 text-sm">Salir</a>
     </header>
-    {% block admin_content %}{% endblock %}
+
+    <div class="flex-1 p-4 md:p-6 overflow-y-auto">
+      {# Toast de feedback post-accion #}
+      {% set msg = request.query_params.get('msg', '') %}
+      {% if msg %}
+        <div id="toast-msg" class="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm animate-slide-up">
+          {{ msg }}
+        </div>
+        <script>setTimeout(function(){ var t = document.getElementById('toast-msg'); if(t) t.style.display='none'; }, 4000);</script>
+      {% endif %}
+
+      {% block admin_content %}{% endblock %}
+    </div>
   </main>
 </div>
 {% endblock %}

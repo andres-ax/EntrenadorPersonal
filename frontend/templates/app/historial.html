@@ -11,20 +11,30 @@
     ] %}
     {% for slug, label in tipos %}
       <a href="?tipo={{ slug }}&dias={{ dias }}"
+         hx-get="/app/historial?tipo={{ slug }}&dias={{ dias }}"
+         hx-target="#historial-content"
+         hx-push-url="true"
+         hx-swap="innerHTML"
          class="px-4 py-2 rounded-lg text-sm
                 {% if tipo == slug %}bg-brand-600 text-white{% else %}bg-slate-100 hover:bg-slate-200 text-slate-700{% endif %}">
         {{ label }}
       </a>
     {% endfor %}
-    <form method="get" class="ml-auto flex items-center gap-2">
-      <input type="hidden" name="tipo" value="{{ tipo }}" />
+    <div class="ml-auto flex items-center gap-2">
       <label class="text-xs text-slate-500">Dias:</label>
-      <select name="dias" onchange="this.form.submit()" class="px-2 py-1 border border-slate-300 rounded text-sm">
+      <select class="px-2 py-1 border border-slate-300 rounded text-sm"
+              hx-get="/app/historial"
+              hx-target="#historial-content"
+              hx-push-url="true"
+              hx-swap="innerHTML"
+              hx-include="[name='tipo_hidden']"
+              name="dias">
         {% for n in [7, 30, 90, 365] %}
           <option value="{{ n }}" {% if dias == n %}selected{% endif %}>{{ n }}</option>
         {% endfor %}
       </select>
-    </form>
+      <input type="hidden" name="tipo_hidden" value="{{ tipo }}" />
+    </div>
   </div>
 </div>
 
