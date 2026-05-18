@@ -36,6 +36,15 @@ def upgrade() -> None:
     bind = op.get_bind()
     dialect = bind.dialect.name
 
+    # IDEMPOTENTE: si 0001 corrio con Base.metadata.create_all() ya creo
+    # el schema completo segun los modelos actuales (incluye plan_actual).
+    # En ese caso, esta migracion es no-op para evitar DuplicateColumnError.
+    insp = sa.inspect(bind)
+    if insp.has_table("usuarios"):
+        cols = [c["name"] for c in insp.get_columns("usuarios")]
+        if "plan_actual" in cols:
+            return
+
     if dialect == "postgresql":
         # Defensa en profundidad: 'free' y 'pro' deberian existir desde el
         # enum creado en 0001 (con values_callable lowercase). Pero si la DB
