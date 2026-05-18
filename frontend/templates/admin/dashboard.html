@@ -33,9 +33,9 @@
       <h2 class="font-semibold text-slate-800">Pagos pendientes</h2>
       <a href="/admin/pagos" class="text-sm text-brand-600 hover:underline">Ver todos</a>
     </div>
-    {% if pagos_pendientes.items %}
+    {% if pagos_pendientes["items"] %}
       <ul class="divide-y divide-slate-100 text-sm">
-        {% for p in pagos_pendientes.items %}
+        {% for p in pagos_pendientes["items"] %}
           <li class="py-2 flex items-center justify-between">
             <div>
               <a href="/admin/pagos/{{ p.id }}" class="font-medium text-slate-800 hover:text-brand-600">
@@ -60,9 +60,9 @@
       <h2 class="font-semibold text-slate-800">Crisis recientes</h2>
       <a href="/admin/crisis" class="text-sm text-brand-600 hover:underline">Ver todas</a>
     </div>
-    {% if crisis_recientes.items %}
+    {% if crisis_recientes["items"] %}
       <ul class="divide-y divide-slate-100 text-sm">
-        {% for c in crisis_recientes.items %}
+        {% for c in crisis_recientes["items"] %}
           <li class="py-2 flex items-center justify-between">
             <div>
               <span class="font-medium text-slate-800">Nivel {{ c.nivel }}</span>
