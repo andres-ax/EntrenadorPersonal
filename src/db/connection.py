@@ -29,7 +29,10 @@ async_session_factory = async_sessionmaker(
 
 
 async def init_db() -> None:
-    """Crea tablas si no existen. En produccion usar Alembic en su lugar."""
+    """Crea tablas si no existen. SKIP en prod (usar `alembic upgrade head`)."""
+    if settings.is_prod:
+        logger.info("env=prod: skip create_all, alembic upgrade head debe correrse fuera")
+        return
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

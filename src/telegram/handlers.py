@@ -23,6 +23,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    InlineQueryHandler,
     MessageHandler,
     PreCheckoutQueryHandler,
     filters,
@@ -239,20 +240,10 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
     texto = update.message.text or ""
-    if len(texto) > settings.max_message_chars:
-        await update.message.reply_text(
-            f"Mensaje muy largo (limite {settings.max_message_chars} chars). Resume."
-        )
-        return
-    if not await check_rate_limit(uid):
-        await update.message.reply_text(
-            "Tranquilo, estoy procesando. Espera un momento."
-        )
-        return
 
-    user = await obtener_usuario(uid)
+    user = await obtener_o_crear_usuario(uid)
     pais = user.pais if user else "CO"
-    crisis = detectar_crisis(texto, pais=pais)
+    crisis = detectar_crisis(texto[:8000], pais=pais)
     if crisis is not None:
         try:
             sent = await update.message.reply_text(crisis.mensaje_contenedor)
@@ -287,6 +278,17 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await log_evento(uid, "crisis_detected", {"nivel": crisis.nivel})
         except Exception:
             logger.exception("Error manejando crisis uid=%s", uid)
+        return
+
+    if len(texto) > settings.max_message_chars:
+        await update.message.reply_text(
+            f"Mensaje muy largo (limite {settings.max_message_chars} chars). Resume."
+        )
+        return
+    if not await check_rate_limit(uid):
+        await update.message.reply_text(
+            "Tranquilo, estoy procesando. Espera un momento."
+        )
         return
 
     await reaccionar(update.message, ctx)
@@ -612,16 +614,36 @@ async def cmd_upgrade(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Aprueba el pre-checkout en <10s. Validaciones aqui (cupon usado, etc)."""
+    """Aprueba el pre-checkout en <10s con validacion de payload, monto y dup."""
+    from src.db.repository import es_usuario_pro
+
     q = update.pre_checkout_query
+    uid = q.from_user.id
     try:
+        if not q.invoice_payload.startswith(f"pro_mensual_{uid}_"):
+            await q.answer(
+                ok=False, error_message="Payload invalido. Reinicia con /upgrade."
+            )
+            return
+        if q.total_amount != 100:
+            await q.answer(ok=False, error_message="Monto invalido.")
+            return
+        if await es_usuario_pro(uid):
+            await q.answer(ok=False, error_message="Ya tienes Pro activo.")
+            return
         await q.answer(ok=True)
     except Exception:
-        logger.exception("Error en precheckout_handler")
+        logger.exception("Error precheckout uid=%s", uid)
+        try:
+            await q.answer(ok=False, error_message="Error temporal. Intenta de nuevo.")
+        except Exception:
+            pass
 
 
 async def successful_payment_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Activa Pro al recibir successful_payment."""
+    """Activa Pro al recibir successful_payment. Idempotente vs duplicados."""
+    from sqlalchemy.exc import IntegrityError
+
     from src.db.repository import activar_suscripcion_pro
 
     uid = update.effective_user.id
@@ -633,24 +655,110 @@ async def successful_payment_handler(update: Update, ctx: ContextTypes.DEFAULT_T
             star_amount=payment.total_amount,
             dias=30,
         )
-        await log_evento(
+    except IntegrityError:
+        logger.info(
+            "Pago duplicado uid=%s charge_id=%s (ya activado)",
             uid,
-            "pro_activado",
-            {
-                "stars": payment.total_amount,
-                "charge_id": payment.telegram_payment_charge_id,
-            },
-        )
-        await update.message.reply_text(
-            "<b>EntrenadorAX Pro activado!</b> Gracias por confiar. "
-            "Vas a notar voz en mensajes intensos, photos ilimitadas y charts top. "
-            "Cualquier cosa, /ayuda."
+            payment.telegram_payment_charge_id,
         )
     except Exception:
         logger.exception("Error activando Pro uid=%s", uid)
         await update.message.reply_text(
             "Recibi el pago pero hubo problema activando. Contacta soporte."
         )
+        return
+    await log_evento(
+        uid,
+        "pro_activado",
+        {
+            "stars": payment.total_amount,
+            "charge_id": payment.telegram_payment_charge_id,
+        },
+    )
+    await update.message.reply_text(
+        "<b>EntrenadorAX Pro activado!</b> Gracias por confiar. "
+        "Vas a notar voz en mensajes intensos, photos ilimitadas y charts top. "
+        "Cualquier cosa, /ayuda."
+    )
+
+
+async def cmd_invitar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Genera link de invitacion con tracking."""
+    uid = update.effective_user.id
+    me = await ctx.bot.get_me()
+    bot_username = me.username
+    link = f"https://t.me/{bot_username}?start=ref_{uid}"
+    await log_evento(uid, "invitar_generado", {})
+    await update.message.reply_text(
+        "<b>Invita amigos a EntrenadorAX</b>\n\n"
+        f"Comparte este link: <code>{link}</code>\n\n"
+        "Cuando se queden 30 dias, recibis 1 mes de Pro gratis."
+    )
+
+
+async def inline_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """@bot mi reporte -> articulo compartible."""
+    from telegram import (
+        InlineQueryResultArticle,
+        InputTextMessageContent,
+    )
+
+    q = update.inline_query
+    if not q:
+        return
+    uid = q.from_user.id
+    query = (q.query or "").lower().strip()
+
+    results = []
+    try:
+        if "reporte" in query or "semana" in query or not query:
+            from src.db.repository import reporte_semanal
+
+            r = await reporte_semanal(uid)
+            texto = (
+                f"<b>Mi semana en EntrenadorAX:</b>\n"
+                f"Dias entrenados: <b>{r.get('dias_entrenados', 0)}</b>\n"
+                f"Volumen: <b>{r.get('volumen_total_kg', 0):.0f} kg</b>\n"
+                f"Nuevos PRs: <b>{len(r.get('nuevos_prs', []))}</b>"
+            )
+            results.append(
+                InlineQueryResultArticle(
+                    id="reporte_semanal",
+                    title="Compartir mi reporte semanal",
+                    description=f"{r.get('dias_entrenados', 0)} dias entrenados",
+                    input_message_content=InputTextMessageContent(
+                        message_text=texto, parse_mode="HTML"
+                    ),
+                )
+            )
+        if "pr" in query:
+            from src.db.repository import listar_prs
+
+            prs = await listar_prs(uid)
+            if prs:
+                top = max(prs, key=lambda p: p.peso_kg or 0)
+                texto = (
+                    f"<b>Mi PR:</b> {top.ejercicio} "
+                    f"<b>{top.peso_kg} kg</b> x{top.reps} reps. "
+                    f"Tracking con EntrenadorAX."
+                )
+                results.append(
+                    InlineQueryResultArticle(
+                        id="top_pr",
+                        title=f"Top PR: {top.ejercicio} {top.peso_kg}kg",
+                        description="Compartir tu mejor PR",
+                        input_message_content=InputTextMessageContent(
+                            message_text=texto, parse_mode="HTML"
+                        ),
+                    )
+                )
+    except Exception:
+        logger.exception("Error inline_query uid=%s", uid)
+
+    try:
+        await q.answer(results=results, cache_time=60, is_personal=True)
+    except Exception:
+        logger.exception("Error answer inline uid=%s", uid)
 
 
 async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -951,6 +1059,8 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("grafico", cmd_grafico))
     app.add_handler(CommandHandler("exportar_csv", cmd_exportar_csv))
     app.add_handler(CommandHandler("upgrade", cmd_upgrade))
+    app.add_handler(CommandHandler("invitar", cmd_invitar))
+    app.add_handler(InlineQueryHandler(inline_query))
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(
         MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler)

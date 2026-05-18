@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from src.db.connection import async_session_factory
 from src.db.models import (
+    CheckinNocturno,
     Comida,
     Compromiso,
     CrisisLog,

@@ -20,9 +20,13 @@ class Settings(BaseSettings):
     redis_url: RedisDsn
 
     webhook_base_url: HttpUrl | None = None
+    # En produccion DEBE setearse como env var; el default es solo para dev/test
+    # (cada restart regenera el secret -> webhook caido tras deploy).
     webhook_secret: SecretStr = SecretStr(secrets.token_hex(32))
 
     developer_chat_id: int | None = None
+    # JWT secret para Mini App. Separado del admin_token por seguridad.
+    jwt_secret: SecretStr = SecretStr(secrets.token_urlsafe(32))
     admin_token: SecretStr = SecretStr(secrets.token_urlsafe(32))
 
     db_pool_size: int = 20
@@ -56,6 +60,18 @@ class Settings(BaseSettings):
                 return v.replace("postgresql://", "postgresql+asyncpg://", 1)
             if v.startswith("postgres://"):
                 return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        return v
+
+    @field_validator("webhook_secret", "admin_token", "jwt_secret", mode="after")
+    @classmethod
+    def _secret_obligatorio_en_prod(cls, v, info):
+        env = info.data.get("env") if hasattr(info, "data") else None
+        if env == "prod":
+            raw = v.get_secret_value() if hasattr(v, "get_secret_value") else str(v)
+            if not raw or len(raw) < 16:
+                raise ValueError(
+                    f"{info.field_name} debe setearse como env var en prod (default autogenerado se pierde tras deploy)"
+                )
         return v
 
     @property

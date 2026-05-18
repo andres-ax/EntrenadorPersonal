@@ -1,6 +1,7 @@
 """FastAPI + webhook de Telegram. Modo produccion (Railway)."""
 from __future__ import annotations
 
+import hmac
 import html
 import json
 import logging
@@ -92,6 +93,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="EntrenadorAX", lifespan=lifespan)
 
+from src.api.auth import router as auth_router  # noqa: E402
+from src.api.me import router as me_router  # noqa: E402
+
+app.include_router(auth_router)
+app.include_router(me_router)
+
 
 @app.get("/health")
 async def health() -> dict:
@@ -125,7 +132,9 @@ async def webhook(
     if telegram_app is None or not telegram_app.running:
         raise HTTPException(503, "Bot no listo")
 
-    if x_telegram_bot_api_secret_token != WEBHOOK_SECRET:
+    if not hmac.compare_digest(
+        x_telegram_bot_api_secret_token or "", WEBHOOK_SECRET
+    ):
         raise HTTPException(403, "Token invalido")
 
     body = await request.body()
@@ -137,6 +146,8 @@ async def webhook(
         raise HTTPException(400, "JSON invalido")
 
     update = Update.de_json(data, telegram_app.bot)
+    if update is None:
+        return {"ok": True}
     await telegram_app.process_update(update)
     return {"ok": True}
 
@@ -144,7 +155,7 @@ async def webhook(
 @app.get("/webhook-info")
 async def webhook_info(x_admin_token: str = Header(None)) -> dict:
     """Devuelve la URL de webhook y secret. Protegido por X-Admin-Token."""
-    if x_admin_token != ADMIN_TOKEN:
+    if not hmac.compare_digest(x_admin_token or "", ADMIN_TOKEN):
         raise HTTPException(403, "Acceso denegado")
     base = str(settings.webhook_base_url).rstrip("/") if settings.webhook_base_url else ""
     return {
@@ -173,7 +184,7 @@ async def admin_stats(x_admin_token: str = Header(None)) -> dict:
         Usuario,
     )
 
-    if x_admin_token != ADMIN_TOKEN:
+    if not hmac.compare_digest(x_admin_token or "", ADMIN_TOKEN):
         raise HTTPException(403, "Acceso denegado")
     hoy = date_t.today()
     hace_30 = hoy - timedelta(days=30)
