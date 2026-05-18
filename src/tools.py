@@ -13,6 +13,7 @@ import random
 import time
 from datetime import date, datetime, time as dtime, timedelta
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from agents import function_tool
 
@@ -182,12 +183,48 @@ def _safe_json_loads(raw: str, fallback=None):
         return fallback if fallback is not None else []
 
 
+_TZ_FALLBACK = "America/Bogota"
+
+
+async def _tz_usuario(telegram_id: int) -> ZoneInfo:
+    """Devuelve el ZoneInfo configurado en el perfil del usuario.
+
+    Cae a `America/Bogota` si el usuario no existe, no tiene tz o la tz es
+    invalida. Evita usar `date.today()` (que toma UTC del servidor Railway)
+    cuando se necesita la fecha local del usuario.
+    """
+    try:
+        u = await obtener_o_crear_usuario(telegram_id)
+        tz_name = u.timezone or _TZ_FALLBACK
+        return ZoneInfo(tz_name)
+    except Exception:
+        return ZoneInfo(_TZ_FALLBACK)
+
+
+async def _hoy_usuario(telegram_id: int) -> date:
+    """Fecha de hoy en la zona horaria del usuario."""
+    tz = await _tz_usuario(telegram_id)
+    return datetime.now(tz).date()
+
+
+async def _ahora_usuario(telegram_id: int) -> datetime:
+    """Datetime aware (con tz) de ahora en la zona horaria del usuario."""
+    tz = await _tz_usuario(telegram_id)
+    return datetime.now(tz)
+
+
 def _validar_fecha(fecha: str) -> str:
+    """Valida formato YYYY-MM-DD. Devuelve "" si invalido (caller decide default).
+
+    NO usa `date.today()` para el fallback porque eso tomaria UTC del servidor;
+    los callers deben usar `_hoy_usuario(telegram_id)` para obtener hoy en la
+    zona del usuario.
+    """
     try:
         date.fromisoformat(fecha)
         return fecha
     except (ValueError, TypeError):
-        return date.today().isoformat()
+        return ""
 
 
 def _error(msg: str) -> str:
@@ -415,10 +452,15 @@ async def guardar_pr(
         ejercicio: nombre del ejercicio (ej: sentadilla, press banca, peso muerto)
         peso_kg: peso levantado en kg
         reps: repeticiones realizadas con ese peso
-        fecha: formato YYYY-MM-DD (si vacio usa hoy)
+        fecha: formato YYYY-MM-DD (si vacio usa hoy en la tz del usuario)
     """
     try:
-        fecha_obj = date.fromisoformat(_validar_fecha(fecha)) if fecha else date.today()
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_obj = (
+            date.fromisoformat(fecha_norm)
+            if fecha_norm
+            else await _hoy_usuario(telegram_id)
+        )
         pr = await repo_guardar_pr(telegram_id, ejercicio, peso_kg, reps, fecha_obj)
         await log_evento(telegram_id, "nuevo_pr", {"ejercicio": ejercicio, "peso": peso_kg})
         try:
@@ -518,10 +560,15 @@ async def resumen_nutricional(telegram_id: int, fecha: str = "") -> str:
 
     Args:
         telegram_id: ID de Telegram del usuario
-        fecha: formato YYYY-MM-DD (si vacio usa hoy)
+        fecha: formato YYYY-MM-DD (si vacio usa hoy en la tz del usuario)
     """
     try:
-        fecha_obj = date.fromisoformat(_validar_fecha(fecha)) if fecha else date.today()
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_obj = (
+            date.fromisoformat(fecha_norm)
+            if fecha_norm
+            else await _hoy_usuario(telegram_id)
+        )
         return json.dumps(await resumen_nutricional_dia(telegram_id, fecha_obj))
     except Exception:
         logger.exception("Error en resumen_nutricional")
@@ -677,11 +724,12 @@ async def firmar_compromiso(
         tipo_compromiso = tipo_compromiso.lower().strip()
         if tipo_compromiso not in TIPOS_COMPROMISO_VALIDOS:
             return _error(f"tipo invalido. Validos: {sorted(TIPOS_COMPROMISO_VALIDOS)}")
+        hoy = await _hoy_usuario(telegram_id)
         try:
             deadline_obj = date.fromisoformat(deadline)
         except ValueError:
-            deadline_obj = date.today() + timedelta(days=60)
-        if deadline_obj <= date.today():
+            deadline_obj = hoy + timedelta(days=60)
+        if deadline_obj <= hoy:
             return _error("deadline debe ser futura")
         frecuencia_semanal = max(1, min(7, frecuencia_semanal))
 
@@ -721,6 +769,7 @@ async def consultar_compromiso(telegram_id: int) -> str:
         if c is None:
             return json.dumps({"existe": False})
         await incrementar_citado_compromiso(c.id)
+        hoy = await _hoy_usuario(telegram_id)
         return json.dumps(
             {
                 "existe": True,
@@ -730,7 +779,7 @@ async def consultar_compromiso(telegram_id: int) -> str:
                 "frecuencia_semanal": c.frecuencia_semanal,
                 "tipo": c.tipo_compromiso.value,
                 "stake": c.stake_simbolico,
-                "dias_restantes": (c.deadline - date.today()).days,
+                "dias_restantes": (c.deadline - hoy).days,
                 "citado_veces": c.citado_veces,
             }
         )
@@ -1014,7 +1063,12 @@ async def registrar_truco_aterrizado(
             )
         if not nombre_truco or len(nombre_truco) > 80:
             return _error("nombre_truco requerido (max 80 chars)")
-        fecha_obj = date.fromisoformat(_validar_fecha(fecha)) if fecha else date.today()
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_obj = (
+            date.fromisoformat(fecha_norm)
+            if fecha_norm
+            else await _hoy_usuario(telegram_id)
+        )
         if es_primer_aterrizaje:
             pr = await repo_guardar_pr_truco(
                 telegram_id, deporte, nombre_truco,
@@ -1081,7 +1135,12 @@ async def registrar_sesion_skill(
             return _error("duracion fuera de rango (5-480 min)")
         if not (1 <= sensacion_1_5 <= 5):
             return _error("sensacion debe ser 1-5")
-        fecha_obj = date.fromisoformat(_validar_fecha(fecha)) if fecha else date.today()
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_obj = (
+            date.fromisoformat(fecha_norm)
+            if fecha_norm
+            else await _hoy_usuario(telegram_id)
+        )
         sesion = await repo_guardar_sesion_skill(
             telegram_id, deporte=deporte, duracion_min=duracion_min,
             spot=spot, foco_sesion=foco_sesion,
@@ -1143,7 +1202,12 @@ async def registrar_via_escalada(
         import re
         if not re.match(r"^(5\.\d{1,2}[a-d]?|V\d{1,2}|[3-9][a-c]\+?)$", grado):
             return _error(f"grado invalido: {grado}. Usa 5.10a, V4 o 6c+")
-        fecha_obj = date.fromisoformat(_validar_fecha(fecha)) if fecha else date.today()
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_obj = (
+            date.fromisoformat(fecha_norm)
+            if fecha_norm
+            else await _hoy_usuario(telegram_id)
+        )
         pr = await repo_guardar_pr_via(
             telegram_id, nombre_via, grado, spot, estilo=estilo, fecha=fecha_obj,
             notas=f"intentos={intentos}; lesion_dedo={lesion_dedo_si_no}",
@@ -1245,7 +1309,12 @@ async def registrar_sparring(
             return _error("intensidad debe ser 1-10")
         if rounds < 1 or rounds > 30:
             return _error("rounds fuera de rango (1-30)")
-        fecha_obj = date.fromisoformat(_validar_fecha(fecha)) if fecha else date.today()
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_obj = (
+            date.fromisoformat(fecha_norm)
+            if fecha_norm
+            else await _hoy_usuario(telegram_id)
+        )
         sesion = await repo_guardar_sesion_sparring(
             telegram_id, estilo=estilo, rounds=rounds,
             duracion_round_min=duracion_round_min,
@@ -1621,7 +1690,7 @@ async def programar_recordatorio(
                 except ValueError:
                     return _error("fecha_unica invalida, usa YYYY-MM-DD")
             else:
-                fecha = date.today() + timedelta(days=1)
+                fecha = (await _hoy_usuario(telegram_id)) + timedelta(days=1)
 
         rec = await repo_crear_recordatorio(
             telegram_id=telegram_id,

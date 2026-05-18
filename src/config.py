@@ -34,7 +34,12 @@ class Settings(BaseSettings):
     db_pool_timeout: int = 10
     db_pool_recycle: int = 300
 
-    session_limit: int = 20
+    # Limite de turnos en RedisSession (historial conversacional del agente).
+    # 20 era muy bajo para onboarding por voz (10+ voice notes con 1-2 tools
+    # c/u llenan el limite y se cortan turnos a mitad de un par
+    # function_call/function_call_output, causando "No tool call found").
+    # 60 deja margen para conversaciones de ~30 turnos del usuario.
+    session_limit: int = 60
     session_ttl_seconds: int = 60 * 60 * 24 * 30
 
     rate_limit_per_minute: int = 10

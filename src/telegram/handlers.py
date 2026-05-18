@@ -5,6 +5,7 @@ import asyncio
 import logging
 import re
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import openai
 import telegram.error
@@ -115,11 +116,25 @@ async def _enviar_con_retry(message, texto: str, intentos: int = 3, **kwargs) ->
 
 
 async def _build_prompt(texto: str, uid: int) -> str:
-    """Construye el prompt con perfil + tono + compromiso + streak inyectados."""
+    """Construye el prompt con perfil + tono + compromiso + streak inyectados.
+
+    Inyecta `fecha`, `hora_actual` y `tz` calculados en la zona horaria del
+    usuario (no del servidor) para que el LLM pueda resolver intenciones tipo
+    "en N minutos", "esta noche", "manana 8am" sin equivocarse.
+    """
     user = await obtener_o_crear_usuario(uid)
+    tz_name = user.timezone or "America/Bogota"
+    try:
+        ahora_user = datetime.now(ZoneInfo(tz_name))
+    except Exception:
+        tz_name = "America/Bogota"
+        ahora_user = datetime.now(ZoneInfo(tz_name))
+    hoy_user = ahora_user.date()
     perfil_parts = [
         f"uid={uid}",
-        f"fecha={date.today().isoformat()}",
+        f"fecha={hoy_user.isoformat()}",
+        f"hora_actual={ahora_user.strftime('%H:%M')}",
+        f"tz={tz_name}",
         f"tono={user.tono.value if user.tono else 'firme'}",
     ]
     if user.nombre:
@@ -144,8 +159,6 @@ async def _build_prompt(texto: str, uid: int) -> str:
         perfil_parts.append(f"modalidad={user.modalidad_deporte}")
     if user.es_competitivo:
         perfil_parts.append("competitivo=si")
-    if user.timezone:
-        perfil_parts.append(f"tz={user.timezone}")
     perfil_parts.append(
         f"onboarding={'si' if user.onboarding_completo else 'no'}"
     )
@@ -159,7 +172,7 @@ async def _build_prompt(texto: str, uid: int) -> str:
         perfil_parts.append(f"streak_entreno={streak.dias_actuales}")
     except Exception:
         pass
-    if user.pausado_hasta and user.pausado_hasta >= date.today():
+    if user.pausado_hasta and user.pausado_hasta >= hoy_user:
         perfil_parts.append(f"pausado_hasta={user.pausado_hasta.isoformat()}")
     return f"[{' | '.join(perfil_parts)}] {texto}"
 
