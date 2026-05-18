@@ -3,11 +3,13 @@
   dockerfilePath = "Dockerfile"
 
 [deploy]
-  # Shell wrapper (sh -c) para expandir $PORT que Railway inyecta.
-  # alembic upgrade head ANTES de arrancar uvicorn para que el schema este al dia.
-  startCommand = "sh -c 'alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8080}'"
+  # start.sh ejecuta `alembic upgrade head` y luego arranca uvicorn.
+  # Mas robusto que `sh -c "..."` porque evita problemas de quoting en Railway.
+  startCommand = "./start.sh"
   healthcheckPath = "/health"
-  healthcheckTimeout = 60
+  # 300s: da margen al primer arranque (alembic + lifespan + JobQueue init).
+  # En arranques warm baja a <10s.
+  healthcheckTimeout = 300
   restartPolicyType = "ON_FAILURE"
 
 [service]

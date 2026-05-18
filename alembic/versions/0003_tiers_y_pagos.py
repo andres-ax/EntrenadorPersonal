@@ -37,6 +37,13 @@ def upgrade() -> None:
     dialect = bind.dialect.name
 
     if dialect == "postgresql":
+        # Defensa en profundidad: 'free' y 'pro' deberian existir desde el
+        # enum creado en 0001 (con values_callable lowercase). Pero si la DB
+        # tiene un estado inconsistente de un deploy previo (ej: enum con
+        # valores en MAYUSCULAS), garantizamos los 5 valores aqui.
+        # IF NOT EXISTS es no-op cuando ya existe.
+        op.execute("ALTER TYPE plansuscripcion ADD VALUE IF NOT EXISTS 'free'")
+        op.execute("ALTER TYPE plansuscripcion ADD VALUE IF NOT EXISTS 'pro'")
         op.execute("ALTER TYPE plansuscripcion ADD VALUE IF NOT EXISTS 'starter'")
         op.execute("ALTER TYPE plansuscripcion ADD VALUE IF NOT EXISTS 'elite'")
         op.execute("ALTER TYPE plansuscripcion ADD VALUE IF NOT EXISTS 'lifetime'")

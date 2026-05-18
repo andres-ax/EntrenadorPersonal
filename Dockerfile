@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -e . --no-deps
 
 EXPOSE 8080
 
-# Aplica migraciones antes de arrancar el servidor.
-# Shell form para expandir $PORT (Railway inyecta su propio puerto).
-CMD ["sh", "-c", "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# El script ejecuta `alembic upgrade head` + `uvicorn` con $PORT correcto.
+# Tambien lo usa Railway como startCommand (railway.toml apunta a ./start.sh).
+RUN chmod +x /app/start.sh
+CMD ["./start.sh"]
