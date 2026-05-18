@@ -33,38 +33,54 @@ def obtener_application() -> Application | None:
     return _APP
 
 
-# Lista canonica de comandos del bot. La descripcion se traduce via i18n key `cmd_<name>`.
-# Cada lang puede omitir comandos avanzados (ej: en/pt solo muestran los basicos).
+# Comandos publicados en TODOS los idiomas (BotFather menu lateral).
+# Orden = importancia: lo mas usado del dia a dia primero. Telegram permite
+# hasta 100 pero conviene <= ~20 para que el menu sea navegable.
 COMANDOS_CORE = [
     "start",
     "menu",
     "hoy",
+    # Registro rapido del dia (los 4 mas comunes)
+    "entreno",
+    "comida",
+    "sueno",
     "peso",
-    "pr",
+    # Reportes y progreso
     "reporte",
+    "pr",
+    "grafico",
     "compromiso",
+    # Configuracion del coach
     "tono",
+    "quiet_hours",
     "pausa",
     "dia_libre",
+    # Cuenta / Pro / ayuda
+    "ayuda",
     "pagar",
     "llamar",
-    "ayuda",
-    "salir",
 ]
 
-# Set extendido solo para ES (locale principal).
+# Set extendido solo para ES (locale principal). Estos solo aparecen en
+# clientes con language_code='es'; en/pt usan COMANDOS_CORE.
 COMANDOS_EXTRA_ES = [
-    "presumir",
-    "porque_me_escribiste",
-    "quiet_hours",
-    "apagar_firme",
-    "feedback",
-    "grafico",
-    "exportar_csv",
+    "mi_mes",
+    "historial_peso",
+    "firmar_compromiso",
     "agua",
     "calma",
     "desafios",
+    "ranking",
+    "kudos",
     "invitar",
+    "presumir",
+    "exportar_csv",
+    "apagar_firme",
+    "porque_me_escribiste",
+    "feedback",
+    "upgrade",
+    "planes",
+    "salir",
     "reset",
     "borrar_datos",
 ]

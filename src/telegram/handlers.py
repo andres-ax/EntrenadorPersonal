@@ -78,16 +78,59 @@ logger = logging.getLogger(__name__)
 RUN_CONFIG = RunConfig(session_settings=SessionSettings(limit=settings.session_limit))
 
 
+# Reply keyboard persistente con los 12 accesos mas usados. Cada texto se
+# captura por `mensaje()` (REPLY_KEYBOARD_INTENTS) y se traduce a un prompt
+# claro para el coach o un comando directo.
 QUICK_ACTIONS_KEYBOARD = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("Entrene"), KeyboardButton("Comi")],
-        [KeyboardButton("Dormi"), KeyboardButton("Peso")],
-        [KeyboardButton("Mi semana"), KeyboardButton("Plan de hoy")],
+        [KeyboardButton("Entrene"), KeyboardButton("Comi"), KeyboardButton("Dormi")],
+        [KeyboardButton("Peso"), KeyboardButton("Agua"), KeyboardButton("Calma")],
+        [KeyboardButton("Plan de hoy"), KeyboardButton("Mi semana"), KeyboardButton("Mis PRs")],
+        [KeyboardButton("Recordatorios"), KeyboardButton("Compromiso"), KeyboardButton("Tono")],
     ],
     is_persistent=True,
     resize_keyboard=True,
     input_field_placeholder="Escribi o tap",
 )
+
+
+class _FakeUpdate:
+    """Wrapper minimo para reutilizar `cmd_*(update, ctx)` desde callbacks.
+
+    Los handlers existentes esperan `update.message.reply_text` y
+    `update.effective_user.id`. Cuando viene un callback_query queremos
+    redirigir a esos handlers sin duplicar codigo. OJO: `q.message.from_user`
+    es el BOT (porque el mensaje lo envio el bot); el usuario real esta en
+    `q.from_user`. Por eso recibimos ambos explicitamente.
+    """
+
+    __slots__ = ("message", "effective_user", "effective_chat", "callback_query")
+
+    def __init__(self, message, user):
+        self.message = message
+        self.effective_user = user
+        self.effective_chat = message.chat if message else None
+        self.callback_query = None
+
+
+# Mapa de etiquetas del reply keyboard -> prompts que el coach recibe.
+# Usamos prompts naturales para que el coach use las tools correctas.
+# Algunas etiquetas (Tono, Agua, Calma) usan comandos slash internos para
+# disparar el handler dedicado en vez de pasar por el LLM.
+REPLY_KEYBOARD_INTENTS: dict[str, str] = {
+    "Entrene": "Quiero registrar mi entrenamiento de hoy",
+    "Comi": "Quiero registrar lo que comi",
+    "Dormi": "Quiero registrar como dormi",
+    "Peso": "Quiero registrar mi peso actual",
+    "Plan de hoy": "Dame mi plan de hoy: entreno, comida y agua",
+    "Mi semana": "Dame mi reporte semanal completo (entrenos, sueno, comidas)",
+    "Mis PRs": "Muestrame mis Personal Records actuales",
+    "Recordatorios": "Lista mis recordatorios activos",
+    "Compromiso": "Quiero ver mi compromiso firmado",
+    "Tono": "Quiero cambiar el tono del coach",
+    "Agua": "Quiero registrar agua y ver como voy hoy",
+    "Calma": "Necesito 3 min de respiracion guiada",
+}
 
 
 _CONFIRMACION_ENTRENO = re.compile(
@@ -366,6 +409,34 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    # Intercepta etiquetas del reply keyboard persistente. Si el usuario hace
+    # tap en "Entrene"/"Comi"/etc., redirigimos al handler o prompt apropiado
+    # en vez de mandar el literal al coach (que puede no interpretar bien).
+    texto_strip = texto.strip()
+    if texto_strip in REPLY_KEYBOARD_INTENTS:
+        # Casos especiales que llaman directo a handlers slash para mejor UX:
+        if texto_strip == "Tono":
+            await cmd_tono(update, ctx)
+            return
+        if texto_strip == "Agua":
+            await cmd_agua(update, ctx)
+            return
+        if texto_strip == "Calma":
+            await cmd_calma(update, ctx)
+            return
+        if texto_strip == "Mis PRs":
+            await cmd_pr(update, ctx)
+            return
+        # Resto: prompt natural al coach (asi usa las tools correctas).
+        prompt = REPLY_KEYBOARD_INTENTS[texto_strip]
+        logger.info(
+            "reply_keyboard intent uid=%s label=%r -> prompt=%r",
+            uid, texto_strip, prompt,
+        )
+        await update.message.chat.send_action(ChatAction.TYPING)
+        await _procesar(update.message, prompt, uid, ctx=ctx)
+        return
+
     await reaccionar(update.message, ctx)
 
     if _CONFIRMACION_ENTRENO.search(texto):
@@ -381,30 +452,59 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Menu principal: inline keyboard 6 categorias + reply persistente."""
     keyboard = [
+        # Registro del dia (lo mas frecuente)
         [
-            InlineKeyboardButton("Registrar entreno", callback_data="entreno"),
-            InlineKeyboardButton("Registrar comida", callback_data="comida"),
+            InlineKeyboardButton("Entreno", callback_data="entreno"),
+            InlineKeyboardButton("Comida", callback_data="comida"),
+            InlineKeyboardButton("Sueno", callback_data="sueno"),
         ],
         [
-            InlineKeyboardButton("Como dormi", callback_data="sueno"),
-            InlineKeyboardButton("Mi peso actual", callback_data="peso"),
+            InlineKeyboardButton("Peso", callback_data="peso"),
+            InlineKeyboardButton("Agua", callback_data="menu_agua"),
+            InlineKeyboardButton("Calma", callback_data="menu_calma"),
         ],
+        # Resumenes / progreso
         [
+            InlineKeyboardButton("Plan de hoy", callback_data="plan_hoy"),
             InlineKeyboardButton("Reporte semanal", callback_data="reporte"),
-            InlineKeyboardButton("Historial de peso", callback_data="historial_peso"),
         ],
+        [
+            InlineKeyboardButton("Mi mes (PDF)", callback_data="menu_mi_mes"),
+            InlineKeyboardButton("Grafico progreso", callback_data="menu_grafico"),
+        ],
+        [
+            InlineKeyboardButton("Mis PRs", callback_data="menu_pr"),
+            InlineKeyboardButton("Historial peso", callback_data="historial_peso"),
+        ],
+        # Compromiso / coach
         [
             InlineKeyboardButton("Mi compromiso", callback_data="compromiso"),
+            InlineKeyboardButton("Recordatorios", callback_data="menu_recordatorios"),
+        ],
+        [
             InlineKeyboardButton("Cambiar tono", callback_data="cambiar_tono"),
+            InlineKeyboardButton("Configuracion", callback_data="menu_config"),
+        ],
+        # Comunidad / Pro
+        [
+            InlineKeyboardButton("Desafios", callback_data="menu_desafios"),
+            InlineKeyboardButton("Ranking", callback_data="menu_ranking"),
+            InlineKeyboardButton("Invitar", callback_data="menu_invitar"),
+        ],
+        [
+            InlineKeyboardButton("Mejorar plan", callback_data="menu_pagar"),
+            InlineKeyboardButton("Ayuda", callback_data="menu_ayuda"),
         ],
     ]
     await update.message.reply_text(
-        "Que quieres hacer?",
+        "<b>Que quieres hacer?</b>\n\n"
+        "Toca cualquier boton, o usa los del teclado de abajo.",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
     await update.message.reply_text(
-        "Tip: usa los botones de abajo siempre que quieras.",
+        "Tip: los botones de abajo estan siempre disponibles.",
         reply_markup=QUICK_ACTIONS_KEYBOARD,
     )
 
@@ -949,32 +1049,56 @@ async def cmd_exportar_csv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "<b>Como funciono</b>\n\n"
-        "1) Escribime cualquier cosa: 'hice pierna hoy, 4x8 sentadilla 80kg', "
+        "1) Escribeme cualquier cosa: 'hice pierna hoy 4x8 sentadilla 80kg', "
         "'almorce pollo y arroz', 'dormi 7h', 'peso 82kg'.\n"
-        "2) Mandame foto de tu plato y te calculo macros.\n"
-        "3) Tambien acepto notas de voz, las transcribo y las proceso.\n"
-        "4) Pidemes recordatorios: 'despiertame a las 7am' o 'avisame en 30 minutos'.\n"
+        "2) Mandame foto del plato y te calculo macros (tambien etiquetas).\n"
+        "3) Acepto notas de voz: las transcribo y las proceso.\n"
+        "4) Pideme recordatorios: 'despiertame a las 7am', 'avisame en 30 min'.\n"
         "5) Yo te recuerdo entrenar, comer y dormir si no lo haces.\n"
-        "6) Mientras mas faltes a tu compromiso, mas intenso me pongo.\n\n"
-        "<b>Comandos rapidos</b>\n"
-        "   /menu - acciones rapidas con botones\n"
+        "6) Si fallaste, te corrijo. Si me corriges, edito (no inventes).\n\n"
+        "<b>Registro del dia</b>\n"
+        "   /menu - menu principal con botones\n"
+        "   /hoy - plan + resumen de hoy\n"
         "   /entreno - registrar entrenamiento\n"
         "   /comida - registrar comida\n"
         "   /sueno - registrar sueno\n"
         "   /peso - registrar peso\n"
-        "   /hoy - resumen de hoy\n"
-        "   /reporte - resumen semanal\n"
-        "   /pr - mis personal records\n"
-        "   /compromiso - ver mi pacto contigo\n"
-        "   /grafico - grafico de progreso\n\n"
-        "<b>Configuracion</b>\n"
+        "   /agua - registrar agua / ver hidratacion\n"
+        "   /calma - 3 minutos de respiracion guiada\n\n"
+        "<b>Progreso y reportes</b>\n"
+        "   /reporte - resumen semanal completo\n"
+        "   /pr - mis Personal Records\n"
+        "   /grafico - grafico visual de progreso\n"
+        "   /mi_mes - analisis mensual en PDF\n"
+        "   /historial_peso - histograma de peso\n"
+        "   /compromiso - ver/firmar mi pacto\n"
+        "   /firmar_compromiso - firmar nuevo compromiso\n\n"
+        "<b>Configuracion del coach</b>\n"
         "   /tono - amigable, firme o militar\n"
-        "   /quiet_hours HH:MM HH:MM - no molestar entre estas horas\n"
+        "   /quiet_hours HH:MM HH:MM - no molestar\n"
         "   /pausa N - silenciarme N dias\n"
-        "   /salir - bajar tono y reducir mensajes\n"
-        "   /borrar_datos - eliminar todo\n\n"
-        "<b>Privacidad:</b> tus datos viven en tu instancia. Puedes borrar todo "
-        "cuando quieras con /borrar_datos."
+        "   /dia_libre - usar freeze (no rompe streak)\n"
+        "   /apagar_firme - bajar a modo amigable\n"
+        "   /salir - bajar tono y reducir mensajes\n\n"
+        "<b>Pro / comunidad</b>\n"
+        "   /pagar - comprar plan (Bre-B, Nequi, etc.)\n"
+        "   /planes - ver opciones de plan\n"
+        "   /upgrade - activar via Telegram Stars\n"
+        "   /llamar - llamada de voz con el coach\n"
+        "   /desafios - desafios de la comunidad\n"
+        "   /ranking - top de la semana\n"
+        "   /kudos - dar/recibir kudos\n"
+        "   /invitar - invitar amigo\n"
+        "   /presumir - compartir un logro\n\n"
+        "<b>Cuenta y datos</b>\n"
+        "   /exportar_csv - bajar mis datos\n"
+        "   /feedback - mandar feedback al equipo\n"
+        "   /porque_me_escribiste - explico por que te escribi\n"
+        "   /reset - reiniciar onboarding\n"
+        "   /borrar_datos - eliminar TODO\n\n"
+        "<b>Privacidad:</b> tus datos son tuyos. Puedes borrar todo "
+        "cuando quieras con /borrar_datos. Tambien puedes exportarlos a "
+        "CSV con /exportar_csv."
     )
 
 
@@ -1207,12 +1331,99 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         return
 
+    # Callbacks "menu_X" que redirigen a comandos slash existentes.
+    # Asi reutilizamos sus handlers sin duplicar logica.
+    if q.data == "menu_agua":
+        await cmd_agua(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_calma":
+        await cmd_calma(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_mi_mes":
+        await cmd_mi_mes(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_grafico":
+        await cmd_grafico(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_pr":
+        await cmd_pr(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_desafios":
+        await cmd_desafios(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_ranking":
+        await cmd_ranking(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_invitar":
+        await cmd_invitar(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_pagar":
+        await cmd_pagar(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_ayuda":
+        await cmd_ayuda(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_config":
+        kb = [
+            [
+                InlineKeyboardButton("Cambiar tono", callback_data="cambiar_tono"),
+                InlineKeyboardButton("No molestar", callback_data="menu_quiet"),
+            ],
+            [
+                InlineKeyboardButton("Pausar bot", callback_data="menu_pausa"),
+                InlineKeyboardButton("Dia libre", callback_data="menu_dia_libre"),
+            ],
+            [
+                InlineKeyboardButton("Bajar a amigable", callback_data="menu_apagar_firme"),
+                InlineKeyboardButton("Exportar CSV", callback_data="menu_exportar"),
+            ],
+            [
+                InlineKeyboardButton("Borrar todo", callback_data="menu_borrar"),
+            ],
+        ]
+        await q.message.reply_text(
+            "<b>Configuracion</b>",
+            reply_markup=InlineKeyboardMarkup(kb),
+        )
+        return
+    if q.data == "menu_quiet":
+        await q.message.reply_text(
+            "Usa: <code>/quiet_hours HH:MM HH:MM</code>\n"
+            "Ej: <code>/quiet_hours 22:00 07:00</code>"
+        )
+        return
+    if q.data == "menu_pausa":
+        await q.message.reply_text(
+            "Usa: <code>/pausa N</code> para silenciarme N dias.\n"
+            "Ej: <code>/pausa 3</code>"
+        )
+        return
+    if q.data == "menu_dia_libre":
+        await cmd_dia_libre(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_apagar_firme":
+        await cmd_apagar_firme(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_exportar":
+        await cmd_exportar_csv(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_borrar":
+        # Reutiliza borrar_datos (manda confirmacion).
+        await borrar_datos(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_recordatorios":
+        await _procesar(
+            q.message, "Lista mis recordatorios activos", uid, ctx=ctx
+        )
+        return
+
     mapping = {
         "onboarding": "Hola, quiero empezar!",
         "entreno": "Quiero registrar mi entrenamiento de hoy",
         "comida": "Quiero registrar lo que comi hoy",
         "sueno": "Quiero registrar como dormi anoche",
         "peso": "Quiero registrar mi peso actual",
+        "plan_hoy": "Dame mi plan de hoy: que entreno, que comer, agua",
         "reporte": "Como voy esta semana? Dame mi reporte",
         "historial_peso": "Muestrame mi historial de peso",
         "compromiso": "Quiero ver o firmar mi compromiso",
