@@ -236,6 +236,45 @@ async def pagos_lista(
     )
 
 
+@router.get("/pagos/{comp_id}/foto")
+async def pago_foto_cookie(
+    comp_id: int, admin: dict = Depends(get_admin_from_cookie)
+):
+    """Proxy foto del comprobante via Telegram API. Autenticado por cookie.
+
+    El router JSON (/admin/pagos/{id}/foto en admin.py) usa header Bearer
+    que no funciona desde <img src="..."> en el browser. Esta ruta duplica
+    la logica pero acepta la cookie HttpOnly del panel HTML.
+    """
+    from fastapi.responses import Response
+
+    import httpx
+
+    from src.config import settings as _settings
+    from src.db.repository import obtener_comprobante
+
+    comp = await obtener_comprobante(comp_id)
+    if comp is None or not comp.foto_file_id:
+        raise HTTPException(404, "Comprobante o foto no encontrada")
+
+    token = _settings.telegram_token.get_secret_value()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        info = await client.get(
+            f"https://api.telegram.org/bot{token}/getFile",
+            params={"file_id": comp.foto_file_id},
+        )
+        info.raise_for_status()
+        data = info.json()
+        if not data.get("ok"):
+            raise HTTPException(502, "getFile fallo")
+        file_path = data["result"]["file_path"]
+        download = await client.get(
+            f"https://api.telegram.org/file/bot{token}/{file_path}"
+        )
+        download.raise_for_status()
+    return Response(content=download.content, media_type="image/jpeg")
+
+
 @router.get("/pagos/{comp_id}", response_class=HTMLResponse)
 async def pago_detalle(
     comp_id: int, request: Request, admin: dict = Depends(get_admin_from_cookie)
@@ -255,7 +294,9 @@ async def pago_aprobar_form(
     notas: str = Form(""),
 ):
     await admin_api.aprobar(comp_id=comp_id, req=admin_api.AprobarReq(notas=notas), admin=admin)
-    return RedirectResponse(url="/admin/pagos", status_code=303)
+    return RedirectResponse(
+        url=f"/admin/pagos?msg=Pago+%23{comp_id}+aprobado.+Plan+activado.", status_code=303
+    )
 
 
 @router.post("/pagos/{comp_id}/rechazar_form")
@@ -268,7 +309,9 @@ async def pago_rechazar_form(
     await admin_api.rechazar(
         comp_id=comp_id, req=admin_api.RechazarReq(motivo=motivo, bloquear=bloquear), admin=admin
     )
-    return RedirectResponse(url="/admin/pagos", status_code=303)
+    return RedirectResponse(
+        url=f"/admin/pagos?msg=Pago+%23{comp_id}+rechazado.", status_code=303
+    )
 
 
 # -----------------------------------------------------------------------------
