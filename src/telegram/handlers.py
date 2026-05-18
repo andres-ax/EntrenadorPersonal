@@ -1293,11 +1293,13 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             f"<b>Plan {plan_pago.value} ({duracion.value}): {formatear_precio(monto)}</b>\n\n"
             f"{descripcion_plan(plan_pago)}\n\n"
             f"<b>Como pagar:</b>\n"
-            f"- Bre-B / Nequi / Daviplata: <code>{settings.cuenta_destino_pago}</code>\n"
-            f"- Bancolombia ahorro: <code>{settings.cuenta_destino_alt}</code>\n\n"
-            f"Cuando termines, mandame la <b>foto del comprobante</b> "
-            f"como respuesta a este mensaje. La activacion es automatica "
-            f"si el monto coincide; un admin la valida en horas."
+            f"Transfiere a esta llave Nu:\n"
+            f"<code>{settings.cuenta_destino_pago}</code>\n\n"
+            f"Aceptamos transferencias de cualquier banco o billetera "
+            f"(Nequi, Daviplata, Bancolombia, Bre-B, etc.).\n\n"
+            f"Cuando termines, mandame la <b>foto del comprobante</b>. "
+            f"La activacion es automatica si el monto coincide; "
+            f"un admin la valida en maximo 24h."
         )
         return
 
@@ -1803,7 +1805,15 @@ async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def _procesar_comprobante(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE, uid: int
 ) -> None:
-    """Procesa una foto como comprobante de pago: Vision -> duplicados -> activacion provisional."""
+    """Procesa una foto como comprobante de pago.
+
+    Flujo: Vision analiza -> guarda SIEMPRE en DB -> duplicados -> activacion.
+
+    IMPORTANTE: el comprobante se guarda en la DB incluso si Vision no lo
+    reconoce como comprobante valido. Asi el admin siempre puede revisarlo
+    manualmente desde /admin/pagos. Antes del fix, si Vision decia
+    "no es comprobante", no se guardaba nada y el pago se perdia.
+    """
     from src.db.models import DuracionPago, PlanSuscripcion
     from src.services.comprobantes import (
         extraer_datos_comprobante,
@@ -1842,23 +1852,30 @@ async def _procesar_comprobante(
     sha = sha256_imagen(raw)
 
     datos = await extraer_datos_comprobante(raw)
-    if not datos.get("ok") or not datos.get("es_comprobante"):
-        razon = datos.get("razon", "no_es_comprobante")
-        await update.message.reply_text(
-            "No reconoci esta imagen como comprobante de pago. "
-            "Asegurate que se vean monto, fecha y referencia. Intenta otra foto."
-        )
-        await log_evento(uid, "comprobante_no_reconocido", {"razon": razon})
-        return
+    vision_reconocio = datos.get("ok") and datos.get("es_comprobante")
 
-    dup = await es_duplicado(
-        foto_sha256=sha,
-        monto_cop=datos.get("monto_cop", 0),
-        fecha_pago=datos.get("fecha_pago"),
-        referencia=datos.get("referencia", ""),
-        cuenta_origen=datos.get("cuenta_origen", ""),
-    )
+    # Si Vision no reconocio la imagen, igual guardamos con datos vacios
+    # para que el admin pueda revisarla manualmente.
+    if not vision_reconocio:
+        datos_para_guardar = {
+            "monto_cop": 0,
+            "monto_extraido_raw": "",
+            "referencia": "",
+            "cuenta_origen": "",
+            "cuenta_destino": "",
+            "fecha_pago": None,
+            "hora_pago": None,
+            "metodo": "otro",
+            "confianza": 0.0,
+            "raw": datos.get("raw", {}),
+            "vision_rechazado": True,
+            "razon_rechazo": datos.get("razon", "no_reconocido"),
+        }
+    else:
+        datos_para_guardar = datos
+        datos_para_guardar["vision_rechazado"] = False
 
+    # GUARDAR SIEMPRE en DB (antes solo se guardaba si Vision decia OK)
     comprobante = await guardar_comprobante(
         telegram_id=uid,
         foto_file_id=photo.file_id,
@@ -1867,8 +1884,59 @@ async def _procesar_comprobante(
         duracion=duracion,
         monto_esperado_cop=monto_esperado,
         dias_otorgados=dias_otorgados,
-        vision_payload=datos,
+        vision_payload=datos_para_guardar,
         referido_codigo=pendiente.get("referido_codigo"),
+    )
+    logger.info(
+        "comprobante guardado uid=%s comp_id=%s vision_ok=%s",
+        uid, comprobante.id, vision_reconocio,
+    )
+
+    # NOTIFICAR AL ADMIN SIEMPRE (reenviar foto + datos)
+    admin_base = str(settings.landing_url or "https://entrenadorax.axsoftware.codes").rstrip("/")
+    admin_link = f"{admin_base}/admin/pagos/{comprobante.id}"
+    if settings.developer_chat_id:
+        try:
+            status_label = "Vision OK" if vision_reconocio else "Vision NO reconocio"
+            monto_label = formatear_precio(comprobante.monto_cop) if comprobante.monto_cop else "no detectado"
+            await ctx.bot.send_photo(
+                chat_id=settings.developer_chat_id,
+                photo=photo.file_id,
+                caption=(
+                    f"<b>Nuevo comprobante #{comprobante.id}</b>\n"
+                    f"Usuario: uid={uid}\n"
+                    f"Plan: {plan_solicitado.value} ({duracion.value})\n"
+                    f"Monto: {monto_label} (esperado {formatear_precio(monto_esperado)})\n"
+                    f"Vision: {status_label}\n"
+                    f"Match: {'si' if comprobante.monto_match else 'no'}\n\n"
+                    f"<a href=\"{admin_link}\">Revisar en admin panel</a>"
+                ),
+            )
+        except Exception:
+            logger.exception("No pude notificar admin de comprobante uid=%s", uid)
+
+    # Si Vision no lo reconocio: notificar al usuario pero el pago queda
+    # en la cola del admin para revision manual.
+    if not vision_reconocio:
+        razon = datos.get("razon", "no_reconocido")
+        await update.message.reply_text(
+            "No pude leer automaticamente tu comprobante, pero ya lo "
+            "guarde y el admin lo va a revisar manualmente.\n\n"
+            "Si quieres acelerar, asegurate que la foto muestre "
+            "claramente monto, fecha y referencia. Te aviso cuando se valide."
+        )
+        await log_evento(uid, "comprobante_vision_rechazado", {
+            "razon": razon, "comp_id": comprobante.id,
+        })
+        return
+
+    # Vision reconocio: flujo normal (duplicados + activacion)
+    dup = await es_duplicado(
+        foto_sha256=sha,
+        monto_cop=datos.get("monto_cop", 0),
+        fecha_pago=datos.get("fecha_pago"),
+        referencia=datos.get("referencia", ""),
+        cuenta_origen=datos.get("cuenta_origen", ""),
     )
 
     if dup.get("es_duplicado"):
@@ -1879,19 +1947,6 @@ async def _procesar_comprobante(
             "pago. Si crees que es un error, contacta soporte."
         )
         await log_evento(uid, "comprobante_duplicado", {"razon": dup["razon"]})
-        if settings.developer_chat_id:
-            try:
-                await ctx.bot.send_message(
-                    chat_id=settings.developer_chat_id,
-                    text=(
-                        f"<b>Comprobante DUPLICADO</b> uid={uid}\n"
-                        f"razon: {dup['razon']}\n"
-                        f"similares: {dup['comprobantes_similares']}\n"
-                        f"comp_id: {comprobante.id}"
-                    ),
-                )
-            except Exception:
-                pass
         return
 
     monto_match = comprobante.monto_match
