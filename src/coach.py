@@ -1,7 +1,8 @@
 """Agent OpenAI - EntrenadorAX con tono configurable y compromiso firmable."""
 import logging
+import re
 
-from agents import Agent
+from agents import Agent, GuardrailFunctionOutput, input_guardrail, output_guardrail
 
 from src.tools import (
     calcular_peso_objetivo_responsable,
@@ -744,10 +745,57 @@ Comandos del bot (NO los procesa el agente, los procesa el handler de Telegram):
 """
 
 
+@input_guardrail
+async def guardrail_anti_spam(ctx, agent, input_data):
+    """Rechaza mensajes con contenido repetitivo/spam que desperdician tokens."""
+    texto = input_data if isinstance(input_data, str) else str(input_data)
+    texto_limpio = texto.strip()
+    if len(texto_limpio) > 3000:
+        return GuardrailFunctionOutput(
+            output_info={"reason": "mensaje_muy_largo"},
+            tripwire_triggered=True,
+        )
+    if len(texto_limpio) > 50:
+        chars = set(texto_limpio.replace(" ", ""))
+        if len(chars) <= 3:
+            return GuardrailFunctionOutput(
+                output_info={"reason": "spam_repetitivo"},
+                tripwire_triggered=True,
+            )
+    return GuardrailFunctionOutput(
+        output_info={"reason": "ok"},
+        tripwire_triggered=False,
+    )
+
+
+_DIAGNOSTICOS_PROHIBIDOS = re.compile(
+    r"\b(tienes\s+(anorexia|bulimia|atracon|depresion|diabetes|hipertension|"
+    r"obesidad|trastorno|tdah|ansiedad\s+generalizada|TOC|PTSD|concusion|"
+    r"conmocion\s+cerebral)|"
+    r"sufres\s+de\s+(anorexia|bulimia|depresion|diabetes|concusion)|"
+    r"estas\s+(deprimid|enferm)|"
+    r"diagnostico\s+(de|es)\s+(anorexia|bulimia|depresion|concusion))\b",
+    re.IGNORECASE,
+)
+
+
+@output_guardrail
+async def guardrail_no_diagnostico(ctx, agent, output):
+    """Bloquea respuestas del agente que contengan diagnosticos medicos."""
+    texto = output if isinstance(output, str) else str(output)
+    matches = _DIAGNOSTICOS_PROHIBIDOS.findall(texto)
+    return GuardrailFunctionOutput(
+        output_info={"matches": [m[0] for m in matches[:5]]} if matches else {},
+        tripwire_triggered=bool(matches),
+    )
+
+
 coach = Agent(
     name="EntrenadorAX",
     instructions=INSTRUCTIONS,
     tools=ALL_TOOLS,
+    input_guardrails=[guardrail_anti_spam],
+    output_guardrails=[guardrail_no_diagnostico],
 )
 
 logger.info(

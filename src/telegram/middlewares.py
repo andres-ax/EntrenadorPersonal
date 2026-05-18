@@ -1,13 +1,24 @@
-"""Rate limit por usuario usando Redis sorted sets (sliding window)."""
+"""Rate limit y cuota diaria por usuario usando Redis."""
 from __future__ import annotations
 
 import logging
 import time
+from datetime import date
 
 from src.cache import get_redis
 from src.config import settings
+from src.db.models import PlanSuscripcion
+from src.db.repository import obtener_plan_actual
 
 logger = logging.getLogger(__name__)
+
+MENSAJES_DIA_POR_PLAN: dict[PlanSuscripcion, int] = {
+    PlanSuscripcion.FREE: settings.free_daily_msg_limit,
+    PlanSuscripcion.STARTER: settings.starter_daily_msg_limit,
+    PlanSuscripcion.PRO: settings.pro_daily_msg_limit,
+    PlanSuscripcion.ELITE: 0,
+    PlanSuscripcion.LIFETIME: 0,
+}
 
 
 async def check_rate_limit(
@@ -36,6 +47,37 @@ async def check_rate_limit(
     except Exception as e:
         logger.warning("Rate limit check failed: %s", e)
         return True
+
+
+async def check_daily_quota(
+    telegram_id: int,
+) -> tuple[bool, int, int]:
+    """Verifica cuota diaria de mensajes segun plan del usuario.
+
+    Returns:
+        (puede_continuar, mensajes_usados, limite)
+        limite=0 significa ilimitado.
+    """
+    try:
+        plan = await obtener_plan_actual(telegram_id)
+        limite = MENSAJES_DIA_POR_PLAN.get(plan, settings.free_daily_msg_limit)
+        if limite == 0:
+            return True, 0, 0
+
+        client = await get_redis()
+        hoy = date.today().isoformat()
+        key = f"daily_msg:{telegram_id}:{hoy}"
+
+        pipe = client.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, 86400)
+        results = await pipe.execute()
+        usado = results[0]
+
+        return usado <= limite, usado, limite
+    except Exception as e:
+        logger.warning("Daily quota check failed: %s", e)
+        return True, 0, 0
 
 
 # Re-export por compatibilidad con código previo (handlers/main).

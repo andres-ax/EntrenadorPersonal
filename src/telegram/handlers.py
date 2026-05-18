@@ -31,7 +31,13 @@ from telegram.ext import (
     filters,
 )
 
-from agents import RunConfig, Runner, SessionSettings
+from agents import (
+    InputGuardrailTripwireTriggered,
+    OutputGuardrailTripwireTriggered,
+    RunConfig,
+    Runner,
+    SessionSettings,
+)
 
 from src.cache import (
     get_perfil_block as cache_get_perfil_block,
@@ -70,7 +76,7 @@ from src.db.repository import (
     usar_freeze_streak,
 )
 from src.telegram.decoradores import requiere_tier
-from src.telegram.middlewares import check_rate_limit
+from src.telegram.middlewares import check_daily_quota, check_rate_limit
 from src.telegram.reacciones import reaccionar
 
 logger = logging.getLogger(__name__)
@@ -257,9 +263,24 @@ async def _procesar(
             result = await Runner.run(
                 coach, prompt, session=session, run_config=RUN_CONFIG
             )
+        except InputGuardrailTripwireTriggered:
+            logger.warning("Input guardrail triggered uid=%s", uid)
+            await _enviar_con_retry(
+                message,
+                "Ese mensaje no se ve bien. Intentalo de nuevo con algo mas claro.",
+            )
+            return
+        except OutputGuardrailTripwireTriggered:
+            logger.warning("Output guardrail (SDK) triggered uid=%s", uid)
+            await _enviar_con_retry(
+                message,
+                "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
+                "que un profesional medico/nutricionista/psicologo evalue tu caso. "
+                "Sigamos con habitos concretos: que vamos a hacer hoy?",
+            )
+            await log_evento(uid, "output_guardrail_diagnostico", {"source": "sdk"})
+            return
         except openai.BadRequestError as e:
-            # Recupera sesion corrupta: tool call output sin su call padre
-            # (truncado por session_limit o crash mid-turn multi-tool).
             if "No tool call found" not in str(e):
                 raise
             logger.warning(
@@ -290,7 +311,7 @@ async def _procesar(
 
         diag = detectar_diagnostico_output(output)
         if diag:
-            logger.warning("Output guardrail: diagnostico detectado uid=%s: %s", uid, diag)
+            logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
             output = (
                 "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
                 "que un profesional medico/nutricionista/psicologo evalue tu caso. "
@@ -406,6 +427,13 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await check_rate_limit(uid):
         await update.message.reply_text(
             "Tranquilo, estoy procesando. Espera un momento."
+        )
+        return
+    puede, usado, limite = await check_daily_quota(uid)
+    if not puede:
+        await update.message.reply_text(
+            f"Llegaste a tu limite diario ({limite} mensajes). "
+            "Mejora tu plan con /pagar para seguir entrenando."
         )
         return
 
@@ -1610,6 +1638,13 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await check_rate_limit(uid):
         await update.message.reply_text("Tranquilo, dame un segundo.")
         return
+    puede, usado, limite = await check_daily_quota(uid)
+    if not puede:
+        await update.message.reply_text(
+            f"Llegaste a tu limite diario ({limite} mensajes). "
+            "Mejora tu plan con /pagar para seguir entrenando."
+        )
+        return
 
     caption = (update.message.caption or "").strip()
     esperando_pago = bool(ctx.user_data.get("esperando_comprobante", False))
@@ -1815,6 +1850,13 @@ async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not await check_rate_limit(uid):
         await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+    puede, usado, limite = await check_daily_quota(uid)
+    if not puede:
+        await update.message.reply_text(
+            f"Llegaste a tu limite diario ({limite} mensajes). "
+            "Mejora tu plan con /pagar para seguir entrenando."
+        )
         return
 
     duration = getattr(voice, "duration", 0) or 0
