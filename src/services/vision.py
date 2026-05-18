@@ -89,7 +89,7 @@ async def analizar_comida(
         if caption:
             user_text += f"\nContexto del usuario: {caption.strip()[:300]}"
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.vision_model,
             messages=[
                 {"role": "system", "content": _prompt_sistema(tono)},
                 {

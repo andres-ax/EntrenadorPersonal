@@ -252,10 +252,10 @@ def _ok(data: dict | None = None) -> str:
 @function_tool
 @_log_tool
 async def obtener_perfil(telegram_id: int) -> str:
-    """Obtiene el perfil completo del usuario.
+    """Obtiene perfil completo del usuario.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         u = await obtener_o_crear_usuario(telegram_id)
@@ -297,21 +297,21 @@ async def guardar_perfil(
     pais: str = "",
     onboarding_completo: bool = False,
 ) -> str:
-    """Actualiza el perfil del usuario. Solo envia los campos con datos concretos.
+    """Actualiza perfil. Solo envia campos con datos concretos.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        nombre: nombre del usuario
-        edad: edad en anos
-        peso_kg: peso en kilogramos
-        altura_cm: altura en centimetros
-        objetivo: ganar musculo, perder grasa, mantenerse, mejorar rendimiento
-        nivel: principiante, intermedio, avanzado
-        dias_entreno: dias por semana que entrena (1-7)
-        deporte_principal: slug del deporte (acepta 67 deportes: bmx, skate, rollers, climbing, boxeo, bjj, mma, futbol, padel, trail, mtb, ciclismo, gimnasio, crossfit, natacion, apnea, equitacion, karting, tejo, etc). Lista completa en DeporteCatalogo.
-        timezone: zona horaria IANA (ej: America/Bogota, America/Mexico_City, Europe/Madrid)
-        pais: codigo ISO de 2 letras (CO, MX, AR, ES)
-        onboarding_completo: True cuando tengas peso, altura, objetivo, nivel y dias_entreno
+        telegram_id: Telegram ID
+        nombre: nombre
+        edad: anos
+        peso_kg: kg
+        altura_cm: cm
+        objetivo: ganar_musculo|perder_grasa|mantenerse|mejorar_rendimiento
+        nivel: principiante|intermedio|avanzado
+        dias_entreno: dias/semana (1-7)
+        deporte_principal: slug deporte (ver DeporteCatalogo)
+        timezone: IANA tz (America/Bogota)
+        pais: ISO 2 letras (CO, MX, AR, ES)
+        onboarding_completo: True si peso+altura+objetivo+nivel+dias listos
     """
     try:
         kwargs: dict = {}
@@ -378,16 +378,16 @@ async def registrar_entreno(
     rpe: float = 0,
     notas: str = "",
 ) -> str:
-    """Registra un entrenamiento completo. Tras registrarlo, incrementa el streak.
+    """Registra entrenamiento e incrementa streak.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        fecha: formato YYYY-MM-DD
-        tipo: DEBE ser uno de: fuerza, cardio, movilidad, deporte
-        duracion_min: duracion en minutos
-        ejercicios_json: JSON array de ejercicios, ej: [{"nombre":"sentadilla","series":4,"reps":8,"peso_kg":80}]
-        rpe: esfuerzo percibido 1-10 (0 si no se sabe)
-        notas: notas adicionales
+        telegram_id: Telegram ID
+        fecha: YYYY-MM-DD
+        tipo: fuerza|cardio|movilidad|deporte
+        duracion_min: minutos
+        ejercicios_json: JSON array [{nombre,series,reps,peso_kg}]
+        rpe: esfuerzo 1-10 (0=desconocido)
+        notas: notas
     """
     try:
         fecha = _validar_fecha(fecha)
@@ -422,11 +422,11 @@ async def registrar_entreno(
 @function_tool
 @_log_tool
 async def obtener_pr(telegram_id: int, ejercicio: str) -> str:
-    """Consulta el Personal Record de un ejercicio especifico.
+    """Consulta PR de un ejercicio.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        ejercicio: nombre del ejercicio (ej: sentadilla, press banca, peso muerto)
+        telegram_id: Telegram ID
+        ejercicio: nombre del ejercicio
     """
     try:
         pr = await obtener_pr_ejercicio(telegram_id, ejercicio)
@@ -454,14 +454,14 @@ async def guardar_pr(
     reps: int = 1,
     fecha: str = "",
 ) -> str:
-    """Registra un nuevo Personal Record.
+    """Registra nuevo PR.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        ejercicio: nombre del ejercicio (ej: sentadilla, press banca, peso muerto)
-        peso_kg: peso levantado en kg
-        reps: repeticiones realizadas con ese peso
-        fecha: formato YYYY-MM-DD (si vacio usa hoy en la tz del usuario)
+        telegram_id: Telegram ID
+        ejercicio: nombre del ejercicio
+        peso_kg: peso en kg
+        reps: repeticiones con ese peso
+        fecha: YYYY-MM-DD (vacio=hoy)
     """
     try:
         fecha_norm = _validar_fecha(fecha) if fecha else ""
@@ -500,10 +500,10 @@ async def guardar_pr(
 @function_tool
 @_log_tool
 async def listar_todos_prs(telegram_id: int) -> str:
-    """Lista todos los Personal Records del usuario.
+    """Lista todos los PRs del usuario.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         prs = await listar_prs(telegram_id)
@@ -534,33 +534,20 @@ async def registrar_comida(
     carbs: float = 0,
     grasas: float = 0,
 ) -> str:
-    """Registra una comida del usuario con macros estimados.
+    """Registra comida con macros. Requiere alimentos NO vacios y al menos 1 macro>0.
 
-    REQUISITOS DUROS (la tool retorna error si no se cumplen):
-    1. `alimentos_json` DEBE ser una lista NO VACIA de strings concretos.
-       Ejemplo OK: '["2 huevos","aguacate","1 vaso de leche"]'.
-       Ejemplo MAL: '[]' o ['comi algo'].
-    2. `calorias` > 0 O (proteinas+carbs+grasas) > 0. Es decir, AL MENOS
-       una macro o calorias debe estar estimado.
-
-    Si el usuario solo dice "comi" sin detalles, NO LLAMES ESTA TOOL.
-    Preguntale QUE comio y cuanto, y solo entonces registra con datos.
-
-    Para fotos: el handler `recibir_foto` ya llama `guardar_comida` directamente
-    con los macros que estima Vision. Si el usuario hace foto + texto del mismo
-    plato, NO duplicar; esta tool detecta duplicados (mismo dia/tipo + alimentos
-    solapados >= 50%) y devuelve `duplicado=True` sin insertar.
+    No llamar sin detalles; preguntar QUE comio primero. Detecta duplicados
+    foto+texto automaticamente.
 
     Args:
-        telegram_id: ID de Telegram del usuario.
-        fecha: formato YYYY-MM-DD.
-        tipo: DEBE ser uno de: desayuno, almuerzo, cena, snack, post_entreno.
-        alimentos_json: JSON array de strings con alimentos concretos.
-            Ej: ["avena","platano","leche"]. NO VACIO.
-        calorias: calorias estimadas totales (> 0 si las macros estan en 0).
-        proteinas: gramos de proteina.
-        carbs: gramos de carbohidratos.
-        grasas: gramos de grasa.
+        telegram_id: Telegram ID
+        fecha: YYYY-MM-DD
+        tipo: desayuno|almuerzo|cena|snack|post_entreno
+        alimentos_json: JSON array de strings NO vacio
+        calorias: kcal totales (>0 si macros=0)
+        proteinas: g proteina
+        carbs: g carbohidratos
+        grasas: g grasa
     """
     try:
         tipo = tipo.lower().strip()
@@ -647,11 +634,11 @@ async def registrar_comida(
 @function_tool
 @_log_tool
 async def resumen_nutricional(telegram_id: int, fecha: str = "") -> str:
-    """Resumen de calorias y macros de un dia.
+    """Resumen calorias y macros de un dia.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        fecha: formato YYYY-MM-DD (si vacio usa hoy en la tz del usuario)
+        telegram_id: Telegram ID
+        fecha: YYYY-MM-DD (vacio=hoy)
     """
     try:
         fecha_norm = _validar_fecha(fecha) if fecha else ""
@@ -680,19 +667,14 @@ async def registrar_sueno(
     calidad: int,
     notas: str = "",
 ) -> str:
-    """Registra horas y calidad de sueno.
-
-    REQUISITO: `horas` debe ser un numero > 0 y <= 16. Si el usuario solo
-    dice "dormi" sin dar las horas, PIDESELAS antes de llamar esta tool.
-    NUNCA llames con `horas=0` o un valor inventado: ensucia el reporte.
+    """Registra sueno. Requiere horas>0; no inventar, preguntar al usuario.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        fecha: formato YYYY-MM-DD (la fecha en que se desperto)
-        horas: horas de sueno > 0 y <= 16 (ej: 7.5). Si no las sabes, NO
-            llames esta tool y pide el dato al usuario.
-        calidad: 1=pesimo, 2=malo, 3=normal, 4=bueno, 5=excelente
-        notas: notas opcionales
+        telegram_id: Telegram ID
+        fecha: YYYY-MM-DD (fecha en que desperto)
+        horas: horas dormidas (1-16). No llamar si desconocido.
+        calidad: 1=pesimo 2=malo 3=normal 4=bueno 5=excelente
+        notas: notas
     """
     try:
         if horas is None or horas <= 0:
@@ -722,10 +704,10 @@ async def registrar_sueno(
 @function_tool
 @_log_tool
 async def reporte_progreso(telegram_id: int) -> str:
-    """Reporte semanal completo: sesiones, volumen, PRs y sueno de los ultimos 7 dias.
+    """Reporte semanal: sesiones, volumen, PRs y sueno (7 dias).
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         return json.dumps(await reporte_semanal(telegram_id), default=str)
@@ -750,10 +732,10 @@ async def registrar_peso(
     """Registra peso corporal actual.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        peso_kg: peso actual en kilogramos
-        grasa_pct: porcentaje de grasa corporal (0 si no se sabe)
-        cintura_cm: medida de cintura en cm (0 si no se sabe)
+        telegram_id: Telegram ID
+        peso_kg: peso en kg
+        grasa_pct: % grasa corporal (0=desconocido)
+        cintura_cm: cintura en cm (0=desconocido)
     """
     try:
         metrica = await guardar_metrica_corporal(
@@ -779,11 +761,11 @@ async def registrar_peso(
 @function_tool
 @_log_tool
 async def consultar_historial_peso(telegram_id: int, limit: int = 10) -> str:
-    """Devuelve los ultimos registros de peso.
+    """Ultimos registros de peso.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        limit: cantidad maxima de registros (default 10)
+        telegram_id: Telegram ID
+        limit: max registros (default 10)
     """
     try:
         registros = await repo_historial_peso(telegram_id, limit)
@@ -820,15 +802,15 @@ async def firmar_compromiso(
     tipo_compromiso: str = "general",
     stake_simbolico: str = "",
 ) -> str:
-    """Firma un compromiso del usuario con su objetivo. El bot lo citara cuando falle.
+    """Firma compromiso con objetivo. El bot lo citara si falla.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        objetivo_texto: objetivo concreto en primera persona (ej: 'Bajar 5kg en 8 semanas')
-        deadline: fecha limite YYYY-MM-DD
-        frecuencia_semanal: dias por semana que se compromete (1-7)
-        tipo_compromiso: entreno, comida, peso o general
-        stake_simbolico: que pierde si falla (ej: 'donar 50k a una causa que no me gusta')
+        telegram_id: Telegram ID
+        objetivo_texto: objetivo en 1a persona
+        deadline: YYYY-MM-DD limite
+        frecuencia_semanal: dias/semana (1-7)
+        tipo_compromiso: entreno|comida|peso|general
+        stake_simbolico: que pierde si falla
     """
     try:
         tipo_compromiso = tipo_compromiso.lower().strip()
@@ -869,10 +851,10 @@ async def firmar_compromiso(
 @function_tool
 @_log_tool
 async def consultar_compromiso(telegram_id: int) -> str:
-    """Devuelve el compromiso activo (si existe) e incrementa citado_veces.
+    """Devuelve compromiso activo e incrementa citado_veces.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         c = await obtener_compromiso_activo(telegram_id)
@@ -906,11 +888,11 @@ async def consultar_compromiso(telegram_id: int) -> str:
 @function_tool
 @_log_tool
 async def cambiar_tono(telegram_id: int, tono: str) -> str:
-    """Cambia el tono del coach. Para militar el usuario debe haber aceptado el disclaimer.
+    """Cambia tono del coach. Militar requiere disclaimer aceptado.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        tono: amigable, firme o militar
+        telegram_id: Telegram ID
+        tono: amigable|firme|militar
     """
     try:
         tono = tono.lower().strip()
@@ -934,13 +916,10 @@ async def cambiar_tono(telegram_id: int, tono: str) -> str:
 @function_tool
 @_log_tool
 async def confirmar_modo_militar(telegram_id: int) -> str:
-    """Marca al usuario como que acepto el disclaimer de modo militar.
-
-    SOLO usar despues de que el usuario lea el disclaimer y diga 'acepto', 'si',
-    'confirmo' o similar. No usar a la ligera.
+    """Marca aceptacion disclaimer militar. Solo tras confirmacion explicita.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         await aceptar_modo_militar(telegram_id)
@@ -956,12 +935,12 @@ async def confirmar_modo_militar(telegram_id: int) -> str:
 async def configurar_quiet_hours(
     telegram_id: int, hora_inicio: str, hora_fin: str
 ) -> str:
-    """Configura las horas de silencio del usuario (no te molesta entre esas horas).
+    """Configura horas de silencio (sin notificaciones).
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        hora_inicio: HH:MM 24h (ej: 22:00)
-        hora_fin: HH:MM 24h (ej: 07:00)
+        telegram_id: Telegram ID
+        hora_inicio: HH:MM 24h
+        hora_fin: HH:MM 24h
     """
     try:
         await set_quiet_hours(telegram_id, hora_inicio, hora_fin)
@@ -977,11 +956,11 @@ async def configurar_quiet_hours(
 @function_tool
 @_log_tool
 async def pausar(telegram_id: int, dias: int = 1) -> str:
-    """Pausa los recordatorios por N dias. El bot no envia nada hasta que pase.
+    """Pausa recordatorios por N dias.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        dias: cantidad de dias (1-30)
+        telegram_id: Telegram ID
+        dias: dias de pausa (1-30)
     """
     try:
         dias = max(1, min(30, dias))
@@ -996,10 +975,10 @@ async def pausar(telegram_id: int, dias: int = 1) -> str:
 @function_tool
 @_log_tool
 async def usar_dia_libre(telegram_id: int) -> str:
-    """Usa 1 freeze para no romper el streak hoy. Devuelve si tenia disponibles.
+    """Usa 1 freeze para no romper streak hoy.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         ok = await usar_freeze_streak(telegram_id, "entreno")
@@ -1015,11 +994,11 @@ async def usar_dia_libre(telegram_id: int) -> str:
 @function_tool
 @_log_tool
 async def consultar_streak(telegram_id: int, tipo: str = "entreno") -> str:
-    """Consulta el streak actual del usuario.
+    """Consulta streak actual.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        tipo: entreno, comida, sueno, peso o todos
+        telegram_id: Telegram ID
+        tipo: entreno|comida|sueno|peso|todos
     """
     try:
         s = await obtener_o_crear_streak(telegram_id, tipo)
@@ -1045,10 +1024,10 @@ async def consultar_streak(telegram_id: int, tipo: str = "entreno") -> str:
 @function_tool
 @_log_tool
 async def proponer_ejercicio_aleatorio(telegram_id: int) -> str:
-    """Sortea un foco de ejercicio para hoy. Solo usar si el usuario dice 'no se que entrenar'.
+    """Sortea foco de ejercicio para hoy.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     opciones = ["push", "pull", "piernas", "core + cardio", "movilidad activa", "descanso activo"]
     eleccion = random.choice(opciones)
@@ -1059,10 +1038,10 @@ async def proponer_ejercicio_aleatorio(telegram_id: int) -> str:
 @function_tool
 @_log_tool
 async def dar_premio_motivacional(telegram_id: int) -> str:
-    """Otorga un sticker/mensaje motivacional aleatorio. Variable reward.
+    """Otorga mensaje motivacional aleatorio.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     mensajes = [
         "Crack, recuerda por que arrancaste.",
@@ -1085,12 +1064,10 @@ def _detectar_logro_streak(dias: int) -> str | None:
 @function_tool
 @_log_tool
 async def verificar_logros(telegram_id: int) -> str:
-    """Verifica si el usuario alcanzo un hito (streak 7/30/100/365). Devuelve string del logro o vacio.
-
-    Llamar despues de registrar_entreno.
+    """Verifica hito streak (7/30/100/365). Llamar post registrar_entreno.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         s = await obtener_o_crear_streak(telegram_id, "entreno")
@@ -1109,10 +1086,10 @@ async def verificar_logros(telegram_id: int) -> str:
 @function_tool
 @_log_tool
 async def consultar_resumen_visual(telegram_id: int) -> str:
-    """Devuelve info para que el handler genere un chart visual del progreso.
+    """Info para generar chart visual de progreso.
 
     Args:
-        telegram_id: ID de Telegram del usuario
+        telegram_id: Telegram ID
     """
     try:
         rep = await reporte_semanal(telegram_id)
@@ -1150,20 +1127,17 @@ async def registrar_truco_aterrizado(
     es_primer_aterrizaje: bool = True,
     fecha: str = "",
 ) -> str:
-    """Registra un truco aterrizado en deportes urbanos (skate/BMX/rollers/parkour).
-
-    Si es_primer_aterrizaje=True crea PersonalRecord(tipo_pr=TRUCO).
-    Si es repeticion (False), solo loggea evento.
+    """Registra truco aterrizado (urbano). Primer aterrizaje crea PR.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        deporte: skate, bmx, rollers, parkour, scooter
-        nombre_truco: nombre del truco (ej "kickflip", "tailwhip", "soul grind", "wallrun")
-        spot: lugar (ej "Salitre BMX", "Aranjuez skatepark", "Suesca")
-        video_url: URL del clip si filmo
-        intentos: numero de intentos hasta lograrlo
-        es_primer_aterrizaje: True si es la primera vez que aterriza este truco
-        fecha: YYYY-MM-DD (si vacio usa hoy)
+        telegram_id: Telegram ID
+        deporte: skate|bmx|rollers|parkour|scooter
+        nombre_truco: nombre del truco (max 80 chars)
+        spot: lugar
+        video_url: URL clip
+        intentos: intentos hasta lograrlo
+        es_primer_aterrizaje: True=primer aterrizaje (crea PR)
+        fecha: YYYY-MM-DD (vacio=hoy)
     """
     try:
         deporte = deporte.lower().strip()
@@ -1217,23 +1191,19 @@ async def registrar_sesion_skill(
     notas: str = "",
     fecha: str = "",
 ) -> str:
-    """Registra sesion completa de deporte urbano (skate/BMX/rollers/parkour/scooter).
-
-    NO uses esta tool para gym (usa registrar_entreno). Esta es solo skill sports.
-    Si num_caidas >= 3 o sensacion_1_5 <= 2, el coach debe sugerir descanso al dia
-    siguiente y screening pasivo de concusion (REGLA #13).
+    """Registra sesion skill sport (no gym). Caidas>=3 o sensacion<=2 activan alerta.
 
     Args:
-        telegram_id: ID Telegram
-        deporte: skate, bmx, rollers, parkour, scooter
-        duracion_min: minutos totales de sesion (5-480)
-        spot: nombre del lugar
-        foco_sesion: ej "kickflip", "transition", "free flow", "spot nuevo"
-        trucos_intentados: cuantos trucos intento
-        trucos_aterrizados: cuantos aterrizo
-        num_caidas: numero de caidas notables (>2 = bandera)
-        sensacion_1_5: 1=pesimo, 5=excelente
-        co_riders: usernames de companeros separados por coma
+        telegram_id: Telegram ID
+        deporte: skate|bmx|rollers|parkour|scooter
+        duracion_min: minutos (5-480)
+        spot: lugar
+        foco_sesion: foco de la sesion
+        trucos_intentados: cantidad intentados
+        trucos_aterrizados: cantidad aterrizados
+        num_caidas: caidas notables (>2=bandera)
+        sensacion_1_5: 1=pesimo 5=excelente
+        co_riders: companeros separados por coma
         notas: texto libre
         fecha: YYYY-MM-DD
     """
@@ -1287,19 +1257,16 @@ async def registrar_via_escalada(
     lesion_dedo_si_no: bool = False,
     fecha: str = "",
 ) -> str:
-    """Registra una via o boulder escalada (climbing).
-
-    NO recomendar hangboard a principiantes (<12-18 meses). Si lesion_dedo_si_no
-    el coach debe sugerir off de crimping/hangboard (Schweizer 2012 poleas A2/A4).
+    """Registra via/boulder escalada. Lesion dedo activa alerta crimping.
 
     Args:
-        telegram_id: ID Telegram
-        nombre_via: nombre de la via o boulder
-        grado: YDS (5.10a), Fontainebleau (V4), francesa (6c)
-        spot: Suesca, San Gil/La Mojarra, Macheta, El Penol, Tatacoa, Toluviejo
-        estilo: on_sight | flash | redpoint | repunto | proyecto | boulder
-        intentos: numero de intentos hasta enviarla
-        lesion_dedo_si_no: True si tuvo molestia/dolor en dedos
+        telegram_id: Telegram ID
+        nombre_via: nombre via o boulder
+        grado: YDS (5.10a)|Fontainebleau (V4)|francesa (6c)
+        spot: lugar
+        estilo: on_sight|flash|redpoint|repunto|proyecto|boulder
+        intentos: intentos hasta enviarla
+        lesion_dedo_si_no: True si dolor en dedos
         fecha: YYYY-MM-DD
     """
     ESTILOS = {"on_sight", "flash", "redpoint", "repunto", "proyecto", "boulder"}
@@ -1342,12 +1309,12 @@ async def consultar_progreso_skill(
     deporte: str,
     ventana_dias: int = 30,
 ) -> str:
-    """Resumen de progreso skill en deportes urbanos (no kg, sino sesiones + trucos).
+    """Resumen progreso skill: sesiones + trucos (no kg).
 
     Args:
-        telegram_id: ID Telegram
-        deporte: skate, bmx, rollers, parkour, scooter
-        ventana_dias: ventana de analisis (7-365, default 30)
+        telegram_id: Telegram ID
+        deporte: skate|bmx|rollers|parkour|scooter
+        ventana_dias: ventana analisis (7-365, default 30)
     """
     try:
         deporte = deporte.lower().strip()
@@ -1395,19 +1362,15 @@ async def registrar_sparring(
     notas: str = "",
     fecha: str = "",
 ) -> str:
-    """Registra sesion de sparring (combate). Subtipo=SPARRING.
-
-    Si golpe_cabeza_fuerte=True el coach DEBE activar screening de concusion
-    (REGLA #13). Si rounds*duracion > 90min el coach debe alertar sobre carga
-    excesiva.
+    """Registra sparring. Golpe cabeza activa screening concusion.
 
     Args:
-        telegram_id: ID Telegram
-        estilo: boxeo, bjj, mma, muay_thai, kickboxing, wrestling, judo, karate, taekwondo, capoeira, krav_maga
-        rounds: numero de rounds o rolls
-        duracion_round_min: minutos por round (boxeo 3, BJJ rolls 5-7)
-        intensidad_1_10: 1-3 light/flow, 4-6 medium, 7-10 hard
-        golpe_cabeza_fuerte: True activa screening concusion (REGLA #13)
+        telegram_id: Telegram ID
+        estilo: boxeo|bjj|mma|muay_thai|kickboxing|wrestling|judo|karate|taekwondo|capoeira|krav_maga
+        rounds: rounds o rolls
+        duracion_round_min: min/round
+        intensidad_1_10: 1-3 light, 4-6 medium, 7-10 hard
+        golpe_cabeza_fuerte: True=screening concusion
         notas: texto libre
         fecha: YYYY-MM-DD
     """
@@ -1466,21 +1429,18 @@ async def registrar_pelea(
     spot: str = "",
     fecha: str = "",
 ) -> str:
-    """Registra pelea oficial (amateur o profesional).
-
-    Calcula rebound peso pesaje vs dia pelea (Matthews 2019). Si rebound > 10%
-    activa educacion sobre cut responsable.
+    """Registra pelea oficial. Calcula rebound pesaje vs dia pelea.
 
     Args:
-        telegram_id: ID Telegram
-        estilo: boxeo, mma, muay_thai, bjj, kickboxing, wrestling
-        resultado: ganada, perdida, draw, no_contest, dq
-        metodo: ko, tko, decision_unanime, decision_dividida, decision_mayoritaria, sumision, dq, draw
-        peso_pesaje_kg: peso oficial del pesaje
-        peso_dia_pelea_kg: peso real dia de pelea (mide rebound)
-        opponent_record: ej "12-3-1"
-        round_final: round en que termino (0 si fue decision)
-        spot: lugar / nombre del evento
+        telegram_id: Telegram ID
+        estilo: boxeo|mma|muay_thai|bjj|kickboxing|wrestling
+        resultado: ganada|perdida|draw|no_contest|dq
+        metodo: ko|tko|decision_unanime|decision_dividida|decision_mayoritaria|sumision|dq|draw
+        peso_pesaje_kg: peso oficial pesaje (40-200)
+        peso_dia_pelea_kg: peso dia pelea (mide rebound)
+        opponent_record: record oponente
+        round_final: round final (0=decision)
+        spot: lugar/evento
         fecha: YYYY-MM-DD
     """
     RESULTADOS = {"ganada", "perdida", "draw", "no_contest", "dq"}
@@ -1535,18 +1495,15 @@ async def calcular_peso_objetivo_responsable(
     estilo_combate: str,
     nivel: str = "amateur",
 ) -> str:
-    """Calcula plan de cut de peso responsable para combate (Reale 2017, IOC 2019).
-
-    Devuelve plan dividido en cut cronico (peso real) + cut agudo (manipulacion).
-    Activa red flag si: cut total > 8% en <14 dias O cut agudo > 5%.
+    """Plan cut peso responsable (Reale 2017, IOC 2019). Red flag si >8%/<14d.
 
     Args:
-        telegram_id: ID Telegram
+        telegram_id: Telegram ID
         peso_actual_kg: peso actual (40-200)
-        peso_categoria_kg: limite de la categoria
+        peso_categoria_kg: limite categoria
         dias_hasta_pesaje: dias restantes (1-180)
-        estilo_combate: boxeo, mma, bjj, muay_thai, kickboxing, judo, karate, taekwondo
-        nivel: amateur o profesional
+        estilo_combate: boxeo|mma|bjj|muay_thai|kickboxing|judo|karate|taekwondo
+        nivel: amateur|profesional
     """
     try:
         if not (40 <= peso_actual_kg <= 200):
@@ -1638,19 +1595,17 @@ async def evaluar_concusion_simplificado(
     dolor_cabeza_severo: bool = False,
     sensibilidad_luz_ruido: bool = False,
 ) -> str:
-    """Triage SCAT6-simplificado post-golpe en cabeza (NO sustituye SCAT-6 oficial).
-
-    Solo heuristica para derivacion. McCrory 2023 Amsterdam consensus, GRTP 6 etapas.
+    """Triage SCAT6-simplificado post-golpe cabeza. No sustituye evaluacion medica.
 
     Args:
-        telegram_id: ID Telegram
-        tuvo_perdida_conciencia: True si perdio el conocimiento
-        duracion_perdida_seg: segundos perdidos (0 si no)
-        nausea_vomito: True si presento nausea o vomito
-        mareo_persistente: True si tiene mareo continuo
-        confusion_amnesia: True si no recuerda eventos cercanos al golpe
-        dolor_cabeza_severo: True si dolor de cabeza fuerte
-        sensibilidad_luz_ruido: True si molesta luz/ruido
+        telegram_id: Telegram ID
+        tuvo_perdida_conciencia: perdio conocimiento
+        duracion_perdida_seg: segundos inconsciente (0=no)
+        nausea_vomito: nausea o vomito
+        mareo_persistente: mareo continuo
+        confusion_amnesia: no recuerda eventos del golpe
+        dolor_cabeza_severo: dolor cabeza fuerte
+        sensibilidad_luz_ruido: molesta luz/ruido
     """
     try:
         sintomas = sum([
@@ -1768,22 +1723,14 @@ async def programar_recordatorio(
     dias_semana: str = "",
     fecha_unica: str = "",
 ) -> str:
-    """Programa un recordatorio personalizado para el usuario.
-
-    Casos de uso: "despiertame a las 5:30am", "recuerdame tomar creatina a las
-    3pm de lunes a viernes", "recordatorio manana 7am de la cita". El bot
-    enviara el mensaje a la hora indicada en la zona horaria del usuario.
+    """Programa recordatorio personalizado.
 
     Args:
-        telegram_id: ID de Telegram del usuario.
-        mensaje: texto del recordatorio (ej: "Hora de entrenar!", "Toma creatina").
-          Maximo 500 caracteres.
-        hora: hora en formato HH:MM 24h en la zona horaria del usuario
-          (ej "05:30", "15:00", "22:45").
-        dias_semana: dias separados por coma (0=lun..6=dom). Tambien acepta
-          "lun,mar,vie", "diario", "finde", "laborales". Vacio = one-shot.
-        fecha_unica: fecha YYYY-MM-DD para recordatorio one-shot (ignorada si
-          dias_semana esta definido). Vacio = manana si tampoco hay dias_semana.
+        telegram_id: Telegram ID
+        mensaje: texto del recordatorio (max 500 chars)
+        hora: HH:MM 24h (tz del usuario)
+        dias_semana: 0=lun..6=dom csv, o diario|finde|laborales (vacio=one-shot)
+        fecha_unica: YYYY-MM-DD one-shot (ignorada si dias_semana, vacio=manana)
     """
     try:
         if not mensaje or not mensaje.strip():
@@ -1848,10 +1795,10 @@ async def programar_recordatorio(
 @function_tool
 @_log_tool
 async def listar_recordatorios(telegram_id: int) -> str:
-    """Lista los recordatorios activos del usuario.
+    """Lista recordatorios activos.
 
     Args:
-        telegram_id: ID de Telegram del usuario.
+        telegram_id: Telegram ID
     """
     try:
         recs = await repo_listar_recordatorios(telegram_id, solo_activos=True)
@@ -1875,11 +1822,11 @@ async def listar_recordatorios(telegram_id: int) -> str:
 @function_tool
 @_log_tool
 async def cancelar_recordatorio(telegram_id: int, recordatorio_id: int) -> str:
-    """Cancela (desactiva) un recordatorio del usuario por id.
+    """Cancela recordatorio por id.
 
     Args:
-        telegram_id: ID de Telegram del usuario (validacion de ownership).
-        recordatorio_id: id devuelto por listar_recordatorios.
+        telegram_id: Telegram ID (valida ownership)
+        recordatorio_id: id de listar_recordatorios
     """
     try:
         ok = await repo_desactivar_recordatorio(recordatorio_id, telegram_id)
@@ -1913,21 +1860,11 @@ async def cerrar_sesion_entrenamiento(
     telegram_id: int,
     sesion_id: int = 0,
 ) -> str:
-    """Cierra una sesion de entrenamiento "en curso" del usuario.
-
-    Llamala cuando el usuario diga "termine", "acabe", "cerrando
-    entrenamiento", "ya descanso", o cuando un periodo de tiempo razonable
-    haya pasado y quieras marcar la sesion como definitiva.
-
-    Mientras una sesion esta abierta (`cerrada=False`), mensajes posteriores
-    del mismo dia + deporte hacen UPDATE en vez de crear nueva fila. Esto
-    evita los duplicados como cuando el usuario describe el entreno en
-    3-4 mensajes seguidos.
+    """Cierra sesion en curso. Evita duplicados en mensajes consecutivos.
 
     Args:
-        telegram_id: ID de Telegram del usuario (valida ownership).
-        sesion_id: id especifico a cerrar. 0 (default) = la ultima sesion
-            abierta del usuario hoy.
+        telegram_id: Telegram ID (valida ownership)
+        sesion_id: id a cerrar (0=ultima abierta hoy)
     """
     try:
         sid = sesion_id if sesion_id > 0 else None
@@ -1959,17 +1896,11 @@ async def cerrar_sesion_entrenamiento(
 async def consultar_ultima_sesion_skill(
     telegram_id: int, deporte: str = ""
 ) -> str:
-    """Devuelve la ULTIMA sesion skill (skate/BMX/rollers/climbing/parkour)
-    del usuario HOY. NO devuelve agregados; devuelve la fila concreta con
-    todos sus contadores actuales.
-
-    Usar ANTES de llamar `editar_sesion_reciente` cuando el usuario corrige
-    algo, para saber el estado actual y comparar.
+    """Ultima sesion skill de hoy. Usar antes de editar_sesion_reciente.
 
     Args:
-        telegram_id: ID de Telegram del usuario.
-        deporte: slug del deporte (skate, bmx, rollers, etc.). Vacio
-            ("") -> cualquier deporte (la mas reciente).
+        telegram_id: Telegram ID
+        deporte: slug deporte (vacio=cualquiera)
     """
     try:
         deporte_f = deporte.strip().lower() or None
@@ -2013,41 +1944,21 @@ async def editar_sesion_reciente(
     foco_sesion: str = "",
     notas: str = "",
 ) -> str:
-    """Corrige campos de una sesion del usuario REEMPLAZANDO valores (SET).
+    """Corrige campos sesion con SET (reemplaza, no suma). Solo hoy.
 
-    Usar cuando el usuario corrige datos ya registrados:
-    - "no, fueron 10 ollies + 2 backsides" -> trucos_intentados=12
-    - "los ollies me salieron todos" -> trucos_aterrizados=10
-    - "me fue bien" -> sensacion_1_5=4
-    - "0 caidas" -> num_caidas=0
-    - "fueron 25 min, no 30" -> duracion_min=25
-
-    DIFERENCIA con `registrar_sesion_skill`:
-    - `registrar_sesion_skill` SUMA contadores (acumula entre llamadas).
-    - `editar_sesion_reciente` REEMPLAZA por el valor exacto que envias.
-
-    Convencion de "no tocar":
-    - Parametros enteros: -1 = NO TOCAR (deja el valor actual).
-    - Strings: "" = NO TOCAR.
-
-    Identificacion del registro a editar:
-    - Si `sesion_id > 0`, edita esa sesion exacta (valida ownership).
-    - Si `sesion_id = 0`, busca la ULTIMA sesion skill del dia
-      (filtra por `deporte` si se da). Funciona incluso si esta `cerrada`.
-
-    Restriccion: solo permite editar sesiones de HOY (no historico).
+    -1=no tocar (enteros), ""=no tocar (strings).
 
     Args:
-        telegram_id: ID de Telegram del usuario (valida ownership).
-        sesion_id: id especifico (0 = ultima del dia).
-        deporte: slug del deporte para filtrar la ultima sesion.
-        duracion_min: minutos totales. -1 = no tocar.
-        trucos_intentados: total absoluto. -1 = no tocar.
-        trucos_aterrizados: total absoluto. -1 = no tocar.
-        num_caidas: total absoluto. -1 = no tocar.
-        sensacion_1_5: 1=pesima, 5=excelente. -1 = no tocar.
-        foco_sesion: descripcion corta del foco. "" = no tocar.
-        notas: notas detalladas (reemplaza completas). "" = no tocar.
+        telegram_id: Telegram ID (valida ownership)
+        sesion_id: id especifico (0=ultima del dia)
+        deporte: slug deporte para filtrar
+        duracion_min: minutos (-1=no tocar)
+        trucos_intentados: total absoluto (-1=no tocar)
+        trucos_aterrizados: total absoluto (-1=no tocar)
+        num_caidas: total absoluto (-1=no tocar)
+        sensacion_1_5: 1-5 (-1=no tocar)
+        foco_sesion: foco (""=no tocar)
+        notas: notas completas (""=no tocar)
     """
     try:
         campos: dict = {}
@@ -2109,22 +2020,12 @@ async def editar_sesion_reciente(
 async def eliminar_comida_reciente(
     telegram_id: int, comida_id: int = 0, tipo: str = ""
 ) -> str:
-    """Borra UNA comida ya registrada del usuario (de HOY solamente).
-
-    Usar cuando el usuario dice "no, ese desayuno no era", "borra el almuerzo
-    que registraste", "elimina ese snack". Restringido a comidas del dia
-    actual y con ownership validado.
-
-    Identificacion:
-    - `comida_id > 0`: borra esa fila exacta.
-    - `comida_id = 0` y `tipo` se da: borra la mas reciente de ese tipo
-      (desayuno/almuerzo/cena/snack/post_entreno).
-    - Sin nada: error.
+    """Borra una comida de HOY. Requiere comida_id o tipo.
 
     Args:
-        telegram_id: ID de Telegram del usuario.
-        comida_id: id especifico (0 = no usa esta via).
-        tipo: tipo de comida para borrar la mas reciente.
+        telegram_id: Telegram ID
+        comida_id: id especifico (0=no usa)
+        tipo: desayuno|almuerzo|cena|snack|post_entreno (borra mas reciente)
     """
     try:
         cid = comida_id if comida_id > 0 else None

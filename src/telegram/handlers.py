@@ -309,6 +309,14 @@ async def _procesar(
             )
         output = result.final_output
 
+        if result.raw_responses:
+            try:
+                total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
+                total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
+                logger.info("LLM usage uid=%s in=%d out=%d rounds=%d", uid, total_in, total_out, len(result.raw_responses))
+            except Exception:
+                pass
+
         diag = detectar_diagnostico_output(output)
         if diag:
             logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)

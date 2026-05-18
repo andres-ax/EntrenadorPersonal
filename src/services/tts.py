@@ -54,7 +54,7 @@ async def transcribir_audio(
         return ""
     try:
         response = await _get_client().audio.transcriptions.create(
-            model="whisper-1",
+            model=settings.transcription_model,
             file=(filename, file_bytes),
             language=language,
         )

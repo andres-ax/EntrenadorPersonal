@@ -117,7 +117,7 @@ async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
     try:
         b64 = base64.b64encode(foto_bytes).decode("ascii")
         response = await _get_client().chat.completions.create(
-            model="gpt-4o",
+            model=settings.comprobante_model,
             messages=[
                 {"role": "system", "content": PROMPT_COMPROBANTE},
                 {

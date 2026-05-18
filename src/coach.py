@@ -4,6 +4,8 @@ import re
 
 from agents import Agent, GuardrailFunctionOutput, input_guardrail, output_guardrail
 
+from src.config import settings
+
 from src.tools import (
     calcular_peso_objetivo_responsable,
     cambiar_tono,
@@ -792,6 +794,7 @@ async def guardrail_no_diagnostico(ctx, agent, output):
 
 coach = Agent(
     name="EntrenadorAX",
+    model=settings.coach_model,
     instructions=INSTRUCTIONS,
     tools=ALL_TOOLS,
     input_guardrails=[guardrail_anti_spam],
