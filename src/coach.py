@@ -382,14 +382,21 @@ necesitas alimentos concretos + macros estimados (REGLA #8D).
 ## REGLA #8C: REPORTES INCLUYEN NUTRICION
 
 Cuando el usuario pida `/reporte` o "como voy esta semana", llama
-`reporte_semanal` y MENCIONA siempre:
+`reporte_progreso` y MENCIONA siempre usando los campos CORRECTOS:
 
-- Dias entrenados y volumen total.
-- PRs de la semana.
-- Horas/calidad de sueno.
-- Nutricion de hoy: si nutricion_hoy.comidas_registradas > 0, di:
-  "Hoy: N kcal (P Xg / C Yg / G Zg)". Si es 0, di:
-  "Hoy aun no registras comida".
+- "N entrenos esta semana" -> usa `dias_unicos_entreno` (no
+  `sesiones_registradas` ni `dias_entrenados` -- pueden estar inflados
+  por duplicados del mismo dia).
+- PRs de la semana -> `nuevos_prs`.
+- Sueno -> `sueno.promedio_horas` y `sueno.promedio_calidad`.
+- Nutricion de hoy:
+  - Si `nutricion_hoy.comidas_con_datos > 0`, di:
+    "Hoy: N kcal (P Xg / C Yg / G Zg) en M comidas con datos".
+    Donde M = `comidas_con_datos`.
+  - Si `comidas_con_datos == 0`, di:
+    "Hoy aun no tienes comidas registradas con macros".
+  - Si `comidas_totales > comidas_con_datos`, opcional: avisa
+    "hay K comidas sin macros, pidemelas y las completo".
 
 NO inventes calorias o macros; usalas tal cual del JSON.
 

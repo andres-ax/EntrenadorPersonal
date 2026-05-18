@@ -465,6 +465,14 @@ async def buscar_comida_similar(
 async def resumen_nutricional_dia(
     telegram_id: int, fecha: Optional[date] = None
 ) -> dict:
+    """Resumen nutricional del dia filtrando comidas placeholder (kcal=0).
+
+    Devuelve:
+    - totales: solo de comidas con datos (calorias>0 o macros>0)
+    - comidas: lista de TODAS las comidas (con flag implícito de datos via
+      `calorias`); el coach decide cómo mencionarlas. Asi mantenemos
+      compat con quienes mostraban la lista.
+    """
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -473,6 +481,8 @@ async def resumen_nutricional_dia(
                 "total_proteinas": 0,
                 "total_carbs": 0,
                 "total_grasas": 0,
+                "comidas_con_datos": 0,
+                "comidas_totales": 0,
                 "comidas": [],
             }
 
@@ -481,11 +491,14 @@ async def resumen_nutricional_dia(
             select(Comida).where(Comida.usuario_id == uid, Comida.fecha == fecha)
         )
         comidas = list(result.scalars().all())
+        con_datos = [c for c in comidas if _comida_tiene_datos(c)]
         return {
-            "total_calorias": sum(c.calorias or 0 for c in comidas),
-            "total_proteinas": sum(c.proteinas_g or 0 for c in comidas),
-            "total_carbs": sum(c.carbohidratos_g or 0 for c in comidas),
-            "total_grasas": sum(c.grasas_g or 0 for c in comidas),
+            "total_calorias": sum(c.calorias or 0 for c in con_datos),
+            "total_proteinas": sum(c.proteinas_g or 0 for c in con_datos),
+            "total_carbs": sum(c.carbohidratos_g or 0 for c in con_datos),
+            "total_grasas": sum(c.grasas_g or 0 for c in con_datos),
+            "comidas_con_datos": len(con_datos),
+            "comidas_totales": len(comidas),
             "comidas": [
                 {
                     "tipo": c.tipo.value if c.tipo else "otro",
@@ -558,29 +571,55 @@ async def resumen_sueno_semanal(telegram_id: int) -> dict:
 # --- Reportes ---
 
 
+def _comida_tiene_datos(c: "Comida") -> bool:
+    """True si la comida tiene al menos un macro o calorias > 0.
+
+    Comidas con calorias=0 y todos los macros en 0 son "placeholders" que
+    el coach registraba antes de la validacion dura; las excluimos de los
+    reportes para no inflar conteos.
+    """
+    if (c.calorias or 0) > 0:
+        return True
+    macros = (c.proteinas_g or 0) + (c.carbohidratos_g or 0) + (c.grasas_g or 0)
+    return macros > 0
+
+
+_EMPTY_NUTRICION_HOY: dict = {
+    "total_calorias": 0,
+    "total_proteinas": 0,
+    "total_carbs": 0,
+    "total_grasas": 0,
+    "comidas_con_datos": 0,
+    "comidas_totales": 0,
+}
+
+
 async def reporte_semanal(telegram_id: int) -> dict:
     """Reporte semanal: entrenos + PRs + sueno + nutricion de hoy.
 
-    Incluye `nutricion_hoy` con calorias y macros del dia para que el coach
-    pueda dar feedback sin necesitar otra tool call. El campo es 0 si el
-    usuario no registro nada hoy.
+    Devuelve:
+    - dias_unicos_entreno: COUNT(DISTINCT fecha) de sesiones de la semana.
+      Es el campo "humano" para "N entrenos esta semana".
+    - sesiones_registradas: COUNT(*) de filas en SesionEntrenamiento (puede
+      ser mayor que dias_unicos_entreno si hay duplicados o multiples sesiones).
+    - dias_entrenados: alias = dias_unicos_entreno (mantiene compat con miniapp
+      y handlers que ya leen ese campo).
+    - nutricion_hoy: solo cuenta comidas con datos (calorias>0 o macros>0).
+      Tambien expone `comidas_totales` (incluye placeholder) por si el coach
+      quiere mencionar diferencia.
     """
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
             return {
+                "dias_unicos_entreno": 0,
+                "sesiones_registradas": 0,
                 "dias_entrenados": 0,
                 "volumen_total_kg": 0,
                 "total_ejercicios": 0,
                 "nuevos_prs": [],
                 "sueno": {},
-                "nutricion_hoy": {
-                    "total_calorias": 0,
-                    "total_proteinas": 0,
-                    "total_carbs": 0,
-                    "total_grasas": 0,
-                    "comidas_registradas": 0,
-                },
+                "nutricion_hoy": dict(_EMPTY_NUTRICION_HOY),
                 "periodo": "",
             }
 
@@ -619,16 +658,24 @@ async def reporte_semanal(telegram_id: int) -> dict:
             select(Comida).where(Comida.usuario_id == uid, Comida.fecha == hoy)
         )
         comidas_hoy = list(result_comidas_hoy.scalars().all())
+        comidas_con_datos = [c for c in comidas_hoy if _comida_tiene_datos(c)]
         nutricion_hoy = {
-            "total_calorias": sum(c.calorias or 0 for c in comidas_hoy),
-            "total_proteinas": sum(c.proteinas_g or 0 for c in comidas_hoy),
-            "total_carbs": sum(c.carbohidratos_g or 0 for c in comidas_hoy),
-            "total_grasas": sum(c.grasas_g or 0 for c in comidas_hoy),
-            "comidas_registradas": len(comidas_hoy),
+            "total_calorias": sum(c.calorias or 0 for c in comidas_con_datos),
+            "total_proteinas": sum(c.proteinas_g or 0 for c in comidas_con_datos),
+            "total_carbs": sum(c.carbohidratos_g or 0 for c in comidas_con_datos),
+            "total_grasas": sum(c.grasas_g or 0 for c in comidas_con_datos),
+            "comidas_con_datos": len(comidas_con_datos),
+            "comidas_totales": len(comidas_hoy),
         }
 
+        dias_unicos = len({s.fecha for s in sesiones if s.fecha is not None})
+
         return {
-            "dias_entrenados": len(sesiones),
+            "dias_unicos_entreno": dias_unicos,
+            "sesiones_registradas": len(sesiones),
+            # Alias para compatibilidad con miniapp / handlers viejos que leen
+            # `dias_entrenados`. Apuntamos al nuevo conteo correcto.
+            "dias_entrenados": dias_unicos,
             "volumen_total_kg": volumen,
             "total_ejercicios": total_ejercicios,
             "nuevos_prs": [
