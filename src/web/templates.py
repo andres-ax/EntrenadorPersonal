@@ -78,8 +78,11 @@ templates.env.globals["ahora_year"] = datetime.now().year
 
 
 def render(request: Request, name: str, ctx: dict | None = None):
-    """Atajo: renderiza `name` con el `request` incluido automaticamente."""
-    data = {"request": request}
-    if ctx:
-        data.update(ctx)
-    return templates.TemplateResponse(name, data)
+    """Atajo: renderiza `name` con el `request` incluido automaticamente.
+
+    Importante: la API nueva de Starlette (>=0.30) requiere `request` como
+    primer argumento posicional. Si lo invocas como (name, context) la
+    libreria interpreta `name=context` y termina pasando un dict como key
+    del cache Jinja2 (TypeError: unhashable type: 'dict').
+    """
+    return templates.TemplateResponse(request, name, ctx or {})

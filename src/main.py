@@ -306,14 +306,23 @@ from src.web.admin_ui import router as admin_ui_router  # noqa: E402
 from src.web.app_ui import router as app_ui_router  # noqa: E402
 from src.web.landing import router as landing_router  # noqa: E402
 
+# ORDEN IMPORTANTE: FastAPI resuelve la primera ruta coincidente. Las rutas
+# HTML del admin viven en /admin/* (mismo prefijo que el JSON). Para que el
+# navegador reciba HTML en GET /admin/usuarios y no el JSON 401, el
+# admin_ui_router debe ir ANTES que admin_router. Los formularios HTML usan
+# sufijos _form (ej. /admin/usuarios/{uid}/bloquear_form) para no chocar
+# con las rutas POST JSON.
+app.include_router(admin_ui_router)
+app.include_router(app_ui_router)
+app.include_router(realtime_router)
+
 app.include_router(auth_router)
 app.include_router(me_router)
 app.include_router(admin_router)
 app.include_router(public_router)
 app.include_router(integraciones_router)
-app.include_router(admin_ui_router)
-app.include_router(app_ui_router)
-app.include_router(realtime_router)
+
+# Landing al final: tiene rutas catch-all (`/`) que podrian capturar otras.
 app.include_router(landing_router)
 
 
