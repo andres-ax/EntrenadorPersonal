@@ -22,7 +22,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import Date, cast, func, select
 
 from src.api import admin as admin_api
 from src.api.admin_auth import (
@@ -536,13 +536,14 @@ async def costos_dashboard(
             for r in top_rows
         ]
 
+        fecha_col = cast(LlmUsage.creado_en, Date)
         dia_q = await session.execute(
             select(
-                func.date(LlmUsage.creado_en).label("dia"),
+                fecha_col.label("dia"),
                 func.sum(LlmUsage.costo_estimado_usd),
             ).where(*base_filter)
-            .group_by(func.date(LlmUsage.creado_en))
-            .order_by(func.date(LlmUsage.creado_en))
+            .group_by(fecha_col)
+            .order_by(fecha_col)
         )
         serie_diaria = [{"fecha": str(r[0]), "costo": r[1] or 0} for r in dia_q]
 
