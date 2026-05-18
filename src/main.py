@@ -294,3 +294,32 @@ async def admin_stats(x_admin_token: str = Header(None)) -> dict:
         "eventos_30d": {tipo: cnt for tipo, cnt in eventos_30d},
         "crisis_30d_por_nivel": {nivel: cnt for nivel, cnt in crisis_30d},
     }
+
+
+# =============================================================================
+# Servir la landing estatica (Astro build) desde "/"
+# =============================================================================
+# El multi-stage Docker build (stage `landing-builder`) genera el directorio
+# `frontend/landing/dist/` con los assets estaticos de la landing publica.
+# Lo montamos al final para que las rutas /api/*, /webhook, /health, /admin/*
+# se resuelvan ANTES y la landing solo capture lo no atrapado por los routers.
+import os  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+_landing_dist = Path(__file__).resolve().parent.parent / "frontend" / "landing" / "dist"
+if _landing_dist.exists():
+    app.mount(
+        "/",
+        StaticFiles(directory=str(_landing_dist), html=True),
+        name="landing",
+    )
+    logger.info("Landing montada desde %s", _landing_dist)
+else:
+    logger.warning(
+        "Landing dist no encontrado en %s; '/' devolvera 404. "
+        "Verifica que el stage `landing-builder` del Dockerfile haya corrido.",
+        _landing_dist,
+    )
+    del os  # silencia ruff F401 si la rama no aplica
