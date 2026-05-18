@@ -30,12 +30,21 @@ graph TD
 ## Estructura principal
 
 - `run_bot.py` - arranca el bot en modo polling (desarrollo local).
-- `src/main.py` - arranca la app FastAPI para webhook de Telegram.
+- `src/main.py` - arranca la app FastAPI: webhook + admin panel + mini app + landing + WS realtime.
 - `src/config.py` - carga variables desde `.env`.
 - `src/coach.py` - define al agente `EntrenadorAX` y sus reglas.
 - `src/tools.py` - define las herramientas (`tools`) que el agente puede usar.
-- `src/db/` - contiene la conexión, modelos y repositorio de datos.
-- `src/telegram/` - define handlers, middleware de rate limit y scheduler de recordatorios.
+- `src/db/` - conexion, modelos y repositorio de datos (PostgreSQL).
+- `src/telegram/` - handlers, middleware de rate limit y scheduler de recordatorios.
+- `src/api/` - routers JSON (`/api/me/*`, `/api/admin/*`, `/api/public/*`).
+- `src/web/` - rutas HTML server-side (admin panel `/admin/*`, mini app `/app/*`, landing `/`).
+- `src/realtime/` - WebSocket relay para llamadas de voz (`/ws/realtime`).
+- `src/data/deportes.py` - catalogo de 71 deportes soportados.
+- `frontend/templates/` - templates Jinja2 (admin, app, landing).
+- `frontend/static/` - assets (imagenes, JS para llamada de voz).
+
+Todo corre en UN SOLO proceso FastAPI (consolidacion total). No hay frontends
+Next.js / Vite / Astro separados; todo es Python + Jinja2 + HTMX + Tailwind via CDN.
 
 ## Dependencias principales
 
