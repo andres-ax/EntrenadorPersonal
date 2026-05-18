@@ -16,6 +16,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, Defaults
 
+from src.api.admin_auth import seed_admin_si_falta
 from src.cache import close_redis, ping as ping_redis
 from src.config import settings
 from src.db.connection import close_db, engine, init_db, ping as ping_db
@@ -84,6 +85,10 @@ async def lifespan(app: FastAPI):
         logger.info("Cargados %s deportes en cache", n)
     except Exception:
         logger.exception("No pude precargar catalog de deportes")
+    try:
+        await seed_admin_si_falta()
+    except Exception:
+        logger.exception("Error en seed_admin_si_falta (no critico)")
     logger.info("Base de datos inicializada")
 
     defaults = Defaults(
@@ -106,6 +111,35 @@ async def lifespan(app: FastAPI):
     await telegram_app.start()
     pubsub_task = start_pubsub_listener(telegram_app)
     logger.info("Telegram app inicializada + pubsub listener activo")
+
+    # Auto-setWebhook: en cada startup registramos la URL con Telegram para
+    # que los updates lleguen a /webhook. Idempotente y resiste el bug clasico
+    # de "el webhook se perdio". Solo corre si WEBHOOK_BASE_URL esta seteada.
+    if settings.webhook_base_url:
+        webhook_url = (
+            f"{str(settings.webhook_base_url).rstrip('/')}/webhook"
+        )
+        try:
+            await telegram_app.bot.set_webhook(
+                url=webhook_url,
+                secret_token=WEBHOOK_SECRET,
+                allowed_updates=[
+                    "message",
+                    "callback_query",
+                    "poll_answer",
+                    "message_reaction",
+                    "pre_checkout_query",
+                    "inline_query",
+                ],
+                drop_pending_updates=False,
+            )
+            logger.info("Webhook seteado en Telegram: %s", webhook_url)
+        except Exception:
+            logger.exception("No pude setear el webhook en Telegram")
+    else:
+        logger.warning(
+            "WEBHOOK_BASE_URL no seteada; el bot no recibira updates por webhook"
+        )
 
     yield
 

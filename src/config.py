@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     canal_logros_id: int | None = None
     canal_pro_id: int | None = None
 
+    # Auto-seed del primer admin del panel en el startup. Si la tabla `admins`
+    # esta vacia y ambas variables estan seteadas, se crea un admin `super`.
+    # Util en Railway para que el primer deploy quede con un admin listo.
+    admin_seed_email: str | None = None
+    admin_seed_password: SecretStr | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

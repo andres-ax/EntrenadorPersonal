@@ -129,6 +129,42 @@ class LoginResponse(BaseModel):
     expira_en: int
 
 
+async def seed_admin_si_falta() -> None:
+    """Crea el primer admin si la tabla esta vacia y hay env vars de seed.
+
+    Lee `settings.admin_seed_email` y `settings.admin_seed_password`. Si ambos
+    estan seteados y todavia no existe ningun admin con ese email, lo crea
+    con rol `super`. Idempotente: tras el primer deploy ya no hace nada.
+
+    Pensado para que el primer deploy en Railway quede con un admin listo
+    sin requerir ejecutar `scripts/crear_admin.py` manualmente.
+    """
+    if not settings.admin_seed_email or not settings.admin_seed_password:
+        logger.info("Skip seed admin: ADMIN_SEED_EMAIL/PASSWORD no estan seteados")
+        return
+    email = settings.admin_seed_email.strip().lower()
+    password = settings.admin_seed_password.get_secret_value()
+    if len(password) < 8:
+        logger.warning("Skip seed admin: ADMIN_SEED_PASSWORD muy corto (<8 chars)")
+        return
+    async with async_session_factory() as session:
+        existente = await session.execute(
+            select(Admin).where(Admin.email == email)
+        )
+        if existente.scalar_one_or_none() is not None:
+            logger.info("Seed admin: ya existe admin con email %s, no creo", email)
+            return
+        nuevo = Admin(
+            email=email,
+            password_hash=hash_password(password),
+            rol=RolAdmin.SUPER,
+            activo=True,
+        )
+        session.add(nuevo)
+        await session.commit()
+        logger.info("Seed admin creado: email=%s rol=super", email)
+
+
 async def autenticar_admin(req: LoginRequest) -> LoginResponse:
     async with async_session_factory() as session:
         result = await session.execute(
