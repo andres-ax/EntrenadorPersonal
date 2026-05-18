@@ -24,7 +24,7 @@
         'box-shadow:0 4px 20px rgba(31,90,216,0.4);',
         'display:flex;align-items:center;justify-content:center;',
       '">',
-        '<img src="/static/img/coach-avatar.png" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" />',
+        '<img src="/static/img/coach-avatar.jpg" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" />',
       '</button>',
 
       // Panel de chat
@@ -40,7 +40,7 @@
           'background:linear-gradient(135deg,#1c3d8a,#1f5ad8);',
           'color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;',
         '">',
-          '<img src="/static/img/coach-avatar.png" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;" />',
+          '<img src="/static/img/coach-avatar.jpg" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;" />',
           '<div>',
             '<div style="font-weight:700;font-size:14px;">EntrenadorAX</div>',
             '<div style="font-size:11px;opacity:0.8;">Coach IA - Prueba gratis</div>',
