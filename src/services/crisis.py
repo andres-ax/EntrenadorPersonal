@@ -26,8 +26,11 @@ Citas principales:
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 _NIVEL_1 = re.compile(
@@ -365,6 +368,21 @@ def detectar(
         pais: codigo ISO-2 para lineas locales.
         peso_actual_kg: peso del usuario para evaluar cut numerico (opcional).
     """
+    resultado = _detectar_inner(texto, pais, peso_actual_kg)
+    if resultado is not None:
+        logger.warning(
+            "Crisis detectada nivel=%s subcat=%s keywords=%s pais=%s",
+            resultado.nivel,
+            resultado.subcategoria,
+            resultado.keywords[:5],
+            pais,
+        )
+    return resultado
+
+
+def _detectar_inner(
+    texto: str, pais: str | None = "CO", peso_actual_kg: float | None = None
+) -> CrisisDetected | None:
     if not texto:
         return None
 

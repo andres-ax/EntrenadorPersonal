@@ -211,7 +211,13 @@ async def crear_magic_link(req: MagicLinkReq) -> MagicLinkResp:
         except Exception:
             logger.exception("Error enviando magic link via Resend")
     else:
-        logger.info("Magic link generado para %s: %s", email, verify_url or token)
+        token_prefix = (token or "")[:8]
+        logger.info(
+            "Magic link generado email=%s token_prefix=%s... "
+            "(Resend no configurado; ver DB para detalle)",
+            email,
+            token_prefix,
+        )
 
     return MagicLinkResp(
         ok=True,

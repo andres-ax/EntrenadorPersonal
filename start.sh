@@ -9,4 +9,8 @@ echo "[start.sh] Aplicando migraciones Alembic..."
 alembic upgrade head
 echo "[start.sh] Migraciones OK. Arrancando uvicorn..."
 
-exec uvicorn src.main:app --host 0.0.0.0 --port "${PORT:-8080}"
+exec uvicorn src.main:app \
+  --host 0.0.0.0 \
+  --port "${PORT:-8080}" \
+  --no-access-log \
+  --log-level warning

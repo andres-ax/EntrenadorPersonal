@@ -6,12 +6,14 @@ import hmac
 import html
 import json
 import logging
+import time
 import traceback
 from contextlib import asynccontextmanager
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, Defaults
@@ -20,10 +22,20 @@ from src.api.admin_auth import seed_admin_si_falta
 from src.cache import close_redis, ping as ping_redis
 from src.config import settings
 from src.db.connection import close_db, engine, init_db, ping as ping_db
+from src.log_setup import (
+    bind_request_id,
+    bind_telegram_id,
+    get_or_make_request_id,
+    request_id_ctx,
+    setup_logging,
+    telegram_id_ctx,
+)
 from src.telegram.bot_setup import setup_bot
 from src.telegram.handlers import registrar
 from src.telegram.pubsub_listener import start_pubsub_listener
 from src.telegram.scheduler import registrar_jobs
+
+setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +64,27 @@ pubsub_task: asyncio.Task | None = None
 
 async def error_handler(update, context) -> None:
     """Captura excepciones no atrapadas y notifica al developer."""
-    logger.error("Excepcion en handler de Telegram", exc_info=context.error)
+    uid = None
+    try:
+        if update is not None and getattr(update, "effective_user", None):
+            uid = update.effective_user.id
+    except Exception:
+        pass
+    logger.error(
+        "Excepcion en handler de Telegram uid=%s update_id=%s",
+        uid,
+        getattr(update, "update_id", None) if update else None,
+        exc_info=context.error,
+    )
+    if settings.sentry_dsn:
+        try:
+            import sentry_sdk
+
+            if uid is not None:
+                sentry_sdk.set_user({"id": uid})
+            sentry_sdk.set_tag("source", "telegram_handler")
+        except Exception:
+            pass
     if settings.developer_chat_id is None:
         return
     tb = "".join(
@@ -177,6 +209,87 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+_ACCESS_LOG_SKIP_PATHS = {"/health"}
+
+
+@app.middleware("http")
+async def request_id_and_access_log(request: Request, call_next):
+    """Inyecta request_id en ContextVar + emite un access log por request.
+
+    Si el cliente envia `X-Request-ID` lo respetamos (util para correlar
+    desde el frontend o un edge proxy). Si no, generamos uno corto.
+    """
+    rid = request.headers.get("x-request-id") or get_or_make_request_id()
+    rid_token = request_id_ctx.set(rid)
+    if settings.sentry_dsn:
+        try:
+            import sentry_sdk
+
+            sentry_sdk.set_tag("request_id", rid)
+        except Exception:
+            pass
+    t0 = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    except Exception:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.exception(
+            "HTTP %s %s -> EXC rid=%s elapsed=%.1fms ip=%s",
+            request.method,
+            request.url.path,
+            rid,
+            elapsed_ms,
+            request.client.host if request.client else "?",
+        )
+        raise
+    finally:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        if request.url.path not in _ACCESS_LOG_SKIP_PATHS:
+            logger.info(
+                "HTTP %s %s -> %d rid=%s elapsed=%.1fms ip=%s ua=%s",
+                request.method,
+                request.url.path,
+                status_code,
+                rid,
+                elapsed_ms,
+                request.client.host if request.client else "?",
+                (request.headers.get("user-agent") or "-")[:120],
+            )
+        try:
+            request_id_ctx.reset(rid_token)
+        except Exception:
+            pass
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Handler global para 500s no controlados.
+
+    HTTPException ya tiene su propio handler en FastAPI; aqui solo entran
+    excepciones genuinamente inesperadas. Devuelve un body con request_id
+    para que el usuario nos lo cite y podamos buscarlo en los logs.
+    """
+    rid = request_id_ctx.get()
+    logger.exception(
+        "Unhandled exception rid=%s method=%s path=%s",
+        rid,
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal Server Error",
+            "request_id": rid,
+        },
+        headers={"x-request-id": rid},
+    )
+
+
 from src.api.admin import router as admin_router  # noqa: E402
 from src.api.auth import router as auth_router  # noqa: E402
 from src.api.integraciones import router as integraciones_router  # noqa: E402
@@ -220,26 +333,112 @@ async def webhook(
     x_telegram_bot_api_secret_token: str = Header(None),
 ):
     if telegram_app is None or not telegram_app.running:
+        logger.warning("Webhook recibido pero bot no esta listo")
         raise HTTPException(503, "Bot no listo")
 
     if not hmac.compare_digest(
         x_telegram_bot_api_secret_token or "", WEBHOOK_SECRET
     ):
+        logger.warning(
+            "Webhook con secret invalido ip=%s",
+            request.client.host if request.client else "?",
+        )
         raise HTTPException(403, "Token invalido")
 
     body = await request.body()
     if len(body) > settings.max_webhook_payload_bytes:
+        logger.warning("Webhook payload too large size=%d", len(body))
         raise HTTPException(413, "Payload too large")
     try:
         data = json.loads(body)
     except json.JSONDecodeError:
+        logger.warning("Webhook con JSON invalido size=%d", len(body))
         raise HTTPException(400, "JSON invalido")
 
     update = Update.de_json(data, telegram_app.bot)
     if update is None:
+        logger.debug("Webhook update no parseable, ignorado")
         return {"ok": True}
-    await telegram_app.process_update(update)
+
+    update_type = _detect_update_type(update)
+    uid = update.effective_user.id if update.effective_user else None
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    text_preview = _preview_update_text(update)
+    tid_token = bind_telegram_id(uid)
+    if settings.sentry_dsn and uid is not None:
+        try:
+            import sentry_sdk
+
+            sentry_sdk.set_user({"id": uid})
+        except Exception:
+            pass
+    logger.info(
+        "TG update_id=%s type=%s uid=%s chat_id=%s text=%r",
+        update.update_id,
+        update_type,
+        uid,
+        chat_id,
+        text_preview,
+    )
+    t0 = time.perf_counter()
+    try:
+        await telegram_app.process_update(update)
+    except Exception:
+        logger.exception(
+            "TG process_update fallo update_id=%s type=%s uid=%s",
+            update.update_id,
+            update_type,
+            uid,
+        )
+        raise
+    finally:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        logger.info(
+            "TG update_id=%s type=%s uid=%s procesado elapsed=%.1fms",
+            update.update_id,
+            update_type,
+            uid,
+            elapsed_ms,
+        )
+        try:
+            telegram_id_ctx.reset(tid_token)
+        except Exception:
+            pass
     return {"ok": True}
+
+
+def _detect_update_type(update: Update) -> str:
+    """Resume el tipo de update para logs (sin reemplazar logica del bot)."""
+    if update.message is not None:
+        if update.message.photo:
+            return "photo"
+        if update.message.voice or update.message.audio:
+            return "voice"
+        if update.message.document:
+            return "document"
+        if update.message.successful_payment:
+            return "payment_ok"
+        return "message"
+    if update.callback_query is not None:
+        return "callback_query"
+    if update.pre_checkout_query is not None:
+        return "pre_checkout_query"
+    if update.inline_query is not None:
+        return "inline_query"
+    if update.poll_answer is not None:
+        return "poll_answer"
+    if update.message_reaction is not None:
+        return "message_reaction"
+    return "other"
+
+
+def _preview_update_text(update: Update) -> str:
+    """Texto recortado del update para logs (sin loggear documentos enteros)."""
+    if update.message is not None and update.message.text:
+        return update.message.text[:80]
+    if update.callback_query is not None and update.callback_query.data:
+        return f"cb:{update.callback_query.data[:80]}"
+    return ""
 
 
 @app.get("/webhook-info")

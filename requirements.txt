@@ -128,3 +128,6 @@ websockets>=13.0,<16.0
 # -----------------------------------------------------------------------------
 # Sentry para tracking de errores en bot-api, realtime-ws y worker.
 sentry-sdk[fastapi]>=2.0,<3.0
+
+# Logs JSON estructurados (consumidos por Railway / agregadores).
+python-json-logger>=2.0,<3.0

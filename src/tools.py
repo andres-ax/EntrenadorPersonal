@@ -6,10 +6,13 @@
 """
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import random
+import time
 from datetime import date, datetime, timedelta
+from typing import Any, Callable
 
 from agents import function_tool
 
@@ -48,6 +51,84 @@ from src.db.repository import (
 from src.db.repository import log_evento
 
 logger = logging.getLogger(__name__)
+
+
+_SENSITIVE_ARG_NAMES = {"password", "token", "secret", "comprobante_url"}
+
+
+def _summary_arg(value: Any) -> Any:
+    """Resume valores grandes para evitar logs gigantes (e.g. URLs base64)."""
+    if isinstance(value, str) and len(value) > 80:
+        return f"{value[:60]}...({len(value)}c)"
+    if isinstance(value, (list, tuple, set)) and len(value) > 8:
+        return f"<{type(value).__name__} len={len(value)}>"
+    if isinstance(value, dict) and len(value) > 8:
+        return f"<dict keys={list(value)[:8]}...>"
+    return value
+
+
+def _looks_ok(result: Any) -> bool:
+    """Heuristica: detecta ok=true en el JSON-string que retornan las tools."""
+    if not isinstance(result, str):
+        return True
+    head = result.lstrip()[:60].lower()
+    if '"ok":false' in head or '"ok": false' in head:
+        return False
+    if '"error"' in head:
+        return False
+    return True
+
+
+def _log_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorador interno que envuelve cada @function_tool con logs.
+
+    Loguea entrada (con args sanitizados), latencia y exito/error. Mantiene la
+    signature original via functools.wraps para que `function_tool` siga
+    pudiendo inspeccionarla y generar el schema JSON correcto.
+
+    En caso de excepcion (no esperada porque las tools deben retornar JSON
+    con ok=False) se logea con stacktrace y se reentrega para que la
+    pipeline del agente la maneje.
+    """
+    tool_name = fn.__name__
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        safe_args = [
+            _summary_arg(a) for a in args
+        ]
+        safe_kwargs = {
+            k: ("***" if k in _SENSITIVE_ARG_NAMES else _summary_arg(v))
+            for k, v in kwargs.items()
+        }
+        logger.info(
+            "tool.%s call args=%s kwargs=%s",
+            tool_name,
+            safe_args,
+            safe_kwargs,
+        )
+        t0 = time.perf_counter()
+        try:
+            result = await fn(*args, **kwargs)
+        except Exception:
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            logger.exception(
+                "tool.%s raised elapsed=%.1fms", tool_name, elapsed_ms
+            )
+            raise
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        ok = _looks_ok(result)
+        log_fn = logger.info if ok else logger.warning
+        log_fn(
+            "tool.%s done ok=%s elapsed=%.1fms",
+            tool_name,
+            ok,
+            elapsed_ms,
+        )
+        return result
+
+    return wrapper
+
 
 TIPOS_ENTRENO_VALIDOS = {"fuerza", "cardio", "movilidad", "deporte"}
 TIPOS_COMIDA_VALIDOS = {"desayuno", "almuerzo", "cena", "snack", "post_entreno"}
@@ -118,6 +199,7 @@ def _ok(data: dict | None = None) -> str:
 
 
 @function_tool
+@_log_tool
 async def obtener_perfil(telegram_id: int) -> str:
     """Obtiene el perfil completo del usuario.
 
@@ -149,6 +231,7 @@ async def obtener_perfil(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def guardar_perfil(
     telegram_id: int,
     nombre: str = "",
@@ -231,6 +314,7 @@ async def guardar_perfil(
 
 
 @function_tool
+@_log_tool
 async def registrar_entreno(
     telegram_id: int,
     fecha: str,
@@ -282,6 +366,7 @@ async def registrar_entreno(
 
 
 @function_tool
+@_log_tool
 async def obtener_pr(telegram_id: int, ejercicio: str) -> str:
     """Consulta el Personal Record de un ejercicio especifico.
 
@@ -307,6 +392,7 @@ async def obtener_pr(telegram_id: int, ejercicio: str) -> str:
 
 
 @function_tool
+@_log_tool
 async def guardar_pr(
     telegram_id: int,
     ejercicio: str,
@@ -353,6 +439,7 @@ async def guardar_pr(
 
 
 @function_tool
+@_log_tool
 async def listar_todos_prs(telegram_id: int) -> str:
     """Lista todos los Personal Records del usuario.
 
@@ -377,6 +464,7 @@ async def listar_todos_prs(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def registrar_comida(
     telegram_id: int,
     fecha: str,
@@ -416,6 +504,7 @@ async def registrar_comida(
 
 
 @function_tool
+@_log_tool
 async def resumen_nutricional(telegram_id: int, fecha: str = "") -> str:
     """Resumen de calorias y macros de un dia.
 
@@ -437,6 +526,7 @@ async def resumen_nutricional(telegram_id: int, fecha: str = "") -> str:
 
 
 @function_tool
+@_log_tool
 async def registrar_sueno(
     telegram_id: int,
     fecha: str,
@@ -465,6 +555,7 @@ async def registrar_sueno(
 
 
 @function_tool
+@_log_tool
 async def reporte_progreso(telegram_id: int) -> str:
     """Reporte semanal completo: sesiones, volumen, PRs y sueno de los ultimos 7 dias.
 
@@ -484,6 +575,7 @@ async def reporte_progreso(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def registrar_peso(
     telegram_id: int,
     peso_kg: float,
@@ -520,6 +612,7 @@ async def registrar_peso(
 
 
 @function_tool
+@_log_tool
 async def consultar_historial_peso(telegram_id: int, limit: int = 10) -> str:
     """Devuelve los ultimos registros de peso.
 
@@ -553,6 +646,7 @@ async def consultar_historial_peso(telegram_id: int, limit: int = 10) -> str:
 
 
 @function_tool
+@_log_tool
 async def firmar_compromiso(
     telegram_id: int,
     objetivo_texto: str,
@@ -607,6 +701,7 @@ async def firmar_compromiso(
 
 
 @function_tool
+@_log_tool
 async def consultar_compromiso(telegram_id: int) -> str:
     """Devuelve el compromiso activo (si existe) e incrementa citado_veces.
 
@@ -642,6 +737,7 @@ async def consultar_compromiso(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def cambiar_tono(telegram_id: int, tono: str) -> str:
     """Cambia el tono del coach. Para militar el usuario debe haber aceptado el disclaimer.
 
@@ -669,6 +765,7 @@ async def cambiar_tono(telegram_id: int, tono: str) -> str:
 
 
 @function_tool
+@_log_tool
 async def confirmar_modo_militar(telegram_id: int) -> str:
     """Marca al usuario como que acepto el disclaimer de modo militar.
 
@@ -688,6 +785,7 @@ async def confirmar_modo_militar(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def configurar_quiet_hours(
     telegram_id: int, hora_inicio: str, hora_fin: str
 ) -> str:
@@ -710,6 +808,7 @@ async def configurar_quiet_hours(
 
 
 @function_tool
+@_log_tool
 async def pausar(telegram_id: int, dias: int = 1) -> str:
     """Pausa los recordatorios por N dias. El bot no envia nada hasta que pase.
 
@@ -728,6 +827,7 @@ async def pausar(telegram_id: int, dias: int = 1) -> str:
 
 
 @function_tool
+@_log_tool
 async def usar_dia_libre(telegram_id: int) -> str:
     """Usa 1 freeze para no romper el streak hoy. Devuelve si tenia disponibles.
 
@@ -746,6 +846,7 @@ async def usar_dia_libre(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def consultar_streak(telegram_id: int, tipo: str = "entreno") -> str:
     """Consulta el streak actual del usuario.
 
@@ -775,6 +876,7 @@ async def consultar_streak(telegram_id: int, tipo: str = "entreno") -> str:
 
 
 @function_tool
+@_log_tool
 async def proponer_ejercicio_aleatorio(telegram_id: int) -> str:
     """Sortea un foco de ejercicio para hoy. Solo usar si el usuario dice 'no se que entrenar'.
 
@@ -788,6 +890,7 @@ async def proponer_ejercicio_aleatorio(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def dar_premio_motivacional(telegram_id: int) -> str:
     """Otorga un sticker/mensaje motivacional aleatorio. Variable reward.
 
@@ -813,6 +916,7 @@ def _detectar_logro_streak(dias: int) -> str | None:
 
 
 @function_tool
+@_log_tool
 async def verificar_logros(telegram_id: int) -> str:
     """Verifica si el usuario alcanzo un hito (streak 7/30/100/365). Devuelve string del logro o vacio.
 
@@ -836,6 +940,7 @@ async def verificar_logros(telegram_id: int) -> str:
 
 
 @function_tool
+@_log_tool
 async def consultar_resumen_visual(telegram_id: int) -> str:
     """Devuelve info para que el handler genere un chart visual del progreso.
 
@@ -867,6 +972,7 @@ DEPORTES_URBANO_TRICKS = {
 
 
 @function_tool
+@_log_tool
 async def registrar_truco_aterrizado(
     telegram_id: int,
     deporte: str,
@@ -924,6 +1030,7 @@ async def registrar_truco_aterrizado(
 
 
 @function_tool
+@_log_tool
 async def registrar_sesion_skill(
     telegram_id: int,
     deporte: str,
@@ -992,6 +1099,7 @@ async def registrar_sesion_skill(
 
 
 @function_tool
+@_log_tool
 async def registrar_via_escalada(
     telegram_id: int,
     nombre_via: str,
@@ -1046,6 +1154,7 @@ async def registrar_via_escalada(
 
 
 @function_tool
+@_log_tool
 async def consultar_progreso_skill(
     telegram_id: int,
     deporte: str,
@@ -1093,6 +1202,7 @@ ESTILOS_COMBATE = {
 
 
 @function_tool
+@_log_tool
 async def registrar_sparring(
     telegram_id: int,
     estilo: str,
@@ -1156,6 +1266,7 @@ async def registrar_sparring(
 
 
 @function_tool
+@_log_tool
 async def registrar_pelea(
     telegram_id: int,
     estilo: str,
@@ -1228,6 +1339,7 @@ async def registrar_pelea(
 
 
 @function_tool
+@_log_tool
 async def calcular_peso_objetivo_responsable(
     telegram_id: int,
     peso_actual_kg: float,
@@ -1328,6 +1440,7 @@ async def calcular_peso_objetivo_responsable(
 
 
 @function_tool
+@_log_tool
 async def evaluar_concusion_simplificado(
     telegram_id: int,
     tuvo_perdida_conciencia: bool = False,

@@ -12,6 +12,7 @@ from arq.connections import RedisSettings
 from arq.cron import cron
 
 from src.config import settings
+from src.log_setup import setup_logging
 from src.worker.jobs_wearables import (
     refresh_tokens_expirados,
     sync_all_active_integrations,
@@ -20,7 +21,22 @@ from src.worker.jobs_wearables import (
 from src.worker.jobs_comunidad import recalcular_rankings
 from src.worker.jobs_procesado import procesar_datos_wearable_raw
 
+setup_logging()
+
 logger = logging.getLogger(__name__)
+
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn.get_secret_value(),
+            environment=settings.env,
+            traces_sample_rate=0.05,
+        )
+        logger.info("Sentry inicializado en worker arq")
+    except Exception:
+        logger.exception("Sentry init fallo en worker arq")
 
 
 async def startup(ctx) -> None:

@@ -4,8 +4,12 @@ Lee precios desde Settings (override via env vars) y aplica descuento anual.
 """
 from __future__ import annotations
 
+import logging
+
 from src.config import settings
 from src.db.models import DuracionPago, PlanSuscripcion
+
+logger = logging.getLogger(__name__)
 
 DIAS_POR_DURACION = {
     DuracionPago.MENSUAL: 30,
@@ -16,6 +20,17 @@ DIAS_POR_DURACION = {
 
 def precio_cop(plan: PlanSuscripcion, duracion: DuracionPago) -> int:
     """Devuelve el monto esperado en pesos colombianos."""
+    monto = _precio_cop_inner(plan, duracion)
+    logger.debug(
+        "precio_cop plan=%s duracion=%s -> %s COP",
+        getattr(plan, "value", plan),
+        getattr(duracion, "value", duracion),
+        monto,
+    )
+    return monto
+
+
+def _precio_cop_inner(plan: PlanSuscripcion, duracion: DuracionPago) -> int:
     if plan == PlanSuscripcion.FREE:
         return 0
     if plan == PlanSuscripcion.LIFETIME:

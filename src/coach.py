@@ -1,4 +1,6 @@
 """Agent OpenAI - EntrenadorAX con tono configurable y compromiso firmable."""
+import logging
+
 from agents import Agent
 
 from src.tools import (
@@ -35,6 +37,8 @@ from src.tools import (
     usar_dia_libre,
     verificar_logros,
 )
+
+logger = logging.getLogger(__name__)
 
 ALL_TOOLS = [
     obtener_perfil,
@@ -455,4 +459,10 @@ coach = Agent(
     name="EntrenadorAX",
     instructions=INSTRUCTIONS,
     tools=ALL_TOOLS,
+)
+
+logger.info(
+    "Coach Agent construido: tools=%d instructions_chars=%d",
+    len(ALL_TOOLS),
+    len(INSTRUCTIONS),
 )

@@ -365,6 +365,13 @@ async def reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def borrar_datos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    username = update.effective_user.username
+    logger.info(
+        "borrar_datos solicitado uid=%s username=%s",
+        uid,
+        username,
+    )
     keyboard = [
         [
             InlineKeyboardButton(
@@ -1039,24 +1046,68 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if q.data == "confirmar_borrado":
+        logger.info("borrar_datos confirmado uid=%s", uid)
+        borrado = False
+        keys_redis = 0
+        evento_ok = False
+        fallo_critico = False
         try:
             borrado = await eliminar_usuario(uid)
-            await limpiar_keys_usuario(uid)
-            await log_evento(uid, "borrar_datos", {"existia": borrado})
-            if borrado:
-                await q.edit_message_text(
-                    "Todos tus datos han sido eliminados permanentemente. "
-                    "Usa /start para comenzar desde cero."
-                )
-            else:
-                await q.edit_message_text(
-                    "No encontre datos asociados a tu cuenta. "
-                    "Usa /start para empezar."
-                )
+            logger.info(
+                "borrar_datos DB delete uid=%s borrado=%s", uid, borrado
+            )
         except Exception:
-            logger.exception("Error borrando datos uid=%s", uid)
+            fallo_critico = True
+            logger.exception(
+                "borrar_datos fallo en eliminar_usuario uid=%s", uid
+            )
+        if not fallo_critico:
+            try:
+                keys_redis = await limpiar_keys_usuario(uid)
+                logger.info(
+                    "borrar_datos Redis cleanup uid=%s keys=%d",
+                    uid,
+                    keys_redis,
+                )
+            except Exception:
+                logger.exception(
+                    "borrar_datos fallo en limpiar_keys uid=%s "
+                    "(DB ya estaba borrada)",
+                    uid,
+                )
+            try:
+                await log_evento(uid, "borrar_datos", {"existia": borrado})
+                evento_ok = True
+            except Exception:
+                logger.exception(
+                    "borrar_datos fallo en log_evento uid=%s "
+                    "(no critico)",
+                    uid,
+                )
+        logger.info(
+            "audit.borrar_datos uid=%s ok=%s db_borrado=%s "
+            "redis_keys=%d evento_ok=%s",
+            uid,
+            not fallo_critico,
+            borrado,
+            keys_redis,
+            evento_ok,
+        )
+        if fallo_critico:
             await q.edit_message_text(
-                "Hubo un error eliminando tus datos. Intenta de nuevo en un momento."
+                "Hubo un error eliminando tus datos. "
+                "Intenta de nuevo en un momento."
+            )
+            return
+        if borrado:
+            await q.edit_message_text(
+                "Todos tus datos han sido eliminados permanentemente. "
+                "Usa /start para comenzar desde cero."
+            )
+        else:
+            await q.edit_message_text(
+                "No encontre datos asociados a tu cuenta. "
+                "Usa /start para empezar."
             )
         return
 

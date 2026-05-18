@@ -29,12 +29,15 @@ from src.cache import close_redis, ping as ping_redis
 from src.config import settings
 from src.db.connection import async_session_factory, close_db, init_db, ping as ping_db
 from src.db.models import RealtimeSesion, Usuario
+from src.log_setup import setup_logging
 from src.realtime.cuotas import (
     consumir_segundos,
     cuota_total_segundos,
     disponible_segundos,
 )
 from src.realtime.openai_client import RealtimeBridge
+
+setup_logging()
 
 logger = logging.getLogger(__name__)
 

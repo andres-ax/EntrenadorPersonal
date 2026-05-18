@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
+
+logger = logging.getLogger(__name__)
 
 from src.db.connection import async_session_factory
 from src.db.models import (
@@ -84,15 +87,29 @@ async def obtener_usuario(telegram_id: int) -> Optional[Usuario]:
 
 
 async def eliminar_usuario(telegram_id: int) -> bool:
+    """Borra el Usuario (cascade elimina entrenos, comidas, PRs, etc.).
+
+    Retorna True si existia y se borro, False si no existia.
+    """
     async with async_session_factory() as session:
         result = await session.execute(
             select(Usuario).where(Usuario.telegram_id == telegram_id)
         )
         usuario = result.scalar_one_or_none()
         if usuario is None:
+            logger.info(
+                "eliminar_usuario uid=%s: no existe, nada que borrar",
+                telegram_id,
+            )
             return False
+        usuario_pk = usuario.id
         await session.delete(usuario)
         await session.commit()
+        logger.info(
+            "eliminar_usuario uid=%s usuario_id=%s borrado (cascade)",
+            telegram_id,
+            usuario_pk,
+        )
         return True
 
 
@@ -1191,6 +1208,14 @@ async def aprobar_comprobante(
         usuario = usuario_result.scalar_one()
         await session.commit()
         await session.refresh(comp)
+    logger.info(
+        "aprobar_comprobante comp_id=%s plan=%s monto=%s uid=%s admin=%s",
+        comp.id,
+        getattr(comp.plan_solicitado, "value", comp.plan_solicitado),
+        comp.monto_cop,
+        usuario.telegram_id,
+        admin_email,
+    )
     await activar_plan(
         telegram_id=usuario.telegram_id,
         plan=comp.plan_solicitado,
@@ -1224,6 +1249,14 @@ async def rechazar_comprobante(
         usuario = usuario_result.scalar_one()
         await session.commit()
         await session.refresh(comp)
+    logger.warning(
+        "rechazar_comprobante comp_id=%s uid=%s admin=%s bloquear=%s motivo=%s",
+        comp.id,
+        usuario.telegram_id,
+        admin_email,
+        bloquear,
+        motivo[:120],
+    )
     other_pendientes = await listar_comprobantes_activos(usuario.telegram_id)
     if not other_pendientes:
         await desactivar_plan(usuario.telegram_id)
@@ -1272,11 +1305,17 @@ async def bloquear_usuario(
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
+            logger.warning(
+                "bloquear_usuario uid=%s: usuario no existe", telegram_id
+            )
             return False
         existente = await session.execute(
             select(UsuarioBloqueado).where(UsuarioBloqueado.usuario_id == uid)
         )
         if existente.scalar_one_or_none() is not None:
+            logger.info(
+                "bloquear_usuario uid=%s: ya estaba bloqueado", telegram_id
+            )
             return False
         bloqueo = UsuarioBloqueado(
             usuario_id=uid,
@@ -1286,6 +1325,12 @@ async def bloquear_usuario(
         session.add(bloqueo)
         await session.commit()
     _FEATURE_CACHE.clear()
+    logger.warning(
+        "bloquear_usuario uid=%s admin=%s motivo=%s",
+        telegram_id,
+        admin_email,
+        motivo[:120],
+    )
     return True
 
 
