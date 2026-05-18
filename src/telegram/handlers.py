@@ -1212,6 +1212,24 @@ _CAPTION_COMPROBANTE = re.compile(
 )
 
 
+def _tipo_comida_por_hora(hora: int) -> str:
+    """Mapea hora local del usuario al tipo de comida mas probable.
+
+    Usado para clasificar fotos de comida sin meta-info. Antes hardcoded
+    "almuerzo" lo cual desfiguraba estadisticas (e.g. foto a las 10pm
+    quedaba como almuerzo).
+    """
+    if 5 <= hora < 11:
+        return "desayuno"
+    if 11 <= hora < 15:
+        return "almuerzo"
+    if 15 <= hora < 17:
+        return "snack"
+    if 17 <= hora < 22:
+        return "cena"
+    return "snack"
+
+
 async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Recibe foto del usuario.
 
@@ -1249,17 +1267,27 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not es_starter_o_mas:
         n = await contar_fotos_hoy(uid)
         if n >= 3:
+            logger.info("photo_limit uid=%s n=%d/3 BLOQUEADO", uid, n)
             await update.message.reply_text(
                 "Llegaste al limite de 3 fotos/dia en plan Free. "
                 "Manana puedes mas, o mejora tu plan con /pagar"
             )
             return
+        if n == 2:
+            logger.info("photo_limit uid=%s n=%d/3 ULTIMA", uid, n)
 
     user = await obtener_usuario(uid)
     if not user:
         return
     objetivo = user.objetivo or "mantenerse"
     tono = user.tono.value if user.tono else "firme"
+    tz_name = user.timezone or "America/Bogota"
+    try:
+        ahora_user = datetime.now(ZoneInfo(tz_name))
+    except Exception:
+        ahora_user = datetime.now(ZoneInfo("America/Bogota"))
+    tipo_comida = _tipo_comida_por_hora(ahora_user.hour)
+    fecha_user = ahora_user.date().isoformat()
 
     await update.message.chat.send_action(ChatAction.TYPING)
 
@@ -1298,15 +1326,23 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         await guardar_comida(
             uid,
-            date.today().isoformat(),
-            "almuerzo",
+            fecha_user,
+            tipo_comida,
             result.get("alimentos", []),
             calorias=result.get("calorias", 0),
             proteinas=result.get("proteinas_g", 0),
             carbs=result.get("carbohidratos_g", 0),
             grasas=result.get("grasas_g", 0),
         )
-        await log_evento(uid, "photo_meal", {"calorias": result.get("calorias", 0)})
+        await log_evento(
+            uid,
+            "photo_meal",
+            {
+                "calorias": result.get("calorias", 0),
+                "tipo": tipo_comida,
+                "fecha": fecha_user,
+            },
+        )
     except Exception:
         logger.exception("Error guardando feedback uid=%s", uid)
 

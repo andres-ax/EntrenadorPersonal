@@ -460,6 +460,12 @@ async def resumen_sueno_semanal(telegram_id: int) -> dict:
 
 
 async def reporte_semanal(telegram_id: int) -> dict:
+    """Reporte semanal: entrenos + PRs + sueno + nutricion de hoy.
+
+    Incluye `nutricion_hoy` con calorias y macros del dia para que el coach
+    pueda dar feedback sin necesitar otra tool call. El campo es 0 si el
+    usuario no registro nada hoy.
+    """
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -469,6 +475,13 @@ async def reporte_semanal(telegram_id: int) -> dict:
                 "total_ejercicios": 0,
                 "nuevos_prs": [],
                 "sueno": {},
+                "nutricion_hoy": {
+                    "total_calorias": 0,
+                    "total_proteinas": 0,
+                    "total_carbs": 0,
+                    "total_grasas": 0,
+                    "comidas_registradas": 0,
+                },
                 "periodo": "",
             }
 
@@ -502,6 +515,19 @@ async def reporte_semanal(telegram_id: int) -> dict:
 
         sueno_data = await _resumen_sueno_semanal_internal(session, uid)
 
+        hoy = date.today()
+        result_comidas_hoy = await session.execute(
+            select(Comida).where(Comida.usuario_id == uid, Comida.fecha == hoy)
+        )
+        comidas_hoy = list(result_comidas_hoy.scalars().all())
+        nutricion_hoy = {
+            "total_calorias": sum(c.calorias or 0 for c in comidas_hoy),
+            "total_proteinas": sum(c.proteinas_g or 0 for c in comidas_hoy),
+            "total_carbs": sum(c.carbohidratos_g or 0 for c in comidas_hoy),
+            "total_grasas": sum(c.grasas_g or 0 for c in comidas_hoy),
+            "comidas_registradas": len(comidas_hoy),
+        }
+
         return {
             "dias_entrenados": len(sesiones),
             "volumen_total_kg": volumen,
@@ -511,7 +537,8 @@ async def reporte_semanal(telegram_id: int) -> dict:
                 for p in nuevos_prs
             ],
             "sueno": sueno_data,
-            "periodo": f"{inicio_semana.isoformat()} - {date.today().isoformat()}",
+            "nutricion_hoy": nutricion_hoy,
+            "periodo": f"{inicio_semana.isoformat()} - {hoy.isoformat()}",
         }
 
 
