@@ -488,6 +488,31 @@ async def cmd_tono(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+# Atajos slash que reusan el agente: el usuario los ve en el menu como botones
+# y los puede tipear directo como comando. Cada uno reusa _procesar con un
+# prompt traducido para que el coach reaccione igual que con el callback.
+_MENU_SLASH_PROMPTS = {
+    "entreno": "Quiero registrar mi entrenamiento de hoy",
+    "comida": "Quiero registrar lo que comi hoy",
+    "sueno": "Quiero registrar como dormi anoche",
+    "historial_peso": "Muestrame mi historial de peso",
+}
+
+
+def _make_menu_slash_handler(prompt: str):
+    """Factory: crea un handler que dispara _procesar con un prompt fijo."""
+
+    async def _handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        uid = update.effective_user.id
+        if not await check_rate_limit(uid):
+            await update.message.reply_text("Tranquilo, dame un segundo.")
+            return
+        await update.message.chat.send_action(ChatAction.TYPING)
+        await _procesar(update.message, prompt, uid, ctx=ctx)
+
+    return _handler
+
+
 async def cmd_quiet_hours(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00"""
     uid = update.effective_user.id
@@ -909,16 +934,26 @@ async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "<b>Como funciono</b>\n\n"
         "1) Escribime cualquier cosa: 'hice pierna hoy, 4x8 sentadilla 80kg', "
         "'almorce pollo y arroz', 'dormi 7h', 'peso 82kg'.\n"
-        "2) Yo te recuerdo entrenar, comer y dormir si no lo haces.\n"
-        "3) Mientras mas faltes a tu compromiso, mas intenso me pongo.\n"
-        "4) Comandos clave:\n"
-        "   /menu - acciones rapidas\n"
-        "   /tono - cambiar entre amigable/firme/militar\n"
-        "   /pausa N - silenciarme N dias\n"
-        "   /compromiso - ver mi pacto contigo\n"
-        "   /pr - mis personal records\n"
+        "2) Mandame foto de tu plato y te calculo macros.\n"
+        "3) Tambien acepto notas de voz, las transcribo y las proceso.\n"
+        "4) Pidemes recordatorios: 'despiertame a las 7am' o 'avisame en 30 minutos'.\n"
+        "5) Yo te recuerdo entrenar, comer y dormir si no lo haces.\n"
+        "6) Mientras mas faltes a tu compromiso, mas intenso me pongo.\n\n"
+        "<b>Comandos rapidos</b>\n"
+        "   /menu - acciones rapidas con botones\n"
+        "   /entreno - registrar entrenamiento\n"
+        "   /comida - registrar comida\n"
+        "   /sueno - registrar sueno\n"
+        "   /peso - registrar peso\n"
+        "   /hoy - resumen de hoy\n"
         "   /reporte - resumen semanal\n"
-        "   /ayuda - este texto\n"
+        "   /pr - mis personal records\n"
+        "   /compromiso - ver mi pacto contigo\n"
+        "   /grafico - grafico de progreso\n\n"
+        "<b>Configuracion</b>\n"
+        "   /tono - amigable, firme o militar\n"
+        "   /quiet_hours HH:MM HH:MM - no molestar entre estas horas\n"
+        "   /pausa N - silenciarme N dias\n"
         "   /salir - bajar tono y reducir mensajes\n"
         "   /borrar_datos - eliminar todo\n\n"
         "<b>Privacidad:</b> tus datos viven en tu instancia. Puedes borrar todo "
@@ -1774,6 +1809,13 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("agua", cmd_agua))
     app.add_handler(CommandHandler("calma", cmd_calma))
     app.add_handler(CommandHandler("invitar", cmd_invitar))
+    # Atajos slash que reusan el agente (espejo de los botones del menu).
+    # Sin esto, /sueno, /comida, /entreno etc. caen al MessageHandler de
+    # texto que ignora el "/" inicial, perdiendo intencion clara del usuario.
+    for _slash_name, _slash_prompt in _MENU_SLASH_PROMPTS.items():
+        app.add_handler(
+            CommandHandler(_slash_name, _make_menu_slash_handler(_slash_prompt))
+        )
     app.add_handler(InlineQueryHandler(inline_query))
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(

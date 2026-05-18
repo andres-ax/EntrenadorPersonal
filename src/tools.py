@@ -310,7 +310,10 @@ async def guardar_perfil(
     try:
         kwargs: dict = {}
         if nombre:
-            kwargs["nombre"] = nombre
+            # Normaliza capitalizacion: "ANdy" -> "Andy", "maria fernanda" -> "Maria Fernanda".
+            # Si el usuario tipea mayusculas raras durante onboarding, el compromiso
+            # firmado se ve raro. .title() es buena heuristica para nombres simples.
+            kwargs["nombre"] = nombre.strip().title()
         if edad > 0:
             kwargs["edad"] = edad
         if peso_kg > 0:
