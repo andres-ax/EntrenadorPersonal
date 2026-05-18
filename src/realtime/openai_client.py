@@ -49,9 +49,14 @@ class RealtimeBridge:
             "Authorization": f"Bearer {api_key}",
             "OpenAI-Beta": "realtime=v1",
         }
+        # websockets >= 14 renombro extra_headers -> additional_headers.
+        # Detectamos cual usar para ser compatibles con ambas versiones.
+        import inspect
+        connect_params = inspect.signature(websockets.connect).parameters
+        header_kwarg = "additional_headers" if "additional_headers" in connect_params else "extra_headers"
         self.ws = await websockets.connect(
             REALTIME_URL,
-            extra_headers=headers,
+            **{header_kwarg: headers},
             max_size=10 * 1024 * 1024,
         )
         await self._enviar_evento(
