@@ -1,39 +1,64 @@
 {% extends "app/_layout.html" %}
 
 {% block app_content %}
-<h1 class="text-xl font-bold text-slate-900">Configuracion</h1>
-<p class="text-sm text-slate-500">Tu perfil y preferencias.</p>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  {# Perfil #}
+  <div class="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
+    <h2 class="font-semibold text-slate-800 mb-4">Tu perfil</h2>
+    {% if perfil %}
+      <dl class="grid grid-cols-2 gap-y-3 text-sm">
+        <dt class="text-slate-500">Nombre</dt><dd class="font-medium">{{ perfil.nombre or "-" }}</dd>
+        <dt class="text-slate-500">Email</dt><dd class="font-medium">{{ perfil.email or "-" }}</dd>
+        <dt class="text-slate-500">Edad</dt><dd class="font-medium">{{ perfil.edad or "-" }} anos</dd>
+        <dt class="text-slate-500">Peso</dt><dd class="font-medium">{{ perfil.peso_kg or "-" }} kg</dd>
+        <dt class="text-slate-500">Altura</dt><dd class="font-medium">{{ perfil.altura_cm or "-" }} cm</dd>
+        <dt class="text-slate-500">Objetivo</dt><dd class="font-medium">{{ perfil.objetivo or "-" }}</dd>
+        <dt class="text-slate-500">Nivel</dt><dd class="font-medium">{{ perfil.nivel or "-" }}</dd>
+        <dt class="text-slate-500">Deporte principal</dt><dd class="font-medium">{{ perfil.deporte_principal or "-" }}</dd>
+        <dt class="text-slate-500">Tono coach</dt><dd class="font-medium">{{ perfil.tono.value if perfil.tono else "firme" }}</dd>
+        <dt class="text-slate-500">Pais</dt><dd class="font-medium">{{ perfil.pais or "-" }}</dd>
+        <dt class="text-slate-500">Plan</dt><dd><span class="px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-xs">{{ perfil.plan_actual.value if perfil.plan_actual else "free" }}</span></dd>
+      </dl>
 
-<div id="perfil-view" hx-get="/api/me/perfil" hx-trigger="load" hx-swap="innerHTML"
-     class="mt-4 text-sm">Cargando...</div>
+      <p class="text-xs text-slate-500 mt-5 pt-4 border-t border-slate-100">
+        Para cambiar cualquier campo, hablale al bot: "cambia mi peso a 78kg",
+        "cambia mi objetivo a hipertrofia", "tono militar", etc.
+      </p>
+    {% else %}
+      <p class="text-sm text-slate-500">No tienes perfil aun. Hablale al bot.</p>
+    {% endif %}
+  </div>
 
-<div class="mt-8 pt-6 border-t border-slate-200">
-  <h2 class="font-semibold text-slate-800 mb-2">Acciones</h2>
-  <a href="/app/wearables" class="block bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-lg text-sm mb-2">
-    Wearables conectados
-  </a>
-  <a href="/app/pagar" class="block bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-lg text-sm">
-    Ver mi plan / pagar
-  </a>
+  {# Compromiso + acciones #}
+  <div class="space-y-4">
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <h3 class="font-semibold text-slate-800 mb-2">Mi compromiso</h3>
+      {% if compromiso %}
+        <p class="text-sm text-slate-700 italic">"{{ compromiso.objetivo_texto }}"</p>
+        <p class="text-xs text-slate-500 mt-2">
+          Firmado el {{ compromiso.fecha_firma }}<br>
+          Deadline: {{ compromiso.deadline }}<br>
+          Frecuencia: {{ compromiso.frecuencia_semanal }}/semana
+        </p>
+      {% else %}
+        <p class="text-sm text-slate-500">Sin compromiso activo.</p>
+        <p class="text-xs text-slate-400 mt-2">Firma uno con /firmar_compromiso en el bot.</p>
+      {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <h3 class="font-semibold text-slate-800 mb-3">Privacidad</h3>
+      <div class="space-y-2 text-sm">
+        <a href="https://t.me/EntrenadorAX_bot?start=exportar_csv" target="_blank" rel="noopener"
+           class="block bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg">
+          Exportar mis datos (CSV)
+        </a>
+        <a href="https://t.me/EntrenadorAX_bot?start=borrar_datos" target="_blank" rel="noopener"
+           class="block bg-rose-50 hover:bg-rose-100 text-rose-700 px-3 py-2 rounded-lg">
+          Borrar TODOS mis datos
+        </a>
+      </div>
+    </div>
+  </div>
 </div>
-
-<script>
-  document.body.addEventListener("htmx:afterRequest", function (evt) {
-    if (evt.detail.elt && evt.detail.elt.id === "perfil-view") {
-      try {
-        var p = JSON.parse(evt.detail.xhr.responseText);
-        var html = '<dl class="grid grid-cols-2 gap-y-1">';
-        ["nombre","email","pais","tono","idioma","plan_actual","peso_kg","altura_cm","edad"].forEach(function (k) {
-          if (p[k] !== undefined && p[k] !== null) {
-            html += '<dt class="text-slate-500">' + k + '</dt><dd class="font-medium">' + p[k] + '</dd>';
-          }
-        });
-        html += '</dl>';
-        evt.detail.elt.innerHTML = html;
-      } catch (e) {
-        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando perfil.</p>';
-      }
-    }
-  });
-</script>
 {% endblock %}

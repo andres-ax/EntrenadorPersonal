@@ -111,7 +111,7 @@ Riesgos:
 
 ## Refunds
 
-Solicitar via `soporte@entrenadorax.com`. Politica:
+Solicitar via `entrenadorax@axsoftware.codes` o WhatsApp +57 304 409 3197. Politica:
 - 100% si <72h post-aprobacion del admin.
 - Pro-rateado por dia restante despues de 72h.
 - Lifetime: 30 dias money-back. Despues no.

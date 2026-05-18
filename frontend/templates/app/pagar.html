@@ -1,35 +1,70 @@
 {% extends "app/_layout.html" %}
 
 {% block app_content %}
-<h1 class="text-xl font-bold text-slate-900">Mejorar tu plan</h1>
-<p class="text-sm text-slate-500">Pago via Bre-B, Nequi o transferencia.</p>
-
-<div class="space-y-3 mt-4">
-  <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
-    <div class="text-xs uppercase text-slate-500">Starter</div>
-    <div class="text-2xl font-bold">{{ precios.starter|cop }}<span class="text-sm font-normal text-slate-500">/mes</span></div>
-  </div>
-  <div class="bg-brand-600 text-white rounded-xl p-4">
-    <div class="text-xs uppercase opacity-80">Pro - mas popular</div>
-    <div class="text-2xl font-bold">{{ precios.pro|cop }}<span class="text-sm font-normal opacity-80">/mes</span></div>
-  </div>
-  <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
-    <div class="text-xs uppercase text-slate-500">Elite (con voz)</div>
-    <div class="text-2xl font-bold">{{ precios.elite|cop }}<span class="text-sm font-normal text-slate-500">/mes</span></div>
-  </div>
-  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-    <div class="text-xs uppercase text-amber-700">Lifetime</div>
-    <div class="text-2xl font-bold text-amber-800">{{ precios.lifetime|cop }}</div>
-    <div class="text-xs text-amber-700">pago unico, cupos limitados</div>
+<div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+  <h2 class="font-semibold text-slate-800 mb-1">Plan actual</h2>
+  <div class="flex items-center gap-3 mt-2">
+    <span class="px-3 py-1 rounded-full text-sm bg-brand-100 text-brand-700 font-medium">{{ plan_actual }}</span>
+    {% if plan_expira_en %}
+      <span class="text-sm text-slate-500">expira el {{ plan_expira_en|fecha if plan_expira_en else "-" }}</span>
+    {% endif %}
   </div>
 </div>
 
-<p class="text-sm text-slate-600 mt-6">
-  Para pagar, abre el bot en Telegram y escribe <code class="bg-slate-100 px-2 py-0.5 rounded">/pagar</code>.
-  El te guia paso a paso.
-</p>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="bg-white rounded-2xl shadow-sm p-6 border-2 {% if plan_actual == 'starter' %}border-brand-500{% else %}border-transparent{% endif %}">
+    <div class="text-xs uppercase text-slate-500">Starter</div>
+    <div class="text-2xl font-bold mt-2">{{ precios.starter|cop }}<span class="text-sm font-normal text-slate-500">/mes</span></div>
+    <ul class="text-sm text-slate-600 mt-3 space-y-1">
+      <li>Registro completo</li>
+      <li>3 tonos del coach</li>
+      <li>Reportes semanales</li>
+    </ul>
+  </div>
+  <div class="bg-brand-600 text-white rounded-2xl shadow-sm p-6 ring-4 ring-brand-200">
+    <div class="text-xs uppercase opacity-80">Pro - mas popular</div>
+    <div class="text-2xl font-bold mt-2">{{ precios.pro|cop }}<span class="text-sm font-normal opacity-80">/mes</span></div>
+    <ul class="text-sm opacity-95 mt-3 space-y-1">
+      <li>Todo de Starter</li>
+      <li>Macros de fotos</li>
+      <li>Graficos + PDF mensual</li>
+      <li>Plan automatico</li>
+    </ul>
+  </div>
+  <div class="bg-white rounded-2xl shadow-sm p-6 border-2 {% if plan_actual == 'elite' %}border-brand-500{% else %}border-transparent{% endif %}">
+    <div class="text-xs uppercase text-slate-500">Elite</div>
+    <div class="text-2xl font-bold mt-2">{{ precios.elite|cop }}<span class="text-sm font-normal text-slate-500">/mes</span></div>
+    <ul class="text-sm text-slate-600 mt-3 space-y-1">
+      <li>Todo de Pro</li>
+      <li>Llamadas de voz</li>
+      <li>Wearables OAuth</li>
+      <li>Soporte prioritario</li>
+    </ul>
+  </div>
+  <div class="bg-amber-50 border-2 {% if plan_actual == 'lifetime' %}border-amber-500{% else %}border-amber-200{% endif %} rounded-2xl shadow-sm p-6">
+    <div class="text-xs uppercase text-amber-700">Lifetime</div>
+    <div class="text-2xl font-bold text-amber-800 mt-2">{{ precios.lifetime|cop }}</div>
+    <div class="text-xs text-amber-700 mt-1">Pago unico, cupos limitados</div>
+    <ul class="text-sm text-amber-800 mt-3 space-y-1">
+      <li>Acceso de por vida</li>
+      <li>Todos los planes futuros</li>
+    </ul>
+  </div>
+</div>
 
-<a href="https://t.me/EntrenadorAX_bot" class="block mt-4 bg-brand-600 hover:bg-brand-700 text-white text-center font-semibold py-3 rounded-lg">
-  Abrir bot
-</a>
+<div class="mt-8 bg-white rounded-xl shadow-sm p-6 text-center">
+  <h3 class="font-semibold text-slate-800 mb-2">Como pago?</h3>
+  <p class="text-sm text-slate-600 mb-4">
+    Abre el bot y escribe <code class="bg-slate-100 px-2 py-0.5 rounded">/pagar</code>.
+    Elige plan, te paso datos de Bre-B/Nequi/Daviplata y subes el comprobante.
+    El admin valida en menos de 24h.
+  </p>
+  <a href="https://t.me/EntrenadorAX_bot?start=pagar" target="_blank" rel="noopener"
+     class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-lg">
+    Pagar via Telegram
+  </a>
+  <p class="text-xs text-slate-400 mt-4">
+    Soporte: <a href="https://wa.me/573044093197" class="underline">WhatsApp +57 304 409 3197</a>
+  </p>
+</div>
 {% endblock %}

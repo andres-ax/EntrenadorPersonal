@@ -1,6 +1,6 @@
 # ADMIN_GUIDE.md - Guia del administrador
 
-Como operar el panel admin de EntrenadorAX. URL: `entrenadorpersonal-production.up.railway.app/admin/login`.
+Como operar el panel admin de EntrenadorAX. URL: `https://entrenadorax.axsoftware.codes/admin/login`.
 
 El panel es server-rendered con Jinja2 + HTMX (sin SPA). Se sirve desde el
 mismo proceso FastAPI que el bot. Auth via cookie HttpOnly `admin_jwt`.

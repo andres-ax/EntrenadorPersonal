@@ -11,11 +11,19 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
+from src.api.admin_auth import (
+    ADMIN_COOKIE_NAME,
+    ADMIN_JWT_TTL,
+    LoginRequest,
+    autenticar_admin,
+)
+from src.api.auth import JWT_TTL_SECONDS, _sign_jwt
 from src.config import settings
 from src.data.deportes import DEPORTES, deporte_por_slug
+from src.services.codigo_web import validar_y_consumir
 from src.web.templates import render
 
 router = APIRouter(tags=["landing"], include_in_schema=False)
@@ -112,6 +120,102 @@ async def politicas_tca(request: Request):
         "landing/politicas/manejo-datos-tca.html",
         {"canonical": _canonical(request, "/politicas/manejo-datos-tca")},
     )
+
+
+# =============================================================================
+# Login unificado de la landing (deportistas + admins)
+# =============================================================================
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(
+    request: Request,
+    tab: str = "deportista",
+    error: str | None = None,
+):
+    """Pagina de login con dos tabs: Deportista (codigo Telegram) y Admin."""
+    return render(
+        request,
+        "landing/login.html",
+        {
+            "canonical": _canonical(request, "/login"),
+            "active_tab": tab if tab in ("deportista", "admin") else "deportista",
+            "error": error,
+        },
+    )
+
+
+@router.post("/login/deportista", response_class=HTMLResponse)
+async def login_deportista_submit(
+    request: Request, codigo: str = Form(...)
+):
+    """Valida el codigo de 6 digitos generado por /codigo_web en el bot."""
+    uid = await validar_y_consumir(codigo.strip())
+    if uid is None:
+        return render(
+            request,
+            "landing/login.html",
+            {
+                "canonical": _canonical(request, "/login"),
+                "active_tab": "deportista",
+                "error": "Codigo invalido o expirado. Pide uno nuevo con /codigo_web en el bot.",
+            },
+        )
+    response = RedirectResponse(url="/app/dashboard", status_code=303)
+    response.set_cookie(
+        key="user_jwt",
+        value=_sign_jwt(uid),
+        max_age=JWT_TTL_SECONDS,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@router.post("/login/admin", response_class=HTMLResponse)
+async def login_admin_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+):
+    """Login admin via email + password (mismo backend que /admin/login)."""
+    try:
+        resp_login = await autenticar_admin(
+            LoginRequest(email=email, password=password)
+        )
+    except HTTPException as exc:
+        return render(
+            request,
+            "landing/login.html",
+            {
+                "canonical": _canonical(request, "/login"),
+                "active_tab": "admin",
+                "error": exc.detail,
+                "email_prefill": email,
+            },
+        )
+    response = RedirectResponse(url="/admin/", status_code=303)
+    response.set_cookie(
+        key=ADMIN_COOKIE_NAME,
+        value=resp_login.jwt,
+        max_age=ADMIN_JWT_TTL,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@router.get("/logout")
+async def logout_unificado():
+    """Borra ambas cookies de sesion (deportista y admin) y vuelve al home."""
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie("user_jwt", path="/")
+    response.delete_cookie(ADMIN_COOKIE_NAME, path="/")
+    return response
 
 
 @router.get("/sitemap.xml")

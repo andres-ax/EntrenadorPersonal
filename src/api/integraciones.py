@@ -49,7 +49,7 @@ def _client_credentials(proveedor: str) -> tuple[str, str, str]:
     # webhook_base_url y NO admin_url. Fallback al dominio Railway real.
     api_base = str(
         settings.webhook_base_url
-        or "https://entrenadorpersonal-production.up.railway.app"
+        or "https://entrenadorax.axsoftware.codes"
     ).rstrip("/")
     redirect = f"{api_base}/api/integraciones/{proveedor}/callback"
     return cid, csec, redirect

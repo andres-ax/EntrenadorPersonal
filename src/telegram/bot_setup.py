@@ -59,6 +59,7 @@ COMANDOS_CORE = [
     "ayuda",
     "pagar",
     "llamar",
+    "codigo_web",
 ]
 
 # Set extendido solo para ES (locale principal). Estos solo aparecen en

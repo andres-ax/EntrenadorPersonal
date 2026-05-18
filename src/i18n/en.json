@@ -57,6 +57,7 @@
   "cmd_planes": "See available plans",
   "cmd_upgrade": "Activate plan via Telegram Stars",
   "cmd_llamar": "Talk to coach by voice",
+  "cmd_codigo_web": "Code to enter the web panel",
   "cmd_desafios": "Community challenges",
   "cmd_ranking": "Community ranking",
   "cmd_kudos": "Give/receive kudos",

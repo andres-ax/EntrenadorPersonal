@@ -17,7 +17,7 @@ import logging
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Cookie, Header, HTTPException, Response
 from pydantic import BaseModel
 
 from src.config import settings
@@ -122,6 +122,43 @@ class TokenResp(BaseModel):
     expira_en: int
 
 
+class CodigoWebReq(BaseModel):
+    codigo: str
+
+
+@router.post("/codigo", response_model=TokenResp)
+async def validar_codigo_web(req: CodigoWebReq, response: Response) -> TokenResp:
+    """Login web del deportista via codigo de 6 digitos generado por el bot.
+
+    Flujo:
+    1. Usuario manda /codigo_web al bot.
+    2. Bot genera codigo, lo guarda en Redis con TTL 15 min.
+    3. Usuario pega el codigo en /login (landing).
+    4. Este endpoint valida, consume el codigo (single-use) y setea
+       cookie HttpOnly `user_jwt`.
+
+    Auth alternativa al `/api/auth/initdata` (que requiere abrir el mini
+    app desde Telegram con `initData`). El codigo permite entrar desde
+    cualquier navegador.
+    """
+    from src.services.codigo_web import validar_y_consumir
+
+    uid = await validar_y_consumir(req.codigo)
+    if uid is None:
+        raise HTTPException(401, "Codigo invalido o expirado")
+    jwt = _sign_jwt(uid)
+    response.set_cookie(
+        key="user_jwt",
+        value=jwt,
+        max_age=JWT_TTL_SECONDS,
+        httponly=True,
+        secure=True,
+        samesite="lax",  # lax para que sobreviva navegacion same-site
+        path="/",
+    )
+    return TokenResp(jwt=jwt, uid=uid, expira_en=JWT_TTL_SECONDS)
+
+
 @router.post("/initdata", response_model=TokenResp)
 async def validar_initdata(req: InitDataReq, response: Response) -> TokenResp:
     """Valida initData del Mini App y devuelve JWT corto.
@@ -156,11 +193,24 @@ async def validar_initdata(req: InitDataReq, response: Response) -> TokenResp:
     return TokenResp(jwt=jwt, uid=uid, expira_en=JWT_TTL_SECONDS)
 
 
-async def get_uid_from_token(authorization: str | None = Header(None)) -> int:
-    """Dependency: extrae uid del header Authorization: Bearer X."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "Bearer token requerido")
-    token = authorization[7:]
+async def get_uid_from_token(
+    authorization: str | None = Header(None),
+    user_jwt: str | None = Cookie(default=None, alias="user_jwt"),
+) -> int:
+    """Dependency: extrae uid del Authorization: Bearer X o cookie user_jwt.
+
+    Acepta DOS fuentes para que `/api/me/*` funcione tanto desde:
+    - Telegram Mini App (legacy: localStorage + Bearer header).
+    - Panel web HTML (cookie HttpOnly seteada por /login/deportista o
+      /api/auth/codigo).
+    """
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    elif user_jwt:
+        token = user_jwt
+    if not token:
+        raise HTTPException(401, "Auth requerida (Bearer header o cookie user_jwt)")
     uid = verify_jwt(token)
     if uid is None:
         raise HTTPException(401, "Token invalido o expirado")
@@ -215,7 +265,7 @@ async def crear_magic_link(req: MagicLinkReq) -> MagicLinkResp:
                         "Content-Type": "application/json",
                     },
                     json={
-                        "from": "EntrenadorAX <auth@entrenadorax.com>",
+                        "from": "EntrenadorAX <entrenadorax@axsoftware.codes>",
                         "to": [email],
                         "subject": "Tu link de acceso a EntrenadorAX",
                         "html": (

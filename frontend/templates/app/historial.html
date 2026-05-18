@@ -1,0 +1,61 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+  <div class="flex flex-wrap gap-2">
+    {% set tipos = [
+      ("entrenos", "Entrenos"),
+      ("comidas", "Comidas"),
+      ("sueno", "Sueno"),
+      ("peso", "Peso"),
+    ] %}
+    {% for slug, label in tipos %}
+      <a href="?tipo={{ slug }}&dias={{ dias }}"
+         class="px-4 py-2 rounded-lg text-sm
+                {% if tipo == slug %}bg-brand-600 text-white{% else %}bg-slate-100 hover:bg-slate-200 text-slate-700{% endif %}">
+        {{ label }}
+      </a>
+    {% endfor %}
+    <form method="get" class="ml-auto flex items-center gap-2">
+      <input type="hidden" name="tipo" value="{{ tipo }}" />
+      <label class="text-xs text-slate-500">Dias:</label>
+      <select name="dias" onchange="this.form.submit()" class="px-2 py-1 border border-slate-300 rounded text-sm">
+        {% for n in [7, 30, 90, 365] %}
+          <option value="{{ n }}" {% if dias == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+</div>
+
+{% if items %}
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="px-5 py-3 border-b border-slate-100 text-sm">
+      <strong>{{ items|length }}</strong> registros
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+        <tr>
+          {% for h in headers %}
+            <th class="px-4 py-2 text-left">{{ h }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in items %}
+          <tr class="hover:bg-slate-50">
+            {% for h in headers %}
+              <td class="px-4 py-2">{{ row[h] }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="bg-white rounded-xl shadow-sm p-8 text-center">
+    <p class="text-sm text-slate-500">Sin registros de {{ tipo }} en los ultimos {{ dias }} dias.</p>
+    <p class="text-xs text-slate-400 mt-2">Habla con el bot para registrar.</p>
+  </div>
+{% endif %}
+{% endblock %}

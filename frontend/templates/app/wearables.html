@@ -1,39 +1,53 @@
 {% extends "app/_layout.html" %}
 
 {% block app_content %}
-<h1 class="text-xl font-bold text-slate-900">Wearables</h1>
-<p class="text-sm text-slate-500">Conecta Whoop, Strava, Garmin o Google Fit para sincronizar tu actividad.</p>
+<div class="bg-white rounded-xl shadow-sm p-6 mb-5">
+  <p class="text-sm text-slate-600">
+    Conecta tu wearable favorito para sincronizar entrenos, sueno y frecuencia
+    cardiaca automaticamente. Solo plan Elite o Lifetime.
+  </p>
+</div>
 
-<div id="wearables-list" hx-get="/api/me/wearables" hx-trigger="load" hx-swap="innerHTML" class="mt-4 text-sm">
-  Cargando...
+<div id="wearables-list" hx-get="/api/me/wearables" hx-trigger="load" hx-swap="innerHTML">
+  <p class="text-sm text-slate-500">Cargando proveedores...</p>
 </div>
 
 <script>
   document.body.addEventListener("htmx:afterRequest", function (evt) {
-    if (evt.detail.elt && evt.detail.elt.id === "wearables-list") {
-      try {
-        var data = JSON.parse(evt.detail.xhr.responseText);
-        var items = data.proveedores || data || [];
-        var html = '<ul class="space-y-2">';
-        items.forEach(function (w) {
-          var conectado = w.conectado;
-          html += '<li class="bg-white border border-slate-200 rounded-xl p-4">'
-                + '<div class="flex items-center justify-between">'
-                + '<div><div class="font-medium">' + (w.nombre || w.proveedor) + '</div>'
-                + '<div class="text-xs text-slate-500">' + (conectado ? "Conectado" : "Desconectado") + '</div></div>';
-          if (conectado) {
-            html += '<button hx-post="/api/me/wearables/' + w.proveedor + '/sync" class="text-xs bg-emerald-600 text-white px-3 py-1 rounded">Sync</button>';
-          } else {
-            html += '<a href="/api/me/wearables/' + w.proveedor + '/connect" class="text-xs bg-brand-600 text-white px-3 py-1 rounded">Conectar</a>';
-          }
-          html += '</div></li>';
-        });
-        html += '</ul>';
-        evt.detail.elt.innerHTML = html;
-        htmx.process(evt.detail.elt);
-      } catch (e) {
-        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando wearables.</p>';
+    if (!evt.detail.elt || evt.detail.elt.id !== "wearables-list") return;
+    if (evt.detail.xhr.status === 401) {
+      evt.detail.elt.innerHTML = '<div class="bg-rose-50 text-rose-700 p-4 rounded-lg text-sm">Tu sesion expiro. Pide un nuevo /codigo_web en el bot.</div>';
+      return;
+    }
+    try {
+      var data = JSON.parse(evt.detail.xhr.responseText);
+      var items = data.proveedores || data || [];
+      if (!items.length) {
+        evt.detail.elt.innerHTML = '<p class="text-sm text-slate-500">No hay proveedores configurados aun.</p>';
+        return;
       }
+      var html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+      items.forEach(function (w) {
+        var connected = w.conectado;
+        html += '<div class="bg-white rounded-xl shadow-sm p-5">';
+        html += '  <div class="flex items-center justify-between">';
+        html += '    <div><div class="font-medium text-slate-800">' + (w.nombre || w.proveedor) + '</div>';
+        html += '         <div class="text-xs mt-0.5 ' + (connected ? "text-emerald-600" : "text-slate-500") + '">' + (connected ? "Conectado" : "Desconectado") + '</div></div>';
+        if (connected) {
+          html += '    <button hx-post="/api/me/wearables/' + w.proveedor + '/sync"';
+          html += '            class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm">Sincronizar</button>';
+        } else {
+          html += '    <a href="/api/me/wearables/' + w.proveedor + '/connect"';
+          html += '       class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm">Conectar</a>';
+        }
+        html += '  </div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      evt.detail.elt.innerHTML = html;
+      htmx.process(evt.detail.elt);
+    } catch (e) {
+      evt.detail.elt.innerHTML = '<p class="text-rose-600 text-sm">Error cargando wearables: ' + e.message + '</p>';
     }
   });
 </script>

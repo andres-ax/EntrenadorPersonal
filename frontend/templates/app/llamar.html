@@ -2,66 +2,70 @@
 
 {% block head_extra %}
 {{ super() }}
-{# JWT del usuario disponible para el WebSocket (no se manda via cookie en
-   handshakes WS). El servidor lo verifica. La meta tag NO es HttpOnly pero
-   solo dura mientras la pagina esta abierta. #}
 {% set user_jwt_value = request.cookies.get("user_jwt", "") %}
 <meta name="user-jwt" content="{{ user_jwt_value }}" />
 <meta name="realtime-ws" content="wss://{{ request.url.netloc }}/ws/realtime" />
 {% endblock %}
 
 {% block app_content %}
-<h1 class="text-xl font-bold text-slate-900">Llamar al coach</h1>
-<p class="text-sm text-slate-500">
-  Hablale al coach en tiempo real. Disponible desde plan Starter (trial 5 min).
-</p>
+<div class="max-w-2xl mx-auto">
+  <div class="bg-white rounded-xl shadow-sm p-6">
+    <p class="text-sm text-slate-600 mb-6">
+      Conversa con el coach IA en tiempo real. Calidad de audio: 24kHz mono.
+      Disponible desde plan Starter (trial 5 min al mes; ilimitado en Elite).
+    </p>
 
-<div class="mt-4">
-  <div id="call-error" class="hidden mb-3 p-3 rounded-lg bg-rose-50 text-rose-700 text-sm"></div>
+    <div id="call-error" class="hidden mb-3 p-3 rounded-lg bg-rose-50 text-rose-700 text-sm"></div>
 
-  <p class="text-xs text-slate-500 mb-3">Estado: <span id="call-state" class="font-semibold">idle</span></p>
+    <div class="flex items-center justify-between mb-5">
+      <div class="text-sm">
+        Estado: <span id="call-state" class="font-semibold ml-1 px-2 py-0.5 rounded bg-slate-100">idle</span>
+      </div>
+      <div id="call-quota" class="text-sm text-slate-500"></div>
+    </div>
 
-  <button id="btn-iniciar"
-          class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-lg"
-          style="display: var(--show-iniciar, block);">
-    Iniciar llamada
-  </button>
-  <button id="btn-terminar"
-          class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-3 rounded-lg mt-2"
-          style="display: none;">
-    Terminar llamada
-  </button>
-  <button id="btn-volver"
-          class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-lg mt-2"
-          style="display: none;">
-    Volver a llamar
-  </button>
+    <button id="btn-iniciar"
+            class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-4 rounded-lg text-lg">
+      Iniciar llamada
+    </button>
+    <button id="btn-terminar"
+            class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-4 rounded-lg text-lg"
+            style="display: none;">
+      Terminar llamada
+    </button>
+    <button id="btn-volver"
+            class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-4 rounded-lg text-lg"
+            style="display: none;">
+      Volver a llamar
+    </button>
+  </div>
 
-  <p id="call-quota" class="text-xs text-slate-500 mt-3"></p>
-</div>
+  <div class="mt-6 bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-3">Transcripcion en vivo</h3>
+    <div id="call-log-wrap" class="max-h-72 overflow-y-auto">
+      <div id="call-log" class="space-y-1 text-sm text-slate-700"></div>
+    </div>
+  </div>
 
-<div class="mt-6 bg-slate-50 rounded-xl p-3 max-h-60 overflow-y-auto" id="call-log-wrap">
-  <h3 class="text-sm font-semibold mb-2">Transcripcion</h3>
-  <div id="call-log" class="space-y-1 text-xs"></div>
+  <p class="text-xs text-slate-500 mt-4">
+    Necesitamos permiso del microfono. Si no funciona el audio, revisa que tu
+    navegador permita acceso al microfono para este sitio.
+  </p>
 </div>
 
 <style>
   body[data-call-state="idle"] #btn-iniciar { display: block; }
   body[data-call-state="idle"] #btn-terminar,
   body[data-call-state="idle"] #btn-volver { display: none; }
-
   body[data-call-state="conectando"] #btn-iniciar,
   body[data-call-state="conectando"] #btn-terminar,
   body[data-call-state="conectando"] #btn-volver { display: none; }
-
   body[data-call-state="en_llamada"] #btn-terminar { display: block; }
   body[data-call-state="en_llamada"] #btn-iniciar,
   body[data-call-state="en_llamada"] #btn-volver { display: none; }
-
   body[data-call-state="terminada"] #btn-volver { display: block; }
   body[data-call-state="terminada"] #btn-iniciar,
   body[data-call-state="terminada"] #btn-terminar { display: none; }
-
   body[data-call-state="error"] #btn-iniciar { display: block; }
   body[data-call-state="error"] #btn-terminar,
   body[data-call-state="error"] #btn-volver { display: none; }

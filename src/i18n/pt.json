@@ -57,6 +57,7 @@
   "cmd_planes": "Ver planos disponiveis",
   "cmd_upgrade": "Ativar plano via Telegram Stars",
   "cmd_llamar": "Falar com o coach por voz",
+  "cmd_codigo_web": "Codigo para entrar no painel web",
   "cmd_desafios": "Desafios da comunidade",
   "cmd_ranking": "Ranking da comunidade",
   "cmd_kudos": "Dar/receber kudos",

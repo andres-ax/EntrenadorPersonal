@@ -34,12 +34,13 @@ FERNET_KEY=...                  # Fernet.generate_key().decode()
 ENV=prod
 
 # URLs (Railway expone *.up.railway.app automaticamente)
-WEBHOOK_BASE_URL=https://entrenadorpersonal-production.up.railway.app
-MINIAPP_URL=https://entrenadorpersonal-production.up.railway.app/app
-LANDING_URL=https://entrenadorpersonal-production.up.railway.app
+WEBHOOK_BASE_URL=https://entrenadorax.axsoftware.codes
+MINIAPP_URL=https://entrenadorax.axsoftware.codes/app
+LANDING_URL=https://entrenadorax.axsoftware.codes
+ADMIN_URL=https://entrenadorax.axsoftware.codes/admin
 
 # Seed del primer admin (solo en primer deploy)
-ADMIN_SEED_EMAIL=admin@entrenadorax.com
+ADMIN_SEED_EMAIL=entrenadorax@axsoftware.codes
 ADMIN_SEED_PASSWORD=...
 
 # Pricing
@@ -50,7 +51,7 @@ PRECIO_LIFETIME_COP=399000
 
 # Opcional: Sentry / Plausible
 SENTRY_DSN=...
-PLAUSIBLE_DOMAIN=entrenadorpersonal-production.up.railway.app
+PLAUSIBLE_DOMAIN=entrenadorax.axsoftware.codes
 ```
 
 ## Migraciones DB
@@ -78,7 +79,7 @@ esta configurado. Si necesitas hacerlo manualmente:
 
 ```bash
 curl -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/setWebhook" \
-  -d "url=https://entrenadorpersonal-production.up.railway.app/webhook" \
+  -d "url=https://entrenadorax.axsoftware.codes/webhook" \
   -d "secret_token=$WEBHOOK_SECRET" \
   -d "allowed_updates=[\"message\",\"callback_query\",\"poll_answer\",\"message_reaction\",\"successful_payment\",\"pre_checkout_query\",\"inline_query\"]"
 ```
@@ -86,7 +87,7 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/setWebhook" \
 Inspeccionar config actual:
 
 ```bash
-curl https://entrenadorpersonal-production.up.railway.app/webhook-info \
+curl https://entrenadorax.axsoftware.codes/webhook-info \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
@@ -107,14 +108,14 @@ curl https://entrenadorpersonal-production.up.railway.app/webhook-info \
 ## Health checks
 
 ```bash
-curl https://entrenadorpersonal-production.up.railway.app/health
+curl https://entrenadorax.axsoftware.codes/health
 # {"status":"ok","bot":true,"db":true,"redis":true,"db_pool":{...}}
 ```
 
 ## Wearables OAuth
 
 Registrar redirect URI en cada developer portal:
-- `https://entrenadorpersonal-production.up.railway.app/api/integraciones/{whoop|strava|garmin|google_fit}/callback`
+- `https://entrenadorax.axsoftware.codes/api/integraciones/{whoop|strava|garmin|google_fit}/callback`
 
 Setear `<PROVEEDOR>_CLIENT_ID` y `<PROVEEDOR>_CLIENT_SECRET` en el servicio.
 

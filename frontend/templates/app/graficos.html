@@ -1,0 +1,30 @@
+{% extends "app/_layout.html" %}
+
+{% block app_content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-3">Peso (ultimas semanas)</h3>
+    <img src="/api/me/charts/peso.png" alt="Peso" class="w-full rounded-lg" loading="lazy"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+    <p class="hidden text-sm text-slate-500 text-center py-8">Sin datos suficientes. Registra tu peso 2+ veces.</p>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-3">Volumen entreno semanal</h3>
+    <img src="/api/me/charts/volumen.png" alt="Volumen" class="w-full rounded-lg" loading="lazy"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+    <p class="hidden text-sm text-slate-500 text-center py-8">Sin datos suficientes. Registra entrenos 2+ semanas.</p>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-3">Macros del dia</h3>
+    <img src="/api/me/charts/macros.png" alt="Macros" class="w-full rounded-lg" loading="lazy"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+    <p class="hidden text-sm text-slate-500 text-center py-8">Aun no registraste comidas hoy.</p>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <h3 class="font-semibold text-slate-800 mb-3">Streak heatmap</h3>
+    <img src="/api/me/charts/streak.png" alt="Streak" class="w-full rounded-lg" loading="lazy"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+    <p class="hidden text-sm text-slate-500 text-center py-8">Sin entrenos registrados aun.</p>
+  </div>
+</div>
+{% endblock %}

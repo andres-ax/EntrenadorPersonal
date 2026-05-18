@@ -708,6 +708,41 @@ async def cmd_feedback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def cmd_codigo_web(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Genera codigo de 6 digitos para login web en https://entrenadorax.axsoftware.codes/login.
+
+    El codigo expira en 15 minutos y es single-use. Solo un codigo activo
+    por usuario; pedir uno nuevo invalida el anterior.
+    """
+    from src.services.codigo_web import CODIGO_TTL_SECONDS, generar_codigo
+
+    uid = update.effective_user.id
+    try:
+        codigo = await generar_codigo(uid)
+    except Exception:
+        logger.exception("Error generando codigo_web uid=%s", uid)
+        await update.message.reply_text(
+            "Tuve un problema generando el codigo. Intenta de nuevo en un momento."
+        )
+        return
+    minutos = CODIGO_TTL_SECONDS // 60
+    landing_url = (
+        str(settings.landing_url).rstrip("/") if settings.landing_url
+        else "https://entrenadorax.axsoftware.codes"
+    )
+    await update.message.reply_text(
+        f"<b>Tu codigo de acceso web</b>\n\n"
+        f"<code>{codigo}</code>\n\n"
+        f"1) Abre <a href=\"{landing_url}/login\">{landing_url}/login</a>\n"
+        f"2) Tab 'Deportista' -> pega el codigo\n"
+        f"3) Listo, entras a tu panel.\n\n"
+        f"El codigo vence en {minutos} minutos y solo sirve una vez. "
+        f"Si te lo pierdes, manda /codigo_web otra vez.",
+        disable_web_page_preview=True,
+    )
+    logger.info("cmd_codigo_web enviado uid=%s", uid)
+
+
 async def cmd_presumir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Compartir ultimo PR a un grupo del usuario."""
     keyboard = [
@@ -1085,6 +1120,7 @@ async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "   /planes - ver opciones de plan\n"
         "   /upgrade - activar via Telegram Stars\n"
         "   /llamar - llamada de voz con el coach\n"
+        "   /codigo_web - codigo para entrar al panel web\n"
         "   /desafios - desafios de la comunidad\n"
         "   /ranking - top de la semana\n"
         "   /kudos - dar/recibir kudos\n"
@@ -2136,6 +2172,7 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("salir", cmd_salir))
     app.add_handler(CommandHandler("dia_libre", cmd_dia_libre))
     app.add_handler(CommandHandler("feedback", cmd_feedback))
+    app.add_handler(CommandHandler("codigo_web", cmd_codigo_web))
     app.add_handler(CommandHandler("presumir", cmd_presumir))
     app.add_handler(CommandHandler("hoy", cmd_hoy))
     app.add_handler(CommandHandler("pr", cmd_pr))

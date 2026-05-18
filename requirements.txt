@@ -108,14 +108,10 @@ cryptography>=42.0,<46.0
 
 
 # -----------------------------------------------------------------------------
-# Tareas asincronas (worker)
+# WebSocket realtime
 # -----------------------------------------------------------------------------
-# arq se MUEVE a requirements-worker.txt porque su redis<5 entra en conflicto
-# con openai-agents[redis] que requiere redis>=7. El worker es un servicio
-# Railway aparte (`arq src.worker.main.WorkerSettings`); cuando se despliegue
-# se instala con `pip install -r requirements.txt -r requirements-worker.txt`.
-
-# Cliente WebSocket async para conectar a OpenAI Realtime API.
+# Cliente WebSocket async para conectar a OpenAI Realtime API (llamadas de voz).
+# El servidor WS vive en /ws/realtime dentro del mismo proceso FastAPI.
 websockets>=13.0,<16.0
 
 

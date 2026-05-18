@@ -1,32 +1,52 @@
 {% extends "app/_layout.html" %}
 
 {% block app_content %}
-<h1 class="text-xl font-bold text-slate-900">Calendario</h1>
-<p class="text-sm text-slate-500">Tus entrenos de las ultimas 4 semanas.</p>
-
-<div id="calendar-data" hx-get="/api/me/calendar" hx-trigger="load" hx-swap="innerHTML"
-     class="mt-4 text-sm text-slate-500">
-  Cargando...
+<div class="bg-white rounded-xl shadow-sm p-5 mb-4 flex items-center justify-between">
+  <p class="text-sm text-slate-600">Verde: entrenaste. Gris: sin registro.</p>
+  <a href="/app/historial?tipo=entrenos" class="text-sm text-brand-600 hover:underline">Ver historial completo</a>
 </div>
 
-<script>
-  // Como /api/me/calendar devuelve JSON (no HTML), renderizamos manualmente.
-  document.body.addEventListener("htmx:afterRequest", function (evt) {
-    if (evt.detail.elt && evt.detail.elt.id === "calendar-data") {
-      try {
-        var data = JSON.parse(evt.detail.xhr.responseText);
-        var html = '<div class="grid grid-cols-7 gap-1 text-center text-xs">';
-        var days = data.dias || [];
-        days.forEach(function (d) {
-          var bg = d.tiene_entreno ? "bg-emerald-500" : "bg-slate-200";
-          html += '<div class="' + bg + ' rounded p-2 text-white">' + (d.dia || "") + '</div>';
-        });
-        html += '</div>';
-        evt.detail.elt.innerHTML = html;
-      } catch (e) {
-        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando calendario.</p>';
-      }
-    }
-  });
-</script>
+<div class="grid grid-cols-7 gap-3">
+  {% for d in dias %}
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center
+                {% if d.realizado %}ring-2 ring-emerald-500{% endif %}
+                {% if d.es_hoy %}border-2 border-brand-600{% endif %}">
+      <div class="text-xs uppercase text-slate-500">{{ d.nombre }}</div>
+      <div class="text-2xl font-bold mt-1 {% if d.es_hoy %}text-brand-700{% else %}text-slate-900{% endif %}">
+        {{ d.fecha.day }}
+      </div>
+      <div class="text-xs text-slate-500 mt-1">{{ d.fecha.strftime('%b') }}</div>
+      {% if d.realizado %}
+        <div class="mt-3 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs">
+          {{ d.tipo or "entreno" }}
+        </div>
+        {% if d.duracion_min %}
+          <div class="text-xs text-slate-500 mt-1">{{ d.duracion_min }} min</div>
+        {% endif %}
+      {% else %}
+        <div class="mt-3 text-xs text-slate-400">Sin registro</div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+<div class="mt-6 bg-white rounded-xl shadow-sm p-5">
+  <h2 class="font-semibold text-slate-800 mb-3">Detalle de la semana</h2>
+  {% set realizados = dias|selectattr("realizado")|list %}
+  {% if realizados %}
+    <ul class="divide-y divide-slate-100 text-sm">
+      {% for d in realizados %}
+        <li class="py-3">
+          <div class="flex justify-between">
+            <span class="font-medium">{{ d.nombre }} {{ d.fecha.day }} {{ d.fecha.strftime('%b') }}</span>
+            <span class="text-emerald-600 text-xs">{{ d.tipo or "entreno" }}</span>
+          </div>
+          {% if d.notas %}<p class="text-xs text-slate-500 mt-1">{{ d.notas }}</p>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-sm text-slate-500">Aun no entrenas esta semana. Hablale al bot para registrar.</p>
+  {% endif %}
+</div>
 {% endblock %}

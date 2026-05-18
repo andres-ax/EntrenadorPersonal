@@ -1,0 +1,101 @@
+{% extends "landing/_layout.html" %}
+
+{% block title %}Iniciar sesion - EntrenadorAX{% endblock %}
+{% block description %}Entra a tu panel deportista con el codigo que te dio el bot, o al panel admin con email + contrasena.{% endblock %}
+
+{% block landing_content %}
+<section class="bg-slate-50 py-16 min-h-[70vh]">
+  <div class="max-w-md mx-auto px-4">
+    <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+
+      {# Tabs #}
+      <div class="grid grid-cols-2 border-b border-slate-200 text-sm font-medium">
+        <a href="/login?tab=deportista"
+           class="py-3 text-center transition
+                  {% if active_tab == 'deportista' %}bg-white text-brand-700 border-b-2 border-brand-600
+                  {% else %}bg-slate-50 text-slate-500 hover:text-slate-800{% endif %}">
+          Deportista
+        </a>
+        <a href="/login?tab=admin"
+           class="py-3 text-center transition
+                  {% if active_tab == 'admin' %}bg-white text-brand-700 border-b-2 border-brand-600
+                  {% else %}bg-slate-50 text-slate-500 hover:text-slate-800{% endif %}">
+          Admin
+        </a>
+      </div>
+
+      <div class="p-7">
+        {% if error %}
+          <div class="mb-4 p-3 rounded-lg bg-rose-50 text-rose-700 text-sm">
+            {{ error }}
+          </div>
+        {% endif %}
+
+        {% if active_tab == "deportista" %}
+          <h1 class="text-xl font-bold text-slate-900 mb-1">Codigo de acceso</h1>
+          <p class="text-sm text-slate-500 mb-5">
+            Abre el bot en Telegram y envia <code class="bg-slate-100 px-1.5 py-0.5 rounded">/codigo_web</code>.
+            Te devolvera un codigo de 6 digitos.
+          </p>
+
+          <form method="post" action="/login/deportista" class="space-y-4">
+            <div>
+              <label class="block text-xs uppercase text-slate-500 mb-2" for="codigo">Codigo</label>
+              <input
+                type="text"
+                name="codigo"
+                id="codigo"
+                required
+                autofocus
+                pattern="[0-9]{6}"
+                maxlength="6"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                placeholder="000000"
+                class="w-full text-center text-2xl tracking-widest font-mono px-3 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <button type="submit"
+                    class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-lg transition">
+              Entrar al panel
+            </button>
+          </form>
+
+          <div class="mt-5 pt-5 border-t border-slate-100 text-sm">
+            <p class="text-slate-600 mb-2">No has hablado nunca con el bot?</p>
+            <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
+               class="block text-center bg-slate-900 hover:bg-slate-700 text-white py-2.5 rounded-lg">
+              Abrir @EntrenadorAX_bot
+            </a>
+          </div>
+
+        {% else %}
+          <h1 class="text-xl font-bold text-slate-900 mb-1">Panel admin</h1>
+          <p class="text-sm text-slate-500 mb-5">Acceso restringido. Email + contrasena.</p>
+
+          <form method="post" action="/login/admin" class="space-y-4">
+            <div>
+              <label class="block text-xs uppercase text-slate-500 mb-1" for="email">Email</label>
+              <input type="email" name="email" id="email" required autofocus
+                     value="{{ email_prefill|default('') }}"
+                     class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+              <label class="block text-xs uppercase text-slate-500 mb-1" for="password">Contrasena</label>
+              <input type="password" name="password" id="password" required
+                     class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <button type="submit"
+                    class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-lg transition">
+              Ingresar
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="text-xs text-slate-400 mt-6 text-center">
+      Al continuar aceptas los <a href="/politicas/terminos" class="underline">terminos</a> y la <a href="/politicas/privacidad" class="underline">politica de privacidad</a>.
+    </p>
+  </div>
+</section>
+{% endblock %}

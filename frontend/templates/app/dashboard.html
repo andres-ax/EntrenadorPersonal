@@ -1,28 +1,108 @@
 {% extends "app/_layout.html" %}
-{% set page_title = "Dashboard" %}
 
 {% block app_content %}
-<h1 class="text-xl font-bold text-slate-900">Hoy</h1>
-<p class="text-sm text-slate-500">Resumen de tu dia y graficos.</p>
+{# Saludo + nombre del usuario si lo tenemos #}
+{% if user.perfil and user.perfil.nombre %}
+  <p class="text-sm text-slate-500 mb-6">Hola {{ user.perfil.nombre }}, este es tu resumen.</p>
+{% endif %}
 
-{# Los charts vienen del endpoint /api/me/charts/*.png que renderiza
-   matplotlib server-side. Solo agregamos `?_=ts` para evitar cache. #}
-<div class="grid grid-cols-1 gap-3 mt-4">
-  <div class="bg-white border border-slate-200 rounded-xl p-3">
-    <h3 class="text-xs uppercase text-slate-500 mb-2">Peso</h3>
-    <img src="/api/me/charts/peso.png" alt="Peso" class="w-full rounded" loading="lazy" />
+{# KPIs principales #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  <div class="bg-white rounded-xl shadow-sm p-4">
+    <div class="text-xs uppercase text-slate-500">Racha entreno</div>
+    <div class="text-3xl font-bold text-slate-900 mt-1">{{ streak.dias_actuales }}<span class="text-base font-normal text-slate-500"> dias</span></div>
+    <div class="text-xs text-slate-500 mt-1">Max: {{ streak.max_historico }} | Freezes: {{ streak.freezes_disponibles }}</div>
   </div>
-  <div class="bg-white border border-slate-200 rounded-xl p-3">
-    <h3 class="text-xs uppercase text-slate-500 mb-2">Volumen entreno</h3>
-    <img src="/api/me/charts/volumen.png" alt="Volumen" class="w-full rounded" loading="lazy" />
+  <div class="bg-white rounded-xl shadow-sm p-4">
+    <div class="text-xs uppercase text-slate-500">Entrenos esta semana</div>
+    <div class="text-3xl font-bold text-slate-900 mt-1">{{ reporte.dias_unicos_entreno|default(0) }}</div>
+    <div class="text-xs text-slate-500 mt-1">{{ reporte.total_entrenos|default(0) }} sesiones totales</div>
   </div>
-  <div class="bg-white border border-slate-200 rounded-xl p-3">
-    <h3 class="text-xs uppercase text-slate-500 mb-2">Macros</h3>
-    <img src="/api/me/charts/macros.png" alt="Macros" class="w-full rounded" loading="lazy" />
+  <div class="bg-white rounded-xl shadow-sm p-4">
+    <div class="text-xs uppercase text-slate-500">Calorias hoy</div>
+    <div class="text-3xl font-bold text-slate-900 mt-1">{{ nutricion.calorias_totales|default(0) }}</div>
+    <div class="text-xs text-slate-500 mt-1">{{ nutricion.comidas_con_datos|default(0) }} de {{ nutricion.comidas_totales|default(0) }} con macros</div>
   </div>
-  <div class="bg-white border border-slate-200 rounded-xl p-3">
-    <h3 class="text-xs uppercase text-slate-500 mb-2">Streak</h3>
-    <img src="/api/me/charts/streak.png" alt="Streak" class="w-full rounded" loading="lazy" />
+  <div class="bg-white rounded-xl shadow-sm p-4">
+    <div class="text-xs uppercase text-slate-500">Peso actual</div>
+    <div class="text-3xl font-bold text-slate-900 mt-1">
+      {% if peso_recientes %}{{ peso_recientes[0].peso_kg }} kg{% else %}-{% endif %}
+    </div>
+    <div class="text-xs text-slate-500 mt-1">
+      {% if peso_recientes %}al {{ peso_recientes[0].fecha }}{% else %}sin registros{% endif %}
+    </div>
   </div>
 </div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  {# Macros del dia #}
+  <div class="bg-white rounded-xl shadow-sm p-5 lg:col-span-2">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-slate-800">Macros de hoy</h2>
+      <a href="/app/graficos" class="text-sm text-brand-600 hover:underline">Ver graficos</a>
+    </div>
+    <div class="grid grid-cols-3 gap-3 text-center">
+      <div class="p-3 bg-slate-50 rounded-lg">
+        <div class="text-xs text-slate-500">Proteinas</div>
+        <div class="text-xl font-bold text-slate-900">{{ nutricion.proteinas_g|default(0) }}g</div>
+      </div>
+      <div class="p-3 bg-slate-50 rounded-lg">
+        <div class="text-xs text-slate-500">Carbos</div>
+        <div class="text-xl font-bold text-slate-900">{{ nutricion.carbohidratos_g|default(0) }}g</div>
+      </div>
+      <div class="p-3 bg-slate-50 rounded-lg">
+        <div class="text-xs text-slate-500">Grasas</div>
+        <div class="text-xl font-bold text-slate-900">{{ nutricion.grasas_g|default(0) }}g</div>
+      </div>
+    </div>
+    {% if nutricion.comidas_totales|default(0) == 0 %}
+      <p class="text-sm text-slate-500 mt-4">
+        Aun no registraste comidas hoy. Hablale al bot: "almorce pollo con arroz".
+      </p>
+    {% endif %}
+  </div>
+
+  {# Quick actions #}
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <h2 class="font-semibold text-slate-800 mb-3">Acciones rapidas</h2>
+    <div class="space-y-2 text-sm">
+      <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
+         class="block w-full text-left px-3 py-2 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium">
+        Registrar en el bot
+      </a>
+      <a href="/app/llamar" class="block w-full text-left px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">
+        Llamar al coach
+      </a>
+      <a href="/app/plan" class="block w-full text-left px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">
+        Generar plan
+      </a>
+      <a href="/app/historial?tipo=entrenos" class="block w-full text-left px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">
+        Ver historial
+      </a>
+    </div>
+  </div>
+</div>
+
+{# Peso reciente #}
+{% if peso_recientes %}
+<div class="bg-white rounded-xl shadow-sm p-5 mt-6">
+  <h2 class="font-semibold text-slate-800 mb-3">Peso reciente</h2>
+  <table class="w-full text-sm">
+    <thead class="text-xs uppercase text-slate-500">
+      <tr>
+        <th class="text-left py-1">Fecha</th>
+        <th class="text-right py-1">Peso</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in peso_recientes %}
+        <tr>
+          <td class="py-2">{{ p.fecha }}</td>
+          <td class="py-2 text-right font-medium">{{ p.peso_kg }} kg</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 {% endblock %}

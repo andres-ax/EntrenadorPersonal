@@ -1,20 +1,64 @@
 {% extends "base.html" %}
 
 {% block head_extra %}
-{# Telegram WebApp SDK. Usamos `window.Telegram.WebApp` directamente sin
-   dependencias adicionales. #}
+{# Telegram WebApp SDK (opcional: si el panel se abre desde el bot, se
+   inicializa). En desktop fallback a Cookie HttpOnly user_jwt. #}
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-  body { background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #1e293b); }
+  body { background: #f1f5f9; }
+  /* Telegram WebApp: respeta los colores del tema cuando se abre desde el bot */
+  @media (display-mode: standalone) {
+    body {
+      background: var(--tg-theme-bg-color, #f1f5f9);
+      color: var(--tg-theme-text-color, #1e293b);
+    }
+  }
 </style>
 {% endblock %}
 
 {% block body %}
-<div class="min-h-screen flex flex-col max-w-md mx-auto bg-white">
-  {% include "app/_navbar.html" %}
-  <main class="flex-1 p-4 space-y-3">
-    {% block app_content %}{% endblock %}
+<div class="min-h-screen flex bg-slate-100">
+  {% include "app/_sidebar.html" %}
+  <main class="flex-1 flex flex-col min-w-0">
+    <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">{{ page_title|default("Panel") }}</h1>
+        {% if page_subtitle %}
+          <p class="text-xs text-slate-500">{{ page_subtitle }}</p>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
+           class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">
+          Bot
+        </a>
+        <span class="hidden md:inline text-slate-500">UID <strong class="font-mono">{{ user.uid }}</strong></span>
+        <a href="/logout" class="text-slate-500 hover:text-rose-600">Salir</a>
+      </div>
+    </header>
+    <div class="flex-1 p-6 overflow-y-auto">
+      {% block app_content %}{% endblock %}
+    </div>
   </main>
-  {% include "app/_tabbar.html" %}
 </div>
+
+<script>
+  // Inicializa Telegram WebApp si el panel se abre desde el bot.
+  (function () {
+    var tg = window.Telegram && window.Telegram.WebApp;
+    if (!tg) return;
+    try { tg.ready(); tg.expand(); } catch (e) {}
+    // Si NO hay cookie user_jwt (caso: primera apertura desde el bot)
+    // y el bot envio initData, lo intercambiamos automaticamente por la cookie.
+    var hasJwt = document.cookie.indexOf("user_jwt=") !== -1;
+    if (!hasJwt && tg.initData) {
+      fetch("/api/auth/initdata", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        credentials: "include",
+        body: JSON.stringify({ init_data: tg.initData }),
+      }).then(function (r) { if (r.ok) location.reload(); });
+    }
+  })();
+</script>
 {% endblock %}

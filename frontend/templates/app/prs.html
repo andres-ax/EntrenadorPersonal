@@ -1,35 +1,46 @@
 {% extends "app/_layout.html" %}
 
 {% block app_content %}
-<h1 class="text-xl font-bold text-slate-900">Personal Records</h1>
-<p class="text-sm text-slate-500">Tus mejores marcas registradas.</p>
-
-<div id="prs-table" hx-get="/api/me/prs" hx-trigger="load" hx-swap="innerHTML"
-     class="mt-4 text-sm">
-  Cargando...
-</div>
-
-<script>
-  document.body.addEventListener("htmx:afterRequest", function (evt) {
-    if (evt.detail.elt && evt.detail.elt.id === "prs-table") {
-      try {
-        var data = JSON.parse(evt.detail.xhr.responseText);
-        var items = data.items || data || [];
-        if (!items.length) {
-          evt.detail.elt.innerHTML = '<p class="text-slate-500">Aun no tienes PRs. Pidele al bot: "registra mi PR de sentadilla 100kg x5".</p>';
-          return;
-        }
-        var html = '<ul class="divide-y divide-slate-100">';
-        items.forEach(function (p) {
-          html += '<li class="py-3"><div class="font-medium">' + (p.ejercicio || p.skill || "?") + '</div>'
-                + '<div class="text-xs text-slate-500">' + (p.peso_kg ? p.peso_kg + " kg" : "") + (p.reps ? " x " + p.reps : "") + (p.detalle || "") + '</div></li>';
-        });
-        html += '</ul>';
-        evt.detail.elt.innerHTML = html;
-      } catch (e) {
-        evt.detail.elt.innerHTML = '<p class="text-rose-600">Error cargando PRs.</p>';
-      }
-    }
-  });
-</script>
+{% if prs %}
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+        <tr>
+          <th class="px-4 py-3 text-left">Ejercicio / Skill</th>
+          <th class="px-4 py-3 text-left">Tipo</th>
+          <th class="px-4 py-3 text-right">Marca</th>
+          <th class="px-4 py-3 text-left">Deporte</th>
+          <th class="px-4 py-3 text-left">Fecha</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in prs %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3 font-medium">{{ p.ejercicio }}</td>
+            <td class="px-4 py-3 text-xs">
+              <span class="px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">{{ p.tipo_pr.value if p.tipo_pr else "peso_reps" }}</span>
+            </td>
+            <td class="px-4 py-3 text-right font-mono">
+              {% if p.peso_kg %}{{ p.peso_kg }} kg{% endif %}
+              {% if p.reps %} x {{ p.reps }}{% endif %}
+              {% if p.tiempo_seg %}{{ "%.2f"|format(p.tiempo_seg) }} s{% endif %}
+              {% if p.grado %}{{ p.grado }}{% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs">{{ p.deporte or "-" }}</td>
+            <td class="px-4 py-3 text-xs text-slate-500">{{ p.fecha }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="bg-white rounded-xl shadow-sm p-8 text-center">
+    <h3 class="font-semibold text-slate-800 mb-2">Aun no tienes Personal Records</h3>
+    <p class="text-sm text-slate-500 mb-5">Manda un mensaje al bot tipo "registra mi PR de sentadilla 100kg x5" y aparecen aqui.</p>
+    <a href="https://t.me/EntrenadorAX_bot" target="_blank" rel="noopener"
+       class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-2 rounded-lg">
+      Abrir bot
+    </a>
+  </div>
+{% endif %}
 {% endblock %}

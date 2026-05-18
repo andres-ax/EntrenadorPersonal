@@ -77,10 +77,10 @@ async def construir_url_oauth(telegram_id: int, proveedor: str) -> str:
     # El callback OAuth lo procesa la API del bot (router `integraciones`
     # montado en /api/integraciones/* en src/main.py), no el admin web. Por
     # eso usamos webhook_base_url y NO admin_url. Fallback al dominio Railway
-    # real (api.entrenadorax.com no existe en DNS).
+    # real (dominio custom configurado en Railway).
     api_base = str(
         settings.webhook_base_url
-        or "https://entrenadorpersonal-production.up.railway.app"
+        or "https://entrenadorax.axsoftware.codes"
     ).rstrip("/")
     redirect_uri = f"{api_base}/api/integraciones/{proveedor}/callback"
     scope = OAUTH_SCOPES[proveedor]

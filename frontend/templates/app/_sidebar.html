@@ -1,0 +1,63 @@
+{# Sidebar fijo del panel deportista. `active` selecciona item. #}
+<aside class="w-60 hidden md:flex flex-col bg-slate-900 text-slate-100 min-h-screen sticky top-0">
+  <div class="p-4 border-b border-slate-800">
+    <a href="/app/dashboard" class="block">
+      <div class="text-lg font-bold">EntrenadorAX</div>
+      <div class="text-xs text-slate-400">Mi panel</div>
+    </a>
+  </div>
+  <nav class="flex-1 p-3 space-y-1 text-sm">
+    {% set sections = [
+      ("Inicio", [
+        ("dashboard", "/app/dashboard", "Hoy"),
+        ("calendario", "/app/calendario", "Calendario"),
+        ("plan", "/app/plan", "Plan semanal"),
+      ]),
+      ("Progreso", [
+        ("prs", "/app/prs", "Personal Records"),
+        ("historial", "/app/historial", "Historial"),
+        ("graficos", "/app/graficos", "Graficos"),
+      ]),
+      ("Acciones", [
+        ("llamar", "/app/llamar", "Llamar al coach"),
+        ("wearables", "/app/wearables", "Wearables"),
+        ("pagar", "/app/pagar", "Plan / Pagar"),
+      ]),
+      ("Cuenta", [
+        ("settings", "/app/settings", "Configuracion"),
+      ]),
+    ] %}
+    {% for label, items in sections %}
+      <div class="mt-3 mb-1 px-3 text-xs uppercase text-slate-500 tracking-wider">{{ label }}</div>
+      {% for key, url, name in items %}
+        <a href="{{ url }}"
+           class="flex items-center px-3 py-2 rounded-lg
+                  {% if active == key %}bg-brand-600 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+          {{ name }}
+        </a>
+      {% endfor %}
+    {% endfor %}
+  </nav>
+  <footer class="p-3 border-t border-slate-800 text-xs text-slate-500">
+    <a href="/" class="hover:text-slate-300">Volver al sitio</a>
+    <span class="mx-2">-</span>
+    <a href="/logout" class="hover:text-rose-400">Salir</a>
+  </footer>
+</aside>
+
+{# Mobile: tabbar inferior con items principales #}
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-5 text-xs z-20">
+  {% set mobile_items = [
+    ("dashboard", "/app/dashboard", "Hoy"),
+    ("calendario", "/app/calendario", "Calend"),
+    ("plan", "/app/plan", "Plan"),
+    ("prs", "/app/prs", "PRs"),
+    ("settings", "/app/settings", "Mas"),
+  ] %}
+  {% for key, url, label in mobile_items %}
+    <a href="{{ url }}"
+       class="py-3 text-center {% if active == key %}text-brand-600 font-semibold{% else %}text-slate-500{% endif %}">
+      {{ label }}
+    </a>
+  {% endfor %}
+</nav>
