@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     Time,
     func,
+    text,
 )
 from sqlalchemy import Enum as _SAEnum
 from sqlalchemy.orm import declarative_base, relationship
@@ -786,5 +787,7 @@ class DeporteCatalogo(Base):
     spots_colombia = Column(JSON, default=list)
     referentes_colombia = Column(JSON, default=list)
     federacion = Column(String(120), default="")
-    activo = Column(Boolean, default=True, nullable=False)
+    activo = Column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
     creado_en = Column(DateTime, server_default=func.now())
