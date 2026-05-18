@@ -1143,6 +1143,98 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await q.answer()
     uid = q.from_user.id
 
+    # Admin: aprobar/rechazar comprobante desde Telegram (solo developer_chat_id)
+    if q.data.startswith("admin_aprobar:") or q.data.startswith("admin_rechazar:"):
+        if str(uid) != str(settings.developer_chat_id):
+            await q.answer("No tienes permiso para esta accion.", show_alert=True)
+            return
+        accion, comp_id_str = q.data.split(":", 1)
+        try:
+            comp_id = int(comp_id_str)
+        except ValueError:
+            return
+        from src.db.repository import aprobar_comprobante, rechazar_comprobante
+        from src.services.pricing import formatear_precio
+        try:
+            if accion == "admin_aprobar":
+                comp = await aprobar_comprobante(comp_id, "admin@telegram", "")
+                if comp is None:
+                    await q.edit_message_caption(
+                        caption=q.message.caption + "\n\nYa fue procesado anteriormente.",
+                    )
+                    return
+                # Activar plan del usuario
+                from src.db.models import MetodoPago
+                from sqlalchemy import select
+                from src.db.connection import async_session_factory
+                from src.db.models import Usuario
+                async with async_session_factory() as session:
+                    result = await session.execute(
+                        select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
+                    )
+                    uid_telegram = result.scalar_one()
+                await activar_plan(
+                    telegram_id=uid_telegram,
+                    plan=comp.plan_solicitado,
+                    dias=comp.dias_otorgados,
+                    metodo=comp.metodo or MetodoPago.OTRO,
+                    monto_cop=comp.monto_cop,
+                    comprobante_id=comp.id,
+                )
+                # Notificar al usuario
+                try:
+                    await ctx.bot.send_message(
+                        chat_id=uid_telegram,
+                        text=(
+                            f"<b>Pago aprobado!</b> Tu plan <b>{comp.plan_solicitado.value}</b> "
+                            f"esta activo. Gracias por confiar en EntrenadorAX!"
+                        ),
+                    )
+                except Exception:
+                    pass
+                # Actualizar el caption de la notificacion
+                await q.edit_message_caption(
+                    caption=q.message.caption + "\n\nAPROBADO. Plan activado.",
+                )
+                logger.info("admin_aprobar comp_id=%s por uid=%s", comp_id, uid)
+            else:
+                comp = await rechazar_comprobante(comp_id, "admin@telegram", "Rechazado via Telegram")
+                if comp is None:
+                    await q.edit_message_caption(
+                        caption=q.message.caption + "\n\nYa fue procesado anteriormente.",
+                    )
+                    return
+                # Notificar al usuario
+                from sqlalchemy import select
+                from src.db.connection import async_session_factory
+                from src.db.models import Usuario
+                async with async_session_factory() as session:
+                    result = await session.execute(
+                        select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
+                    )
+                    uid_telegram = result.scalar_one()
+                try:
+                    await ctx.bot.send_message(
+                        chat_id=uid_telegram,
+                        text=(
+                            "Tu comprobante fue revisado y <b>no se pudo validar</b>. "
+                            "Si crees que es un error, contacta soporte por WhatsApp: "
+                            "https://wa.me/573044093197"
+                        ),
+                    )
+                except Exception:
+                    pass
+                await q.edit_message_caption(
+                    caption=q.message.caption + "\n\nRECHAZADO.",
+                )
+                logger.info("admin_rechazar comp_id=%s por uid=%s", comp_id, uid)
+        except Exception:
+            logger.exception("Error en admin_%s comp_id=%s", accion, comp_id_str)
+            await q.edit_message_caption(
+                caption=q.message.caption + "\n\nError procesando. Revisa en el panel web.",
+            )
+        return
+
     if q.data.startswith("tono:"):
         nuevo = q.data.split(":", 1)[1]
         if nuevo == "militar":
@@ -1900,13 +1992,31 @@ async def _procesar_comprobante(
         uid, comprobante.id, vision_reconocio,
     )
 
-    # NOTIFICAR AL ADMIN SIEMPRE (reenviar foto + datos)
+    # NOTIFICAR AL ADMIN con botones inline para aprobar/rechazar desde Telegram
     admin_base = str(settings.landing_url or "https://entrenadorax.axsoftware.codes").rstrip("/")
     admin_link = f"{admin_base}/admin/pagos/{comprobante.id}"
     if settings.developer_chat_id:
         try:
             status_label = "Vision OK" if vision_reconocio else "Vision NO reconocio"
             monto_label = formatear_precio(comprobante.monto_cop) if comprobante.monto_cop else "no detectado"
+            admin_keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "Aprobar pago",
+                        callback_data=f"admin_aprobar:{comprobante.id}",
+                    ),
+                    InlineKeyboardButton(
+                        "Rechazar",
+                        callback_data=f"admin_rechazar:{comprobante.id}",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "Ver en panel web",
+                        url=admin_link,
+                    ),
+                ],
+            ])
             await ctx.bot.send_photo(
                 chat_id=settings.developer_chat_id,
                 photo=photo.file_id,
@@ -1916,9 +2026,9 @@ async def _procesar_comprobante(
                     f"Plan: {plan_solicitado.value} ({duracion.value})\n"
                     f"Monto: {monto_label} (esperado {formatear_precio(monto_esperado)})\n"
                     f"Vision: {status_label}\n"
-                    f"Match: {'si' if comprobante.monto_match else 'no'}\n\n"
-                    f"<a href=\"{admin_link}\">Revisar en admin panel</a>"
+                    f"Match: {'si' if comprobante.monto_match else 'no'}"
                 ),
+                reply_markup=admin_keyboard,
             )
         except Exception:
             logger.exception("No pude notificar admin de comprobante uid=%s", uid)
