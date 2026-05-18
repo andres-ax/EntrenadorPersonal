@@ -20,6 +20,9 @@ from src.tools import (
     guardar_perfil,
     guardar_pr,
     cerrar_sesion_entrenamiento,
+    consultar_ultima_sesion_skill,
+    editar_sesion_reciente,
+    eliminar_comida_reciente,
     listar_recordatorios,
     listar_todos_prs,
     obtener_perfil,
@@ -85,6 +88,10 @@ ALL_TOOLS = [
     cancelar_recordatorio,
     # Gestion de sesion abierta de entrenamiento
     cerrar_sesion_entrenamiento,
+    # Correcciones de datos del dia (REGLA #16)
+    consultar_ultima_sesion_skill,
+    editar_sesion_reciente,
+    eliminar_comida_reciente,
 ]
 
 
@@ -632,7 +639,66 @@ Mensajes que SI disparan:
 - "termine: rodaje suave + 10 ollies + 2 backsides"
 - "estoy entrenando, voy 15 min de calentamiento"
 
-## REGLA #16: RECORDATORIOS PERSONALIZADOS
+Para CORRECCIONES de una sesion ya registrada (ej: "no, eran 10 ollies, no 2"
+o "me fue bien"), NO uses registrar_sesion_skill (sumaria contadores).
+Usa el flujo de REGLA #16 con consultar_ultima_sesion_skill +
+editar_sesion_reciente.
+
+## REGLA #16: CORRECCIONES DE DATOS (NUNCA INVENTES "QUEDO REGISTRADO")
+
+Cuando el usuario corrige algo ya registrado, por ejemplo:
+- "no, eran 10 ollies" / "fueron 12 trucos no 2" / "fueron mas"
+- "te equivocaste" / "corrige eso" / "ese dato esta mal"
+- "me fue bien" / "fue malo" / "sensacion 4 no 2"
+- "no, no almorce, era snack" / "borra el almuerzo" / "ese no era"
+- "fueron 25 min" / "no fueron 30, fueron 25"
+
+PASOS OBLIGATORIOS:
+
+1. **Consulta el dato actual** ANTES de modificar:
+   - Sesion skill (skate/BMX/rollers/parkour/climbing):
+     llama `consultar_ultima_sesion_skill(uid, deporte)`.
+   - Comida: llama `resumen_nutricional(uid, fecha)` para ver lista
+     con macros.
+
+2. **Decide la accion correcta**:
+   - Si el dato a corregir es de una **sesion** y son CAMPOS numericos
+     (trucos, duracion, sensacion, caidas) o `foco`/`notas`:
+     llama `editar_sesion_reciente` con los VALORES REALES (SET, no SUM).
+     Ej: usuario dice "fueron 10 ollies + 2 backsides" -> 12 totales,
+     llama editar con `trucos_intentados=12`.
+   - Si el usuario quiere **borrar una comida** entera:
+     llama `eliminar_comida_reciente(tipo="almuerzo")` o por comida_id.
+   - Si quiere reemplazar **una comida** con datos distintos:
+     elimina la incorrecta y luego `registrar_comida` con los nuevos.
+
+3. **NUNCA respondas "quedo registrado X"** si NO hubo `tool_call`. Si
+   la tool retorna error o no la llamaste, di "no pude actualizar,
+   intentemos de nuevo" y pide datos. Decir que persististe algo sin
+   haberlo hecho viola REGLA #7C (anti-invencion).
+
+Ejemplos correctos:
+
+Usuario: "no, fueron 10 ollies y 2 backsides, me fue bien"
+Tu accion:
+  1) llama `consultar_ultima_sesion_skill(uid, "skate")`
+     -> ves: trucos_int=2, ater=0, sens=2.
+  2) llama `editar_sesion_reciente(uid,
+       trucos_intentados=12, trucos_aterrizados=10, sensacion_1_5=4,
+       notas="Sesion skate: 10 ollies aterrizados + 2 backsides intentados (0 aterrizados). Bien.")`
+  3) responde: "Corregido: 12 trucos (10 aterrizados), sensacion 4."
+
+Usuario: "borra el almuerzo, no almorce eso"
+Tu accion:
+  1) llama `eliminar_comida_reciente(uid, tipo="almuerzo")`
+  2) responde: "Borre el almuerzo. Cuentame que comiste si quieres registrarlo."
+
+Restriccion: solo se editan/borran datos de HOY. Si el usuario pide
+corregir algo de ayer o mas atras, explica que no puedes editar
+historico desde el chat y sugiere que para esos datos uses `/borrar_datos`
+(ultimo recurso, borra todo).
+
+## REGLA #17: RECORDATORIOS PERSONALIZADOS
 
 Si el usuario pide cosas tipo:
 - "despiertame manana a las 5:30am"

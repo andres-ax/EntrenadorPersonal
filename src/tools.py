@@ -22,10 +22,12 @@ from src.db.repository import (
     aceptar_modo_militar,
     cambiar_tono as repo_cambiar_tono,
     crear_compromiso,
+    actualizar_sesion_skill_set as repo_actualizar_sesion_skill_set,
     crear_recordatorio as repo_crear_recordatorio,
     buscar_comida_similar as repo_buscar_comida_similar,
     cerrar_sesion_abierta as repo_cerrar_sesion_abierta,
     desactivar_recordatorio as repo_desactivar_recordatorio,
+    eliminar_comida as repo_eliminar_comida,
     guardar_comida as repo_guardar_comida,
     guardar_metrica_corporal,
     guardar_pr as repo_guardar_pr,
@@ -44,10 +46,12 @@ from src.db.repository import (
     listar_sesiones_skill as repo_listar_sesiones_skill,
     listar_sparring_reciente as repo_listar_sparring_reciente,
     listar_trucos_aterrizados as repo_listar_trucos,
+    obtener_comidas_dia as repo_obtener_comidas_dia,
     obtener_compromiso_activo,
     obtener_o_crear_usuario,
     obtener_o_crear_streak,
     obtener_pr_ejercicio,
+    obtener_ultima_sesion_skill as repo_obtener_ultima_sesion_skill,
     pausar_recordatorios,
     reporte_semanal,
     resumen_nutricional_dia,
@@ -1948,3 +1952,204 @@ async def cerrar_sesion_entrenamiento(
     except Exception:
         logger.exception("Error en cerrar_sesion_entrenamiento")
         return _error("no pude cerrar la sesion")
+
+
+@function_tool
+@_log_tool
+async def consultar_ultima_sesion_skill(
+    telegram_id: int, deporte: str = ""
+) -> str:
+    """Devuelve la ULTIMA sesion skill (skate/BMX/rollers/climbing/parkour)
+    del usuario HOY. NO devuelve agregados; devuelve la fila concreta con
+    todos sus contadores actuales.
+
+    Usar ANTES de llamar `editar_sesion_reciente` cuando el usuario corrige
+    algo, para saber el estado actual y comparar.
+
+    Args:
+        telegram_id: ID de Telegram del usuario.
+        deporte: slug del deporte (skate, bmx, rollers, etc.). Vacio
+            ("") -> cualquier deporte (la mas reciente).
+    """
+    try:
+        deporte_f = deporte.strip().lower() or None
+        sesion = await repo_obtener_ultima_sesion_skill(telegram_id, deporte_f)
+        if sesion is None:
+            return _ok({"existe": False})
+        return _ok({
+            "existe": True,
+            "sesion_id": sesion.id,
+            "fecha": sesion.fecha.isoformat() if sesion.fecha else None,
+            "deporte": sesion.deporte_slug,
+            "duracion_min": sesion.duracion_min,
+            "trucos_intentados": sesion.trucos_intentados,
+            "trucos_aterrizados": sesion.trucos_aterrizados,
+            "num_caidas": sesion.num_caidas,
+            "sensacion_1_5": sesion.sensacion_1_5,
+            "foco_sesion": sesion.foco_sesion,
+            "spot": sesion.spot,
+            "notas": sesion.notas,
+            "cerrada": sesion.cerrada,
+            "updated_at": (
+                sesion.updated_at.isoformat() if sesion.updated_at else None
+            ),
+        })
+    except Exception:
+        logger.exception("Error en consultar_ultima_sesion_skill")
+        return _error("no pude consultar la sesion")
+
+
+@function_tool
+@_log_tool
+async def editar_sesion_reciente(
+    telegram_id: int,
+    sesion_id: int = 0,
+    deporte: str = "",
+    duracion_min: int = -1,
+    trucos_intentados: int = -1,
+    trucos_aterrizados: int = -1,
+    num_caidas: int = -1,
+    sensacion_1_5: int = -1,
+    foco_sesion: str = "",
+    notas: str = "",
+) -> str:
+    """Corrige campos de una sesion del usuario REEMPLAZANDO valores (SET).
+
+    Usar cuando el usuario corrige datos ya registrados:
+    - "no, fueron 10 ollies + 2 backsides" -> trucos_intentados=12
+    - "los ollies me salieron todos" -> trucos_aterrizados=10
+    - "me fue bien" -> sensacion_1_5=4
+    - "0 caidas" -> num_caidas=0
+    - "fueron 25 min, no 30" -> duracion_min=25
+
+    DIFERENCIA con `registrar_sesion_skill`:
+    - `registrar_sesion_skill` SUMA contadores (acumula entre llamadas).
+    - `editar_sesion_reciente` REEMPLAZA por el valor exacto que envias.
+
+    Convencion de "no tocar":
+    - Parametros enteros: -1 = NO TOCAR (deja el valor actual).
+    - Strings: "" = NO TOCAR.
+
+    Identificacion del registro a editar:
+    - Si `sesion_id > 0`, edita esa sesion exacta (valida ownership).
+    - Si `sesion_id = 0`, busca la ULTIMA sesion skill del dia
+      (filtra por `deporte` si se da). Funciona incluso si esta `cerrada`.
+
+    Restriccion: solo permite editar sesiones de HOY (no historico).
+
+    Args:
+        telegram_id: ID de Telegram del usuario (valida ownership).
+        sesion_id: id especifico (0 = ultima del dia).
+        deporte: slug del deporte para filtrar la ultima sesion.
+        duracion_min: minutos totales. -1 = no tocar.
+        trucos_intentados: total absoluto. -1 = no tocar.
+        trucos_aterrizados: total absoluto. -1 = no tocar.
+        num_caidas: total absoluto. -1 = no tocar.
+        sensacion_1_5: 1=pesima, 5=excelente. -1 = no tocar.
+        foco_sesion: descripcion corta del foco. "" = no tocar.
+        notas: notas detalladas (reemplaza completas). "" = no tocar.
+    """
+    try:
+        campos: dict = {}
+        if duracion_min >= 0:
+            campos["duracion_min"] = duracion_min
+        if trucos_intentados >= 0:
+            campos["trucos_intentados"] = trucos_intentados
+        if trucos_aterrizados >= 0:
+            campos["trucos_aterrizados"] = trucos_aterrizados
+        if num_caidas >= 0:
+            campos["num_caidas"] = num_caidas
+        if sensacion_1_5 >= 0:
+            campos["sensacion_1_5"] = max(1, min(5, sensacion_1_5))
+        if foco_sesion.strip():
+            campos["foco_sesion"] = foco_sesion.strip()
+        if notas.strip():
+            campos["notas"] = notas.strip()
+        if not campos:
+            return _error(
+                "no hay campos a editar (todos quedaron en -1 o vacios)"
+            )
+
+        sid = sesion_id if sesion_id > 0 else None
+        deporte_f = deporte.strip().lower() or None
+        sesion = await repo_actualizar_sesion_skill_set(
+            telegram_id=telegram_id,
+            sesion_id=sid,
+            deporte=deporte_f,
+            **campos,
+        )
+        if sesion is None:
+            return _error(
+                "no encontre sesion para editar (o no es de hoy)"
+            )
+        await log_evento(
+            telegram_id,
+            "sesion_editada",
+            {
+                "sesion_id": sesion.id,
+                "campos_editados": list(campos.keys()),
+            },
+        )
+        return _ok({
+            "sesion_id": sesion.id,
+            "actualizada": True,
+            "duracion_min": sesion.duracion_min,
+            "trucos_intentados": sesion.trucos_intentados,
+            "trucos_aterrizados": sesion.trucos_aterrizados,
+            "num_caidas": sesion.num_caidas,
+            "sensacion_1_5": sesion.sensacion_1_5,
+        })
+    except Exception:
+        logger.exception("Error en editar_sesion_reciente")
+        return _error("no pude editar la sesion")
+
+
+@function_tool
+@_log_tool
+async def eliminar_comida_reciente(
+    telegram_id: int, comida_id: int = 0, tipo: str = ""
+) -> str:
+    """Borra UNA comida ya registrada del usuario (de HOY solamente).
+
+    Usar cuando el usuario dice "no, ese desayuno no era", "borra el almuerzo
+    que registraste", "elimina ese snack". Restringido a comidas del dia
+    actual y con ownership validado.
+
+    Identificacion:
+    - `comida_id > 0`: borra esa fila exacta.
+    - `comida_id = 0` y `tipo` se da: borra la mas reciente de ese tipo
+      (desayuno/almuerzo/cena/snack/post_entreno).
+    - Sin nada: error.
+
+    Args:
+        telegram_id: ID de Telegram del usuario.
+        comida_id: id especifico (0 = no usa esta via).
+        tipo: tipo de comida para borrar la mas reciente.
+    """
+    try:
+        cid = comida_id if comida_id > 0 else None
+        tipo_norm = tipo.strip().lower() or None
+        if cid is None and tipo_norm is None:
+            return _error(
+                "necesito comida_id o tipo (desayuno/almuerzo/cena/snack)"
+            )
+        if tipo_norm and tipo_norm not in TIPOS_COMIDA_VALIDOS:
+            return _error(
+                f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}"
+            )
+        borrado_id = await repo_eliminar_comida(
+            telegram_id=telegram_id,
+            comida_id=cid,
+            tipo=tipo_norm,
+        )
+        if borrado_id is None:
+            return _error("no encontre comida para borrar (o no es de hoy)")
+        await log_evento(
+            telegram_id,
+            "comida_eliminada",
+            {"comida_id": borrado_id, "tipo": tipo_norm},
+        )
+        return _ok({"comida_id": borrado_id, "eliminada": True})
+    except Exception:
+        logger.exception("Error en eliminar_comida_reciente")
+        return _error("no pude eliminar la comida")

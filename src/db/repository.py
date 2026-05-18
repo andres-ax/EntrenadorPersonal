@@ -1996,6 +1996,237 @@ async def cerrar_sesion_abierta(
     return sesion
 
 
+async def obtener_ultima_sesion_skill(
+    telegram_id: int,
+    deporte: Optional[str] = None,
+    fecha: Optional[date] = None,
+) -> Optional[SesionEntrenamiento]:
+    """Devuelve la ultima sesion skill del usuario en una fecha (hoy default).
+
+    Si `deporte` se da, filtra por ese deporte. Sin filtro, devuelve la mas
+    reciente de cualquier deporte. Util para que el coach consulte valores
+    actuales antes de corregir (ver `editar_sesion_reciente`).
+    """
+    fecha_use = fecha or date.today()
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return None
+        query = select(SesionEntrenamiento).where(
+            SesionEntrenamiento.usuario_id == uid,
+            SesionEntrenamiento.fecha == fecha_use,
+            SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
+        )
+        if deporte:
+            query = query.where(SesionEntrenamiento.deporte_slug == deporte)
+        query = query.order_by(SesionEntrenamiento.updated_at.desc()).limit(1)
+        result = await session.execute(query)
+        return result.scalar_one_or_none()
+
+
+# Campos que `actualizar_sesion_skill_set` puede sobrescribir. Lista
+# explicita para evitar updates a columnas sensibles (usuario_id, fecha).
+_CAMPOS_EDITABLES_SESION_SKILL = {
+    "duracion_min",
+    "trucos_intentados",
+    "trucos_aterrizados",
+    "num_caidas",
+    "sensacion_1_5",
+    "foco_sesion",
+    "spot",
+    "co_riders",
+    "notas",
+    "cerrada",
+}
+
+
+async def actualizar_sesion_skill_set(
+    telegram_id: int,
+    sesion_id: Optional[int] = None,
+    deporte: Optional[str] = None,
+    fecha: Optional[date] = None,
+    **campos: Any,
+) -> Optional[SesionEntrenamiento]:
+    """SET (no SUM) de campos en una sesion skill del usuario.
+
+    - Si `sesion_id` se da, busca esa fila exacta validando ownership.
+    - Si no, busca la mas reciente del dia (hoy por default) + deporte
+      opcional, INCLUSO si esta `cerrada`. Este es el camino "corregir
+      lo que acabo de registrar".
+
+    Solo aplica updates en sesiones del dia indicado (no editamos
+    historico de dias anteriores para preservar reportes pasados).
+
+    Solo procesa los campos presentes en `_CAMPOS_EDITABLES_SESION_SKILL`
+    cuyos valores sean diferentes de None. Numeros se aceptan tal cual,
+    strings se aceptan si son no-vacios.
+    """
+    fecha_use = fecha or date.today()
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            logger.warning(
+                "actualizar_sesion_skill_set: usuario uid=%s no existe",
+                telegram_id,
+            )
+            return None
+
+        if sesion_id is not None and sesion_id > 0:
+            result = await session.execute(
+                select(SesionEntrenamiento).where(
+                    SesionEntrenamiento.id == sesion_id,
+                    SesionEntrenamiento.usuario_id == uid,
+                )
+            )
+        else:
+            query = select(SesionEntrenamiento).where(
+                SesionEntrenamiento.usuario_id == uid,
+                SesionEntrenamiento.fecha == fecha_use,
+                SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
+            )
+            if deporte:
+                query = query.where(
+                    SesionEntrenamiento.deporte_slug == deporte
+                )
+            query = query.order_by(SesionEntrenamiento.updated_at.desc()).limit(1)
+            result = await session.execute(query)
+        sesion = result.scalar_one_or_none()
+        if sesion is None:
+            logger.info(
+                "actualizar_sesion_skill_set uid=%s sin sesion (id=%s deporte=%s fecha=%s)",
+                telegram_id, sesion_id, deporte, fecha_use,
+            )
+            return None
+        # Restriccion: solo hoy. Para historico, requeriria flag explicito.
+        if sesion.fecha != date.today():
+            logger.warning(
+                "actualizar_sesion_skill_set uid=%s sesion_id=%s rechazada "
+                "(fecha=%s != hoy)",
+                telegram_id, sesion.id, sesion.fecha,
+            )
+            return None
+
+        antes: dict[str, Any] = {}
+        despues: dict[str, Any] = {}
+        for campo, valor in campos.items():
+            if campo not in _CAMPOS_EDITABLES_SESION_SKILL:
+                continue
+            if valor is None:
+                continue
+            if isinstance(valor, str) and not valor.strip():
+                continue
+            antes[campo] = getattr(sesion, campo, None)
+            despues[campo] = valor
+            setattr(sesion, campo, valor)
+        if not despues:
+            logger.info(
+                "actualizar_sesion_skill_set uid=%s sesion_id=%s sin cambios",
+                telegram_id, sesion.id,
+            )
+            return sesion
+        sesion.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(sesion)
+    logger.info(
+        "actualizar_sesion_skill_set uid=%s sesion_id=%s antes=%s despues=%s",
+        telegram_id, sesion.id, antes, despues,
+    )
+    return sesion
+
+
+async def obtener_comidas_dia(
+    telegram_id: int, fecha: Optional[date] = None
+) -> list[Comida]:
+    """Lista las Comida de un usuario en una fecha (hoy default)."""
+    fecha_use = fecha or date.today()
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return []
+        result = await session.execute(
+            select(Comida)
+            .where(Comida.usuario_id == uid, Comida.fecha == fecha_use)
+            .order_by(Comida.id.desc())
+        )
+        return list(result.scalars().all())
+
+
+async def eliminar_comida(
+    telegram_id: int,
+    comida_id: Optional[int] = None,
+    tipo: Optional[str] = None,
+    fecha: Optional[date] = None,
+) -> Optional[int]:
+    """Borra UNA comida del usuario.
+
+    - Si `comida_id` se da, valida ownership y borra esa fila.
+    - Si no, busca por `tipo` (desayuno/almuerzo/cena/snack/post_entreno)
+      en la `fecha` (hoy default) y borra la MAS RECIENTE de ese tipo.
+
+    Retorna el id de la fila borrada o None si no encontro nada.
+    Restringido a borrar comidas del dia actual (no historico).
+    """
+    fecha_use = fecha or date.today()
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return None
+        if comida_id is not None and comida_id > 0:
+            result = await session.execute(
+                select(Comida).where(
+                    Comida.id == comida_id,
+                    Comida.usuario_id == uid,
+                )
+            )
+            comida = result.scalar_one_or_none()
+        else:
+            if not tipo:
+                logger.warning(
+                    "eliminar_comida uid=%s: sin comida_id ni tipo",
+                    telegram_id,
+                )
+                return None
+            try:
+                tipo_enum = TipoComida(tipo)
+            except ValueError:
+                logger.warning(
+                    "eliminar_comida uid=%s: tipo invalido %s",
+                    telegram_id, tipo,
+                )
+                return None
+            result = await session.execute(
+                select(Comida)
+                .where(
+                    Comida.usuario_id == uid,
+                    Comida.fecha == fecha_use,
+                    Comida.tipo == tipo_enum,
+                )
+                .order_by(Comida.id.desc())
+                .limit(1)
+            )
+            comida = result.scalar_one_or_none()
+        if comida is None:
+            logger.info(
+                "eliminar_comida uid=%s no encontro (id=%s tipo=%s fecha=%s)",
+                telegram_id, comida_id, tipo, fecha_use,
+            )
+            return None
+        if comida.fecha != date.today():
+            logger.warning(
+                "eliminar_comida uid=%s id=%s rechazado (fecha=%s != hoy)",
+                telegram_id, comida.id, comida.fecha,
+            )
+            return None
+        comida_id_borrada = comida.id
+        await session.delete(comida)
+        await session.commit()
+    logger.info(
+        "eliminar_comida uid=%s id=%s borrada (tipo=%s fecha=%s)",
+        telegram_id, comida_id_borrada, tipo, fecha_use,
+    )
+    return comida_id_borrada
+
+
 async def guardar_sesion_sparring(
     telegram_id: int,
     estilo: str,
