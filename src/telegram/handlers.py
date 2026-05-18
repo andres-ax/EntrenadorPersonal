@@ -32,9 +32,13 @@ from telegram.ext import (
 )
 
 from agents import RunConfig, Runner, SessionSettings
-from agents.extensions.memory import RedisSession
 
-from src.cache import limpiar_keys_usuario
+from src.cache import (
+    get_perfil_block as cache_get_perfil_block,
+    limpiar_keys_usuario,
+    set_perfil_block as cache_set_perfil_block,
+)
+from src.telegram.safe_session import SafeRedisSession
 from src.coach import coach
 from src.config import settings
 from src.db.models import PlanSuscripcion
@@ -121,7 +125,13 @@ async def _build_prompt(texto: str, uid: int) -> str:
     Inyecta `fecha`, `hora_actual` y `tz` calculados en la zona horaria del
     usuario (no del servidor) para que el LLM pueda resolver intenciones tipo
     "en N minutos", "esta noche", "manana 8am" sin equivocarse.
+
+    La parte estatica del bloque (todo menos hora_actual y tono dinamicos)
+    se cachea en Redis con TTL=30s via `cache.get_perfil_block`. Esto baja
+    las 3 queries DB por turno a 0 en mensajes consecutivos. La hora se
+    siempre recalcula (cambia cada minuto).
     """
+    cached_static = await cache_get_perfil_block(uid)
     user = await obtener_o_crear_usuario(uid)
     tz_name = user.timezone or "America/Bogota"
     try:
@@ -130,51 +140,57 @@ async def _build_prompt(texto: str, uid: int) -> str:
         tz_name = "America/Bogota"
         ahora_user = datetime.now(ZoneInfo(tz_name))
     hoy_user = ahora_user.date()
-    perfil_parts = [
+    dinamicos = [
         f"uid={uid}",
         f"fecha={hoy_user.isoformat()}",
         f"hora_actual={ahora_user.strftime('%H:%M')}",
         f"tz={tz_name}",
         f"tono={user.tono.value if user.tono else 'firme'}",
     ]
+    if cached_static is not None:
+        return f"[{' | '.join(dinamicos)} | {cached_static}] {texto}"
+
+    estaticos = []
     if user.nombre:
-        perfil_parts.append(f"nombre={user.nombre}")
+        estaticos.append(f"nombre={user.nombre}")
     if user.peso_kg:
-        perfil_parts.append(f"peso={user.peso_kg}kg")
+        estaticos.append(f"peso={user.peso_kg}kg")
     if user.altura_cm:
-        perfil_parts.append(f"altura={user.altura_cm}cm")
+        estaticos.append(f"altura={user.altura_cm}cm")
     if user.edad:
-        perfil_parts.append(f"edad={user.edad}")
+        estaticos.append(f"edad={user.edad}")
     if user.objetivo:
-        perfil_parts.append(f"objetivo={user.objetivo}")
+        estaticos.append(f"objetivo={user.objetivo}")
     if user.nivel:
-        perfil_parts.append(f"nivel={user.nivel}")
+        estaticos.append(f"nivel={user.nivel}")
     if user.dias_entreno:
-        perfil_parts.append(f"dias_entreno={user.dias_entreno}")
+        estaticos.append(f"dias_entreno={user.dias_entreno}")
     if user.deporte_principal:
-        perfil_parts.append(f"deporte={user.deporte_principal}")
+        estaticos.append(f"deporte={user.deporte_principal}")
     if user.categoria_deporte:
-        perfil_parts.append(f"categoria_deporte={user.categoria_deporte.value}")
+        estaticos.append(f"categoria_deporte={user.categoria_deporte.value}")
     if user.modalidad_deporte:
-        perfil_parts.append(f"modalidad={user.modalidad_deporte}")
+        estaticos.append(f"modalidad={user.modalidad_deporte}")
     if user.es_competitivo:
-        perfil_parts.append("competitivo=si")
-    perfil_parts.append(
+        estaticos.append("competitivo=si")
+    estaticos.append(
         f"onboarding={'si' if user.onboarding_completo else 'no'}"
     )
     compromiso = await obtener_compromiso_activo(uid)
     if compromiso:
-        perfil_parts.append(
+        estaticos.append(
             f"compromiso='{compromiso.objetivo_texto[:80]}' (deadline={compromiso.deadline.isoformat()})"
         )
     try:
         streak = await obtener_o_crear_streak(uid, "entreno")
-        perfil_parts.append(f"streak_entreno={streak.dias_actuales}")
+        estaticos.append(f"streak_entreno={streak.dias_actuales}")
     except Exception:
         pass
     if user.pausado_hasta and user.pausado_hasta >= hoy_user:
-        perfil_parts.append(f"pausado_hasta={user.pausado_hasta.isoformat()}")
-    return f"[{' | '.join(perfil_parts)}] {texto}"
+        estaticos.append(f"pausado_hasta={user.pausado_hasta.isoformat()}")
+    estatico_block = " | ".join(estaticos)
+    await cache_set_perfil_block(uid, estatico_block)
+    return f"[{' | '.join(dinamicos)} | {estatico_block}] {texto}"
 
 
 async def _procesar(
@@ -188,7 +204,7 @@ async def _procesar(
     Cancela escalation de los tipos que el usuario cumplio durante el run.
     """
     prompt = await _build_prompt(texto, uid)
-    session = RedisSession.from_url(
+    session = SafeRedisSession.from_url(
         str(uid),
         url=settings.redis_url_str,
         ttl=settings.session_ttl_seconds,
@@ -219,7 +235,7 @@ async def _procesar(
                 "sesion_redis_recuperada",
                 {"error": str(e)[:200]},
             )
-            session = RedisSession.from_url(
+            session = SafeRedisSession.from_url(
                 str(uid),
                 url=settings.redis_url_str,
                 ttl=settings.session_ttl_seconds,
@@ -251,7 +267,8 @@ async def _procesar(
     except Exception:
         logger.exception("Error procesando mensaje uid=%s", uid)
         await _enviar_con_retry(
-            message, "Ups, tuve un problema procesando tu mensaje. Intentalo de nuevo."
+            message,
+            "Tuve un saltico tecnico. Vuelve a escribirme y arrancamos.",
         )
     finally:
         await session.close()

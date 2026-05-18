@@ -106,12 +106,21 @@ async def eliminar_usuario(telegram_id: int) -> bool:
         usuario_pk = usuario.id
         await session.delete(usuario)
         await session.commit()
-        logger.info(
-            "eliminar_usuario uid=%s usuario_id=%s borrado (cascade)",
+    try:
+        from src.cache import invalidar_perfil_cache
+
+        await invalidar_perfil_cache(telegram_id)
+    except Exception:
+        logger.exception(
+            "eliminar_usuario uid=%s: fallo invalidar cache perfil",
             telegram_id,
-            usuario_pk,
         )
-        return True
+    logger.info(
+        "eliminar_usuario uid=%s usuario_id=%s borrado (cascade)",
+        telegram_id,
+        usuario_pk,
+    )
+    return True
 
 
 async def actualizar_usuario(telegram_id: int, **kwargs) -> Optional[Usuario]:
@@ -127,7 +136,18 @@ async def actualizar_usuario(telegram_id: int, **kwargs) -> Optional[Usuario]:
                 setattr(usuario, key, value)
         await session.commit()
         await session.refresh(usuario)
-        return usuario
+    # Cualquier mutacion al perfil invalida el cache del bloque inyectado en
+    # _build_prompt. Import inline para evitar ciclo handlers/repository.
+    try:
+        from src.cache import invalidar_perfil_cache
+
+        await invalidar_perfil_cache(telegram_id)
+    except Exception:
+        logger.exception(
+            "actualizar_usuario uid=%s: fallo invalidar cache perfil",
+            telegram_id,
+        )
+    return usuario
 
 
 async def marcar_bot_bloqueado(telegram_id: int, bloqueado: bool = True) -> None:
@@ -590,7 +610,16 @@ async def crear_compromiso(
         session.add(compromiso)
         await session.commit()
         await session.refresh(compromiso)
-        return compromiso
+    try:
+        from src.cache import invalidar_perfil_cache
+
+        await invalidar_perfil_cache(telegram_id)
+    except Exception:
+        logger.exception(
+            "crear_compromiso uid=%s: fallo invalidar cache perfil",
+            telegram_id,
+        )
+    return compromiso
 
 
 async def obtener_compromiso_activo(telegram_id: int) -> Optional[Compromiso]:

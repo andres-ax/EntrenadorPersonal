@@ -96,9 +96,12 @@ fpdf2>=2.7,<3.0
 # Seguridad y cifrado
 # -----------------------------------------------------------------------------
 # Password hashing para admin panel (bcrypt via passlib).
-# bcrypt pinned a 4.x porque passlib<2 no soporta 5.x (cambio de API __about__).
+# bcrypt pinned a 4.0.x porque passlib 1.7.x lee bcrypt.__about__.__version__
+# que fue removido en bcrypt 4.1+. Sin el pin, en cada startup aparece:
+#   AttributeError: module 'bcrypt' has no attribute '__about__'
+# (no critico pero ensucia logs y deja el backend en modo "unknown version").
 passlib>=1.7,<2.0
-bcrypt>=4.0,<5.0
+bcrypt>=4.0,<4.1
 
 # Cifrado simetrico de tokens OAuth de wearables (Fernet).
 cryptography>=42.0,<46.0

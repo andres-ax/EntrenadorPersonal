@@ -435,11 +435,15 @@ def _detect_update_type(update: Update) -> str:
 
 
 def _preview_update_text(update: Update) -> str:
-    """Texto recortado del update para logs (sin loggear documentos enteros)."""
+    """Texto recortado del update para logs (sin loggear documentos enteros).
+
+    Truncado a 40 chars para reducir PII en logs. Suficiente para identificar
+    comando o intencion sin guardar el texto completo del usuario.
+    """
     if update.message is not None and update.message.text:
-        return update.message.text[:80]
+        return update.message.text[:40]
     if update.callback_query is not None and update.callback_query.data:
-        return f"cb:{update.callback_query.data[:80]}"
+        return f"cb:{update.callback_query.data[:40]}"
     return ""
 
 

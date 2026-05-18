@@ -35,11 +35,11 @@ class Settings(BaseSettings):
     db_pool_recycle: int = 300
 
     # Limite de turnos en RedisSession (historial conversacional del agente).
-    # 20 era muy bajo para onboarding por voz (10+ voice notes con 1-2 tools
-    # c/u llenan el limite y se cortan turnos a mitad de un par
-    # function_call/function_call_output, causando "No tool call found").
-    # 60 deja margen para conversaciones de ~30 turnos del usuario.
-    session_limit: int = 60
+    # Subido de 20 -> 60 -> 120 progresivamente. SafeRedisSession ahora filtra
+    # function_call_output huerfanos en lectura, asi que el limite alto solo
+    # es para reducir frecuencia y dar mas contexto. 120 cubre conversaciones
+    # de onboarding largo (muchas voice notes con 2-3 tools c/u).
+    session_limit: int = 120
     session_ttl_seconds: int = 60 * 60 * 24 * 30
 
     rate_limit_per_minute: int = 10

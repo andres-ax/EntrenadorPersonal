@@ -78,3 +78,45 @@ async def ping() -> bool:
     except Exception:
         logger.exception("Redis ping failed")
         return False
+
+
+# ============================================================================
+# Cache del bloque de perfil que se inyecta en el prompt del coach
+# ============================================================================
+#
+# `_build_prompt` en handlers.py hace 3 queries DB por cada mensaje del usuario
+# (perfil, compromiso activo, streak). Para conversaciones rapidas eso suma
+# 100-300ms por turno. Cacheamos el bloque ya formateado (string) con TTL
+# corto: 30s. Si el usuario cambia su perfil/tono/compromiso, llamamos
+# `invalidar_perfil_cache(uid)` para forzar refresh inmediato.
+
+_PERFIL_KEY = "prompt_user_block:{}"
+_PERFIL_TTL_S = 30
+
+
+async def get_perfil_block(uid: int) -> str | None:
+    """Devuelve el bloque de perfil ya formateado si esta cacheado."""
+    try:
+        client = await get_redis()
+        return await client.get(_PERFIL_KEY.format(uid))
+    except Exception:
+        logger.exception("Error leyendo perfil cache uid=%s", uid)
+        return None
+
+
+async def set_perfil_block(uid: int, block: str) -> None:
+    """Guarda el bloque de perfil con TTL corto."""
+    try:
+        client = await get_redis()
+        await client.setex(_PERFIL_KEY.format(uid), _PERFIL_TTL_S, block)
+    except Exception:
+        logger.exception("Error guardando perfil cache uid=%s", uid)
+
+
+async def invalidar_perfil_cache(uid: int) -> None:
+    """Borra el cache del bloque de perfil (llamar al mutar el perfil)."""
+    try:
+        client = await get_redis()
+        await client.delete(_PERFIL_KEY.format(uid))
+    except Exception:
+        logger.exception("Error invalidando perfil cache uid=%s", uid)
