@@ -23,6 +23,7 @@ from src.db.repository import (
     cambiar_tono as repo_cambiar_tono,
     crear_compromiso,
     crear_recordatorio as repo_crear_recordatorio,
+    buscar_comida_similar as repo_buscar_comida_similar,
     desactivar_recordatorio as repo_desactivar_recordatorio,
     guardar_comida as repo_guardar_comida,
     guardar_metrica_corporal,
@@ -528,29 +529,111 @@ async def registrar_comida(
     carbs: float = 0,
     grasas: float = 0,
 ) -> str:
-    """Registra una comida del usuario.
+    """Registra una comida del usuario con macros estimados.
+
+    REQUISITOS DUROS (la tool retorna error si no se cumplen):
+    1. `alimentos_json` DEBE ser una lista NO VACIA de strings concretos.
+       Ejemplo OK: '["2 huevos","aguacate","1 vaso de leche"]'.
+       Ejemplo MAL: '[]' o ['comi algo'].
+    2. `calorias` > 0 O (proteinas+carbs+grasas) > 0. Es decir, AL MENOS
+       una macro o calorias debe estar estimado.
+
+    Si el usuario solo dice "comi" sin detalles, NO LLAMES ESTA TOOL.
+    Preguntale QUE comio y cuanto, y solo entonces registra con datos.
+
+    Para fotos: el handler `recibir_foto` ya llama `guardar_comida` directamente
+    con los macros que estima Vision. Si el usuario hace foto + texto del mismo
+    plato, NO duplicar; esta tool detecta duplicados (mismo dia/tipo + alimentos
+    solapados >= 50%) y devuelve `duplicado=True` sin insertar.
 
     Args:
-        telegram_id: ID de Telegram del usuario
-        fecha: formato YYYY-MM-DD
-        tipo: DEBE ser uno de: desayuno, almuerzo, cena, snack, post_entreno
-        alimentos_json: JSON array de strings con alimentos, ej: ["avena","platano","leche"]
-        calorias: calorias estimadas totales
-        proteinas: gramos de proteina
-        carbs: gramos de carbohidratos
-        grasas: gramos de grasa
+        telegram_id: ID de Telegram del usuario.
+        fecha: formato YYYY-MM-DD.
+        tipo: DEBE ser uno de: desayuno, almuerzo, cena, snack, post_entreno.
+        alimentos_json: JSON array de strings con alimentos concretos.
+            Ej: ["avena","platano","leche"]. NO VACIO.
+        calorias: calorias estimadas totales (> 0 si las macros estan en 0).
+        proteinas: gramos de proteina.
+        carbs: gramos de carbohidratos.
+        grasas: gramos de grasa.
     """
     try:
-        fecha = _validar_fecha(fecha)
         tipo = tipo.lower().strip()
         if tipo not in TIPOS_COMIDA_VALIDOS:
-            return _error(f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}")
-        alimentos = _safe_json_loads(alimentos_json, [])
-        await repo_guardar_comida(
-            telegram_id, fecha, tipo, alimentos, calorias, proteinas, carbs, grasas
+            return _error(
+                f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}"
+            )
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_use = fecha_norm or (await _hoy_usuario(telegram_id)).isoformat()
+
+        alimentos_raw = _safe_json_loads(alimentos_json, [])
+        alimentos: list[str] = []
+        for a in alimentos_raw:
+            if isinstance(a, str) and a.strip():
+                alimentos.append(a.strip()[:120])
+            elif isinstance(a, dict):
+                nombre = (
+                    a.get("nombre") or a.get("name") or a.get("alimento") or ""
+                )
+                if isinstance(nombre, str) and nombre.strip():
+                    alimentos.append(nombre.strip()[:120])
+        if not alimentos:
+            return _error(
+                "alimentos requerido (lista no vacia). Pidele al usuario "
+                "QUE comio antes de llamar esta tool."
+            )
+
+        macros_total = (proteinas or 0) + (carbs or 0) + (grasas or 0)
+        if (calorias or 0) <= 0 and macros_total <= 0:
+            return _error(
+                "calorias y macros todos en 0. Estima los valores aproximados "
+                "(ej: 2 huevos = 140 kcal P12g, 1 vaso leche = 150 kcal C12g G8g) "
+                "o pide foto al usuario antes de llamar esta tool."
+            )
+
+        # Deteccion de duplicado: mismo (telegram_id, fecha, tipo) y alimentos
+        # solapados >= 50%. Evita el patron foto+texto del mismo plato (un
+        # registro y luego el usuario lo describe en texto).
+        dup_id = await repo_buscar_comida_similar(
+            telegram_id, fecha_use, tipo, alimentos
         )
-        await log_evento(telegram_id, "registro_comida", {"tipo": tipo})
-        return _ok({"tipo": tipo, "alimentos": alimentos})
+        if dup_id is not None:
+            logger.info(
+                "registrar_comida duplicado detectado uid=%s tipo=%s "
+                "existente_id=%s alimentos=%s",
+                telegram_id, tipo, dup_id, alimentos[:5],
+            )
+            return _ok({
+                "duplicado": True,
+                "comida_existente_id": dup_id,
+                "mensaje": (
+                    f"ya hay una comida {tipo} con esos alimentos hoy "
+                    f"(id={dup_id}); no inserto duplicado"
+                ),
+            })
+
+        await repo_guardar_comida(
+            telegram_id, fecha_use, tipo, alimentos, calorias, proteinas, carbs, grasas
+        )
+        await log_evento(
+            telegram_id,
+            "registro_comida",
+            {
+                "tipo": tipo,
+                "fecha": fecha_use,
+                "kcal": calorias,
+                "n_alimentos": len(alimentos),
+            },
+        )
+        return _ok({
+            "tipo": tipo,
+            "fecha": fecha_use,
+            "alimentos": alimentos,
+            "calorias": calorias,
+            "proteinas_g": proteinas,
+            "carbs_g": carbs,
+            "grasas_g": grasas,
+        })
     except Exception:
         logger.exception("Error en registrar_comida")
         return _error("no pude registrar la comida")

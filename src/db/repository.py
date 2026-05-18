@@ -387,6 +387,81 @@ async def guardar_comida(
     return comida
 
 
+def _alimentos_set(raw: Any) -> set[str]:
+    """Normaliza alimentos a un set de strings lowercase para comparar.
+
+    Acepta str (JSON), list[str] o list[dict].
+    """
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            data = []
+    else:
+        data = raw or []
+    out: set[str] = set()
+    for item in data:
+        if isinstance(item, str):
+            s = item.strip().lower()
+            if s:
+                out.add(s)
+        elif isinstance(item, dict):
+            nombre = (
+                item.get("nombre") or item.get("name") or item.get("alimento") or ""
+            )
+            if isinstance(nombre, str) and nombre.strip():
+                out.add(nombre.strip().lower())
+    return out
+
+
+async def buscar_comida_similar(
+    telegram_id: int,
+    fecha_str: str,
+    tipo: str,
+    alimentos: list[str],
+    umbral_solapamiento: float = 0.5,
+) -> Optional[int]:
+    """Busca una Comida del mismo dia + tipo cuyos alimentos solapen >=umbral.
+
+    Devuelve el id de la primera coincidencia o None. Pensado para que
+    `registrar_comida` rechace duplicados sin abortar conversaciones donde
+    el usuario solo describe la misma comida de otra forma.
+
+    El solapamiento se calcula como `len(a & b) / max(len(a), len(b))`.
+    """
+    nuevo = _alimentos_set(alimentos)
+    if not nuevo:
+        return None
+    try:
+        fecha = date.fromisoformat(fecha_str)
+    except (ValueError, TypeError):
+        return None
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return None
+        try:
+            tipo_enum = TipoComida(tipo)
+        except ValueError:
+            return None
+        result = await session.execute(
+            select(Comida).where(
+                Comida.usuario_id == uid,
+                Comida.fecha == fecha,
+                Comida.tipo == tipo_enum,
+            )
+        )
+        for c in result.scalars().all():
+            existente = _alimentos_set(c.alimentos)
+            if not existente:
+                continue
+            interseccion = nuevo & existente
+            denom = max(len(nuevo), len(existente))
+            if denom > 0 and (len(interseccion) / denom) >= umbral_solapamiento:
+                return c.id
+        return None
+
+
 async def resumen_nutricional_dia(
     telegram_id: int, fecha: Optional[date] = None
 ) -> dict:
