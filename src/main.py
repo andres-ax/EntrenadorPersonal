@@ -1,6 +1,7 @@
 """FastAPI + webhook de Telegram. Modo produccion (Railway)."""
 from __future__ import annotations
 
+import asyncio
 import hmac
 import html
 import json
@@ -10,6 +11,7 @@ from contextlib import asynccontextmanager
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, Defaults
@@ -19,6 +21,7 @@ from src.config import settings
 from src.db.connection import close_db, engine, init_db, ping as ping_db
 from src.telegram.bot_setup import setup_bot
 from src.telegram.handlers import registrar
+from src.telegram.pubsub_listener import start_pubsub_listener
 from src.telegram.scheduler import registrar_jobs
 
 logger = logging.getLogger(__name__)
@@ -27,6 +30,7 @@ WEBHOOK_SECRET: str = settings.webhook_secret.get_secret_value()
 ADMIN_TOKEN: str = settings.admin_token.get_secret_value()
 
 telegram_app: Application | None = None
+pubsub_task: asyncio.Task | None = None
 
 
 async def error_handler(update, context) -> None:
@@ -54,7 +58,7 @@ async def error_handler(update, context) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global telegram_app
+    global telegram_app, pubsub_task
 
     await init_db()
     logger.info("Base de datos inicializada")
@@ -77,10 +81,17 @@ async def lifespan(app: FastAPI):
 
     await telegram_app.initialize()
     await telegram_app.start()
-    logger.info("Telegram app inicializada y lista")
+    pubsub_task = start_pubsub_listener(telegram_app)
+    logger.info("Telegram app inicializada + pubsub listener activo")
 
     yield
 
+    if pubsub_task and not pubsub_task.done():
+        pubsub_task.cancel()
+        try:
+            await pubsub_task
+        except (asyncio.CancelledError, Exception):
+            pass
     if telegram_app:
         try:
             await telegram_app.stop()
@@ -93,11 +104,33 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="EntrenadorAX", lifespan=lifespan)
 
+allowed_origins = [
+    str(settings.miniapp_url).rstrip("/") if settings.miniapp_url else "*",
+    str(settings.admin_url).rstrip("/") if settings.admin_url else "",
+    str(settings.landing_url).rstrip("/") if settings.landing_url else "",
+]
+allowed_origins = [o for o in allowed_origins if o]
+if not allowed_origins:
+    allowed_origins = ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from src.api.admin import router as admin_router  # noqa: E402
 from src.api.auth import router as auth_router  # noqa: E402
+from src.api.integraciones import router as integraciones_router  # noqa: E402
 from src.api.me import router as me_router  # noqa: E402
+from src.api.public import router as public_router  # noqa: E402
 
 app.include_router(auth_router)
 app.include_router(me_router)
+app.include_router(admin_router)
+app.include_router(public_router)
+app.include_router(integraciones_router)
 
 
 @app.get("/health")

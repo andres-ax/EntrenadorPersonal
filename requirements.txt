@@ -63,6 +63,9 @@ pydantic-settings>=2.7,<3.0
 # Carga manual del archivo .env en run_bot.py y scripts/reset_db.py.
 python-dotenv>=1.0,<2.0
 
+# EmailStr validation para Pydantic (newsletter, magic links).
+email-validator>=2.0,<3.0
+
 
 # -----------------------------------------------------------------------------
 # Cache / rate limiting (Redis async)
@@ -83,3 +86,33 @@ matplotlib>=3.8,<4.0
 
 # Pillow para procesar imagenes recibidas (resize antes de mandar a Vision API).
 Pillow>=10.0,<12.0
+
+# Generacion de PDFs (analisis mensual del usuario).
+fpdf2>=2.7,<3.0
+
+
+# -----------------------------------------------------------------------------
+# Seguridad y cifrado
+# -----------------------------------------------------------------------------
+# Password hashing para admin panel (bcrypt via passlib).
+passlib[bcrypt]>=1.7,<2.0
+
+# Cifrado simetrico de tokens OAuth de wearables (Fernet).
+cryptography>=42.0,<46.0
+
+
+# -----------------------------------------------------------------------------
+# Tareas asincronas (worker)
+# -----------------------------------------------------------------------------
+# Worker liviano para sync de wearables, recalcular rankings, etc.
+arq>=0.26,<1.0
+
+# Cliente WebSocket async para conectar a OpenAI Realtime API.
+websockets>=13.0,<16.0
+
+
+# -----------------------------------------------------------------------------
+# Magic link emails (V2 auth web)
+# -----------------------------------------------------------------------------
+# Cliente HTTP de Resend para enviar magic links de auth web.
+# (httpx ya viene como dep transitiva de openai, no se vuelve a declarar)

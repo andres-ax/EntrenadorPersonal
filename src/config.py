@@ -43,6 +43,30 @@ class Settings(BaseSettings):
 
     default_timezone: str = "America/Bogota"
 
+    precio_starter_cop: int = 5000
+    precio_pro_cop: int = 14990
+    precio_elite_cop: int = 39990
+    precio_lifetime_cop: int = 399000
+    descuento_anual_pct: int = 20
+    cupos_lifetime_total: int = 100
+    cuenta_destino_pago: str = "300 123 4567"
+    cuenta_destino_alt: str = "1234567890"
+    monto_pago_tolerancia_cop: int = 500
+    referido_dias_bonus: int = 30
+
+    miniapp_url: HttpUrl | None = None
+    landing_url: HttpUrl | None = None
+    admin_url: HttpUrl | None = None
+    realtime_ws_url: str | None = None
+
+    fernet_key: SecretStr | None = None
+    resend_api_key: SecretStr | None = None
+    sentry_dsn: SecretStr | None = None
+    plausible_domain: str | None = None
+
+    canal_logros_id: int | None = None
+    canal_pro_id: int | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

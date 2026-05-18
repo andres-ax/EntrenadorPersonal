@@ -35,28 +35,35 @@ from agents.extensions.memory import RedisSession
 from src.cache import limpiar_keys_usuario
 from src.coach import coach
 from src.config import settings
+from src.db.models import PlanSuscripcion
 from src.services.crisis import detectar as detectar_crisis
 from src.services.crisis import detectar_diagnostico_output
+from src.db.models import DuracionPago
 from src.db.repository import (
     actualizar_usuario,
     aceptar_modo_militar,
+    activar_plan,
     cambiar_tono as repo_cambiar_tono,
     contar_fotos_hoy,
     eliminar_usuario,
     guardar_comida,
+    guardar_comprobante,
     guardar_feedback_comida,
     log_crisis,
     log_evento,
     marcar_bot_bloqueado,
+    marcar_comprobante_duplicado,
     obtener_compromiso_activo,
     obtener_o_crear_usuario,
     obtener_o_crear_streak,
     obtener_usuario,
+    obtener_plan_actual,
     pausar_recordatorios,
     set_quiet_hours,
     ultimos_eventos,
     usar_freeze_streak,
 )
+from src.telegram.decoradores import requiere_tier
 from src.telegram.middlewares import check_rate_limit
 from src.telegram.reacciones import reaccionar
 
@@ -243,7 +250,8 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     user = await obtener_o_crear_usuario(uid)
     pais = user.pais if user else "CO"
-    crisis = detectar_crisis(texto[:8000], pais=pais)
+    peso = user.peso_kg if user else None
+    crisis = detectar_crisis(texto[:8000], pais=pais, peso_actual_kg=peso)
     if crisis is not None:
         try:
             sent = await update.message.reply_text(crisis.mensaje_contenedor)
@@ -761,6 +769,7 @@ async def inline_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Error answer inline uid=%s", uid)
 
 
+@requiere_tier(PlanSuscripcion.STARTER)
 async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]"""
     from src.services.charts import (
@@ -908,6 +917,67 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    if q.data.startswith("desafio_inscribir:"):
+        from src.services.comunidad import inscribir_en_desafio
+
+        slug = q.data.split(":", 1)[1]
+        ok = await inscribir_en_desafio(uid, slug)
+        if ok:
+            await q.edit_message_text(
+                f"Inscripto en <b>{slug}</b>. Usa /ranking para ver tu posicion."
+            )
+        else:
+            await q.edit_message_text(
+                "Ya estabas inscrito o el desafio no existe."
+            )
+        return
+
+    if q.data.startswith("pagar:"):
+        from src.db.models import DuracionPago, PlanSuscripcion
+        from src.services.pricing import (
+            descripcion_plan,
+            dias_duracion,
+            formatear_precio,
+            precio_cop,
+        )
+
+        partes = q.data.split(":")
+        if len(partes) >= 3:
+            plan_str, duracion_str = partes[1], partes[2]
+        else:
+            plan_str, duracion_str = partes[1], "mensual"
+        try:
+            plan_pago = PlanSuscripcion(plan_str)
+            duracion = DuracionPago(duracion_str)
+        except ValueError:
+            await q.edit_message_text("Opcion invalida.")
+            return
+        monto = precio_cop(plan_pago, duracion)
+        dias = dias_duracion(plan_pago, duracion)
+        ctx.user_data["esperando_comprobante"] = True
+        ctx.user_data["plan_pendiente_pago"] = {
+            "plan": plan_pago.value,
+            "duracion": duracion.value,
+            "monto": monto,
+            "dias": dias,
+        }
+        await log_evento(
+            uid,
+            "pagar_seleccionado",
+            {"plan": plan_pago.value, "duracion": duracion.value, "monto": monto},
+        )
+        await q.edit_message_text(
+            f"<b>Plan {plan_pago.value} ({duracion.value}): {formatear_precio(monto)}</b>\n\n"
+            f"{descripcion_plan(plan_pago)}\n\n"
+            f"<b>Como pagar:</b>\n"
+            f"- Bre-B / Nequi / Daviplata: <code>{settings.cuenta_destino_pago}</code>\n"
+            f"- Bancolombia ahorro: <code>{settings.cuenta_destino_alt}</code>\n\n"
+            f"Cuando termines, mandame la <b>foto del comprobante</b> "
+            f"como respuesta a este mensaje. La activacion es automatica "
+            f"si el monto coincide; un admin la valida en horas."
+        )
+        return
+
     if q.data == "confirmar_borrado":
         try:
             borrado = await eliminar_usuario(uid)
@@ -946,11 +1016,28 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _procesar(q.message, texto, uid, ctx=ctx)
 
 
+_CAPTION_COMPROBANTE = re.compile(
+    r"\b(pago|comprobante|bre\W?b|transferencia|nequi|daviplata|pse|recibo)\b",
+    re.IGNORECASE,
+)
+
+
 async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Recibe foto del usuario. Si es comida, llama Vision API. Cap 3 fotos/dia free."""
+    """Recibe foto del usuario.
+
+    Si es comprobante de pago (esperando_comprobante=True o caption indica pago)
+    -> procesa con Vision-comprobante. Si no, va a Vision-comida.
+    Cap 3 fotos/dia free.
+    """
     from datetime import date
 
-    from src.db.repository import es_usuario_pro
+    from src.db.repository import es_plan_minimo
+    from src.db.models import PlanSuscripcion
+    from src.services.comprobantes import (
+        extraer_datos_comprobante,
+        sha256_imagen,
+    )
+    from src.services.deteccion_duplicados import es_duplicado
     from src.services.vision import analizar_comida, resize_si_pesa
 
     uid = update.effective_user.id
@@ -958,13 +1045,23 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Tranquilo, dame un segundo.")
         return
 
-    es_pro = await es_usuario_pro(uid)
-    if not es_pro:
+    caption = (update.message.caption or "").strip()
+    esperando_pago = bool(ctx.user_data.get("esperando_comprobante", False))
+    es_modo_pago = esperando_pago or bool(
+        caption and _CAPTION_COMPROBANTE.search(caption)
+    )
+
+    if es_modo_pago:
+        await _procesar_comprobante(update, ctx, uid)
+        return
+
+    es_starter_o_mas = await es_plan_minimo(uid, PlanSuscripcion.STARTER)
+    if not es_starter_o_mas:
         n = await contar_fotos_hoy(uid)
         if n >= 3:
             await update.message.reply_text(
-                "Llegaste al limite de 3 fotos/dia en plan free. "
-                "Manana puedes mas, o /upgrade para Pro."
+                "Llegaste al limite de 3 fotos/dia en plan Free. "
+                "Manana puedes mas, o mejora tu plan con /pagar"
             )
             return
 
@@ -1035,6 +1132,315 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(respuesta)
 
 
+async def _procesar_comprobante(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE, uid: int
+) -> None:
+    """Procesa una foto como comprobante de pago: Vision -> duplicados -> activacion provisional."""
+    from src.db.models import DuracionPago, PlanSuscripcion
+    from src.services.comprobantes import (
+        extraer_datos_comprobante,
+        sha256_imagen,
+    )
+    from src.services.deteccion_duplicados import es_duplicado
+    from src.services.pricing import dias_duracion, formatear_precio, precio_cop
+
+    pendiente = ctx.user_data.get("plan_pendiente_pago") or {}
+    plan_str = pendiente.get("plan", "starter")
+    duracion_str = pendiente.get("duracion", "mensual")
+    try:
+        plan_solicitado = PlanSuscripcion(plan_str)
+        duracion = DuracionPago(duracion_str)
+    except ValueError:
+        plan_solicitado = PlanSuscripcion.STARTER
+        duracion = DuracionPago.MENSUAL
+
+    monto_esperado = pendiente.get("monto") or precio_cop(plan_solicitado, duracion)
+    dias_otorgados = dias_duracion(plan_solicitado, duracion)
+
+    await update.message.chat.send_action(ChatAction.TYPING)
+    await update.message.reply_text(
+        "Recibi tu comprobante. Lo estoy analizando..."
+    )
+
+    try:
+        photo = update.message.photo[-1]
+        file = await photo.get_file()
+        raw = bytes(await file.download_as_bytearray())
+    except Exception:
+        logger.exception("Error descargando comprobante uid=%s", uid)
+        await update.message.reply_text("No pude descargar el comprobante. Intenta de nuevo.")
+        return
+
+    sha = sha256_imagen(raw)
+
+    datos = await extraer_datos_comprobante(raw)
+    if not datos.get("ok") or not datos.get("es_comprobante"):
+        razon = datos.get("razon", "no_es_comprobante")
+        await update.message.reply_text(
+            "No reconoci esta imagen como comprobante de pago. "
+            "Asegurate que se vean monto, fecha y referencia. Intenta otra foto."
+        )
+        await log_evento(uid, "comprobante_no_reconocido", {"razon": razon})
+        return
+
+    dup = await es_duplicado(
+        foto_sha256=sha,
+        monto_cop=datos.get("monto_cop", 0),
+        fecha_pago=datos.get("fecha_pago"),
+        referencia=datos.get("referencia", ""),
+        cuenta_origen=datos.get("cuenta_origen", ""),
+    )
+
+    comprobante = await guardar_comprobante(
+        telegram_id=uid,
+        foto_file_id=photo.file_id,
+        foto_sha256=sha,
+        plan_solicitado=plan_solicitado,
+        duracion=duracion,
+        monto_esperado_cop=monto_esperado,
+        dias_otorgados=dias_otorgados,
+        vision_payload=datos,
+        referido_codigo=pendiente.get("referido_codigo"),
+    )
+
+    if dup.get("es_duplicado"):
+        await marcar_comprobante_duplicado(comprobante.id, dup["razon"])
+        await update.message.reply_text(
+            "Este comprobante ya habia sido enviado antes (razon: "
+            f"{dup['razon']}). No puedo activar tu plan dos veces con el mismo "
+            "pago. Si crees que es un error, contacta soporte."
+        )
+        await log_evento(uid, "comprobante_duplicado", {"razon": dup["razon"]})
+        if settings.developer_chat_id:
+            try:
+                await ctx.bot.send_message(
+                    chat_id=settings.developer_chat_id,
+                    text=(
+                        f"<b>Comprobante DUPLICADO</b> uid={uid}\n"
+                        f"razon: {dup['razon']}\n"
+                        f"similares: {dup['comprobantes_similares']}\n"
+                        f"comp_id: {comprobante.id}"
+                    ),
+                )
+            except Exception:
+                pass
+        return
+
+    monto_match = comprobante.monto_match
+    if monto_match:
+        await activar_plan(
+            telegram_id=uid,
+            plan=plan_solicitado,
+            dias=dias_otorgados,
+            duracion=duracion,
+            metodo=comprobante.metodo,
+            monto_cop=comprobante.monto_cop,
+            comprobante_id=comprobante.id,
+        )
+        ctx.user_data.pop("esperando_comprobante", None)
+        ctx.user_data.pop("plan_pendiente_pago", None)
+        await update.message.reply_text(
+            f"<b>Pago recibido!</b> Plan <b>{plan_solicitado.value}</b> "
+            f"activado provisional. Un admin lo validara en las proximas horas.\n\n"
+            f"Monto detectado: {formatear_precio(comprobante.monto_cop)}\n"
+            f"Referencia: <code>{comprobante.referencia}</code>"
+        )
+    else:
+        await update.message.reply_text(
+            f"Recibi tu comprobante pero el monto no coincide.\n"
+            f"Esperado: {formatear_precio(monto_esperado)}\n"
+            f"Detectado: {formatear_precio(comprobante.monto_cop)}\n\n"
+            "Un admin va a revisarlo. Te aviso cuando se valide."
+        )
+
+    await log_evento(
+        uid,
+        "comprobante_recibido",
+        {
+            "comp_id": comprobante.id,
+            "monto_cop": comprobante.monto_cop,
+            "monto_match": monto_match,
+            "plan": plan_solicitado.value,
+        },
+    )
+
+    if settings.developer_chat_id:
+        try:
+            estado = "activacion_provisional" if monto_match else "monto_no_match"
+            await ctx.bot.send_message(
+                chat_id=settings.developer_chat_id,
+                text=(
+                    f"<b>Nuevo comprobante #{comprobante.id}</b>\n"
+                    f"uid={uid} plan={plan_solicitado.value}\n"
+                    f"monto: {comprobante.monto_cop}/{monto_esperado}\n"
+                    f"metodo: {comprobante.metodo.value}\n"
+                    f"ref: <code>{comprobante.referencia}</code>\n"
+                    f"estado: {estado}"
+                ),
+            )
+        except Exception:
+            logger.exception("No pude notificar admin de nuevo comprobante")
+
+
+@requiere_tier(PlanSuscripcion.STARTER)
+async def cmd_mi_mes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Genera y envia PDF con analisis del mes pasado."""
+    from datetime import date as _date
+    from io import BytesIO
+
+    from src.services.analisis_mensual import generar_pdf_mensual
+
+    uid = update.effective_user.id
+    hoy = _date.today()
+    if hoy.month == 1:
+        ano, mes = hoy.year - 1, 12
+    else:
+        ano, mes = hoy.year, hoy.month - 1
+
+    await update.message.chat.send_action(ChatAction.UPLOAD_DOCUMENT)
+    try:
+        pdf_bytes = await generar_pdf_mensual(uid, ano, mes)
+        if not pdf_bytes:
+            await update.message.reply_text(
+                "Aun no tengo datos suficientes del mes pasado."
+            )
+            return
+        await ctx.bot.send_document(
+            chat_id=uid,
+            document=BytesIO(pdf_bytes),
+            filename=f"entrenadorax_{ano}-{mes:02d}.pdf",
+            caption=f"<b>Tu mes en EntrenadorAX</b>: {mes:02d}/{ano}",
+        )
+        await log_evento(uid, "pdf_mensual_enviado", {"ano": ano, "mes": mes})
+    except Exception:
+        logger.exception("Error generando PDF mensual uid=%s", uid)
+        await update.message.reply_text(
+            "No pude generar el PDF ahora. Intenta de nuevo en unos minutos."
+        )
+
+
+@requiere_tier(PlanSuscripcion.STARTER)
+async def cmd_llamar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Abre Mini App en modo llamada con el coach."""
+    from telegram import WebAppInfo
+
+    if not settings.miniapp_url:
+        await update.message.reply_text(
+            "El servicio de llamada esta proximamente. Mientras tanto, "
+            "responde con texto que tambien te ayudo."
+        )
+        return
+    url = f"{str(settings.miniapp_url).rstrip('/')}/llamar"
+    keyboard = [[
+        InlineKeyboardButton("Iniciar llamada", web_app=WebAppInfo(url=url)),
+    ]]
+    await update.message.reply_text(
+        "<b>Llamar al coach</b>\n\nToca el boton y permite acceso al microfono.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def cmd_desafios(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lista desafios activos + boton inscribirse."""
+    from src.services.comunidad import listar_desafios_activos
+
+    desafios = await listar_desafios_activos()
+    if not desafios:
+        await update.message.reply_text(
+            "No hay desafios activos ahora. Vuelve a chequear pronto!"
+        )
+        return
+    lineas = ["<b>Desafios activos:</b>"]
+    botones = []
+    for d in desafios[:10]:
+        lineas.append(f"- <b>{d.titulo}</b> ({d.tipo}) hasta {d.fecha_fin.isoformat()}")
+        botones.append([
+            InlineKeyboardButton(
+                f"Inscribirme: {d.titulo[:30]}",
+                callback_data=f"desafio_inscribir:{d.slug}",
+            )
+        ])
+    await update.message.reply_text(
+        "\n".join(lineas), reply_markup=InlineKeyboardMarkup(botones)
+    )
+
+
+async def cmd_ranking(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Muestra mi posicion en desafios activos."""
+    from src.services.comunidad import mi_posicion
+
+    uid = update.effective_user.id
+    posiciones = await mi_posicion(uid)
+    if not posiciones:
+        await update.message.reply_text(
+            "No estas inscrito en ningun desafio. Usa /desafios para ver disponibles."
+        )
+        return
+    lineas = ["<b>Tu posicion en desafios:</b>"]
+    for p in posiciones:
+        lineas.append(
+            f"- <b>{p['desafio']}</b>: posicion <b>#{p['posicion']}</b> con valor {p['valor']:.0f}"
+        )
+    await update.message.reply_text("\n".join(lineas))
+
+
+async def cmd_kudos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """/kudos @usuario - dar kudos a otro atleta."""
+    from src.services.comunidad import dar_kudos
+
+    args = ctx.args or []
+    if not args:
+        await update.message.reply_text(
+            "Uso: <code>/kudos @username</code>\nDa 1 kudos a otro atleta (max 10/dia)."
+        )
+        return
+    target = args[0].lstrip("@")
+    try:
+        chat = await ctx.bot.get_chat(f"@{target}")
+        destino_id = chat.id
+    except Exception:
+        await update.message.reply_text(
+            "No encontre ese usuario. Asegurate de poner el @username correcto."
+        )
+        return
+    uid = update.effective_user.id
+    ok = await dar_kudos(uid, destino_id)
+    if ok:
+        await update.message.reply_text(f"Kudos a @{target} dado!")
+    else:
+        await update.message.reply_text(
+            "No pude dar kudos (puede ser que ya llegaste al cap diario o el usuario no exista en EntrenadorAX)."
+        )
+
+
+async def cmd_pagar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Muestra los 4 tiers con inline keyboard para iniciar pago."""
+    from src.db.models import DuracionPago, PlanSuscripcion
+    from src.services.pricing import formatear_precio, precio_cop
+
+    starter_m = formatear_precio(precio_cop(PlanSuscripcion.STARTER, DuracionPago.MENSUAL))
+    pro_m = formatear_precio(precio_cop(PlanSuscripcion.PRO, DuracionPago.MENSUAL))
+    elite_m = formatear_precio(precio_cop(PlanSuscripcion.ELITE, DuracionPago.MENSUAL))
+    pro_a = formatear_precio(precio_cop(PlanSuscripcion.PRO, DuracionPago.ANUAL))
+    lifetime = formatear_precio(precio_cop(PlanSuscripcion.LIFETIME, DuracionPago.LIFETIME))
+
+    keyboard = [
+        [InlineKeyboardButton(f"Starter {starter_m}/mes", callback_data="pagar:starter:mensual")],
+        [InlineKeyboardButton(f"Pro {pro_m}/mes", callback_data="pagar:pro:mensual")],
+        [InlineKeyboardButton(f"Elite {elite_m}/mes", callback_data="pagar:elite:mensual")],
+        [InlineKeyboardButton(f"Pro anual {pro_a} (20% off)", callback_data="pagar:pro:anual")],
+        [InlineKeyboardButton(f"Lifetime {lifetime}", callback_data="pagar:lifetime:lifetime")],
+    ]
+    await update.message.reply_text(
+        "<b>Elige tu plan EntrenadorAX</b>\n\n"
+        f"<b>Starter</b> {starter_m}/mes: charts avanzados + photo ilimitado + Mini App + 5min voz trial.\n"
+        f"<b>Pro</b> {pro_m}/mes: + voz coach + 30min Realtime + 1 wearable + plan generator.\n"
+        f"<b>Elite</b> {elite_m}/mes: + 120min Realtime + wearables ilimitados + PDFs ilimitados.\n"
+        f"<b>Lifetime</b> {lifetime}: Elite para siempre (solo 100 cupos en launch).",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
 def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
@@ -1059,6 +1465,13 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("grafico", cmd_grafico))
     app.add_handler(CommandHandler("exportar_csv", cmd_exportar_csv))
     app.add_handler(CommandHandler("upgrade", cmd_upgrade))
+    app.add_handler(CommandHandler("pagar", cmd_pagar))
+    app.add_handler(CommandHandler("planes", cmd_pagar))
+    app.add_handler(CommandHandler("llamar", cmd_llamar))
+    app.add_handler(CommandHandler("mi_mes", cmd_mi_mes))
+    app.add_handler(CommandHandler("desafios", cmd_desafios))
+    app.add_handler(CommandHandler("ranking", cmd_ranking))
+    app.add_handler(CommandHandler("kudos", cmd_kudos))
     app.add_handler(CommandHandler("invitar", cmd_invitar))
     app.add_handler(InlineQueryHandler(inline_query))
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))

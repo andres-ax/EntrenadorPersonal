@@ -146,3 +146,115 @@ async def get_uid_from_token(authorization: str | None = Header(None)) -> int:
     if uid is None:
         raise HTTPException(401, "Token invalido o expirado")
     return uid
+
+
+# --- Magic link (auth web alternativa) ---
+
+
+import secrets as _secrets  # noqa: E402
+from datetime import datetime as _dt, timedelta as _td  # noqa: E402
+
+import httpx  # noqa: E402
+from sqlalchemy import select as _select  # noqa: E402
+
+from src.db.connection import async_session_factory as _afs  # noqa: E402
+from src.db.models import MagicLink, Usuario  # noqa: E402
+
+
+class MagicLinkReq(BaseModel):
+    email: str
+
+
+class MagicLinkResp(BaseModel):
+    ok: bool
+    message: str
+
+
+@router.post("/magic-link", response_model=MagicLinkResp)
+async def crear_magic_link(req: MagicLinkReq) -> MagicLinkResp:
+    """Genera magic link + envia por Resend (si key seteada) o log."""
+    token = _secrets.token_urlsafe(48)
+    expires_at = _dt.utcnow() + _td(minutes=15)
+    email = req.email.lower().strip()
+    async with _afs() as session:
+        ml = MagicLink(
+            token=token, email=email, expires_at=expires_at
+        )
+        session.add(ml)
+        await session.commit()
+
+    landing_url = str(settings.landing_url or settings.miniapp_url or "").rstrip("/")
+    verify_url = f"{landing_url}/auth/verify?token={token}" if landing_url else None
+
+    if settings.resend_api_key and verify_url:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {settings.resend_api_key.get_secret_value()}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": "EntrenadorAX <auth@entrenadorax.com>",
+                        "to": [email],
+                        "subject": "Tu link de acceso a EntrenadorAX",
+                        "html": (
+                            f"<p>Hola,</p>"
+                            f"<p>Aqui esta tu link para entrar a EntrenadorAX:</p>"
+                            f"<p><a href='{verify_url}'>Entrar</a></p>"
+                            f"<p>Expira en 15 minutos.</p>"
+                            f"<p>Si no fuiste tu, ignora este email.</p>"
+                        ),
+                    },
+                )
+        except Exception:
+            logger.exception("Error enviando magic link via Resend")
+    else:
+        logger.info("Magic link generado para %s: %s", email, verify_url or token)
+
+    return MagicLinkResp(
+        ok=True,
+        message="Si el email es valido, recibiras un link en breve.",
+    )
+
+
+@router.get("/verify", response_model=TokenResp)
+async def verificar_magic_link(token: str) -> TokenResp:
+    """Verifica magic link + devuelve JWT (crea usuario si no existe)."""
+    if not token:
+        raise HTTPException(400, "token requerido")
+    async with _afs() as session:
+        ml_q = await session.execute(
+            _select(MagicLink).where(MagicLink.token == token)
+        )
+        ml = ml_q.scalar_one_or_none()
+        if ml is None:
+            raise HTTPException(401, "magic link invalido")
+        if ml.used_at is not None:
+            raise HTTPException(401, "magic link ya usado")
+        if ml.expires_at < _dt.utcnow():
+            raise HTTPException(401, "magic link expirado")
+
+        user_q = await session.execute(
+            _select(Usuario).where(Usuario.email == ml.email)
+        )
+        user = user_q.scalar_one_or_none()
+        if user is None:
+            user = Usuario(
+                telegram_id=-int(_secrets.randbits(32)),  # placeholder uid si solo web
+                email=ml.email,
+                email_verified_at=_dt.utcnow(),
+                auth_method="email",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        else:
+            user.email_verified_at = _dt.utcnow()
+            if user.auth_method == "telegram":
+                user.auth_method = "both"
+        ml.used_at = _dt.utcnow()
+        await session.commit()
+        uid = user.telegram_id
+    return TokenResp(jwt=_sign_jwt(uid), uid=uid, expira_en=JWT_TTL_SECONDS)

@@ -291,6 +291,25 @@ async def guardar_pr(
         fecha_obj = date.fromisoformat(_validar_fecha(fecha)) if fecha else date.today()
         pr = await repo_guardar_pr(telegram_id, ejercicio, peso_kg, reps, fecha_obj)
         await log_evento(telegram_id, "nuevo_pr", {"ejercicio": ejercicio, "peso": peso_kg})
+        try:
+            from src.cache import get_redis
+            import json as _json
+
+            client = await get_redis()
+            await client.publish(
+                "pr_publicar_canal",
+                _json.dumps(
+                    {
+                        "telegram_id": telegram_id,
+                        "pr_id": pr.id,
+                        "ejercicio": pr.ejercicio,
+                        "peso_kg": pr.peso_kg,
+                        "reps": pr.reps,
+                    }
+                ),
+            )
+        except Exception:
+            pass
         return _ok({"ejercicio": pr.ejercicio, "peso_kg": pr.peso_kg, "reps": pr.reps})
     except Exception:
         logger.exception("Error en guardar_pr")

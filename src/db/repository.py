@@ -10,18 +10,25 @@ from sqlalchemy.orm import selectinload
 
 from src.db.connection import async_session_factory
 from src.db.models import (
+    Admin,
     CheckinNocturno,
     Comida,
     Compromiso,
     CrisisLog,
+    DuracionPago,
     EjercicioRealizado,
     EscalacionState,
+    EstadoPago,
     EventoBot,
     FeedbackComida,
+    MetodoPago,
     MetricaCorporal,
     MetricaSueno,
+    PagoComprobante,
     PersonalRecord,
+    PlanDefinicion,
     PlanSuscripcion,
+    RolAdmin,
     SesionEntrenamiento,
     Streak,
     Suscripcion,
@@ -32,6 +39,7 @@ from src.db.models import (
     TipoStreak,
     TonoCoach,
     Usuario,
+    UsuarioBloqueado,
 )
 
 
@@ -889,22 +897,127 @@ async def contar_fotos_hoy(telegram_id: int) -> int:
 # --- Suscripciones (V2 Stars) ---
 
 
-async def activar_suscripcion_pro(
-    telegram_id: int,
-    telegram_payment_charge_id: str,
-    star_amount: int,
-    dias: int = 30,
-) -> Suscripcion:
+PLAN_RANKING: dict[PlanSuscripcion, int] = {
+    PlanSuscripcion.FREE: 0,
+    PlanSuscripcion.STARTER: 1,
+    PlanSuscripcion.PRO: 2,
+    PlanSuscripcion.ELITE: 3,
+    PlanSuscripcion.LIFETIME: 4,
+}
+
+
+async def _esta_bloqueado(session, usuario_id: int) -> bool:
+    result = await session.execute(
+        select(UsuarioBloqueado).where(UsuarioBloqueado.usuario_id == usuario_id)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def obtener_plan_actual(telegram_id: int) -> PlanSuscripcion:
+    """Devuelve el plan vigente. Si esta bloqueado o expirado -> FREE."""
+    ahora = datetime.utcnow()
     async with async_session_factory() as session:
-        uid = await _get_usuario_id(session, telegram_id)
-        if uid is None:
+        result = await session.execute(
+            select(Usuario).where(Usuario.telegram_id == telegram_id)
+        )
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
+            return PlanSuscripcion.FREE
+        if await _esta_bloqueado(session, usuario.id):
+            return PlanSuscripcion.FREE
+        plan = usuario.plan_actual or PlanSuscripcion.FREE
+        if plan == PlanSuscripcion.LIFETIME:
+            return PlanSuscripcion.LIFETIME
+        if plan == PlanSuscripcion.FREE:
+            return PlanSuscripcion.FREE
+        if usuario.plan_expira_en is not None and usuario.plan_expira_en < ahora:
+            usuario.plan_actual = PlanSuscripcion.FREE
+            usuario.plan_expira_en = None
+            await session.commit()
+            return PlanSuscripcion.FREE
+        return plan
+
+
+async def es_plan_minimo(
+    telegram_id: int, tier_minimo: PlanSuscripcion
+) -> bool:
+    """True si el plan vigente cumple o supera el tier minimo."""
+    actual = await obtener_plan_actual(telegram_id)
+    return PLAN_RANKING.get(actual, 0) >= PLAN_RANKING.get(tier_minimo, 0)
+
+
+async def es_usuario_pro(telegram_id: int) -> bool:
+    """Backwards-compat. True si plan >= PRO (Pro, Elite o Lifetime)."""
+    return await es_plan_minimo(telegram_id, PlanSuscripcion.PRO)
+
+
+_FEATURE_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+async def obtener_features_plan(plan: PlanSuscripcion) -> dict:
+    """Lee features dinamicas desde plan_definicion. Cache 5 min in-process."""
+    import time as _t
+
+    key = plan.value
+    ahora = _t.time()
+    cached = _FEATURE_CACHE.get(key)
+    if cached and (ahora - cached[0]) < 300:
+        return cached[1]
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PlanDefinicion).where(PlanDefinicion.plan == plan)
+        )
+        definicion = result.scalar_one_or_none()
+        features: dict = definicion.features if definicion else {}
+    _FEATURE_CACHE[key] = (ahora, features)
+    return features
+
+
+def _dias_por_duracion(plan: PlanSuscripcion, duracion: DuracionPago) -> int:
+    if plan == PlanSuscripcion.LIFETIME:
+        return 36500
+    if duracion == DuracionPago.LIFETIME:
+        return 36500
+    if duracion == DuracionPago.ANUAL:
+        return 365
+    return 30
+
+
+async def activar_plan(
+    telegram_id: int,
+    plan: PlanSuscripcion,
+    dias: int | None = None,
+    duracion: DuracionPago = DuracionPago.MENSUAL,
+    metodo: MetodoPago = MetodoPago.MANUAL_ADMIN,
+    monto_cop: int | None = None,
+    comprobante_id: int | None = None,
+) -> Suscripcion:
+    """Crea/extiende suscripcion + actualiza plan_actual + plan_expira_en."""
+    dias_real = dias if dias is not None else _dias_por_duracion(plan, duracion)
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Usuario).where(Usuario.telegram_id == telegram_id)
+        )
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
             raise ValueError(f"Usuario {telegram_id} no existe")
+        ahora = datetime.utcnow()
+        base = usuario.plan_expira_en or ahora
+        if base < ahora:
+            base = ahora
+        nueva_expira = (
+            None if plan == PlanSuscripcion.LIFETIME else base + timedelta(days=dias_real)
+        )
+        usuario.plan_actual = plan
+        usuario.plan_expira_en = nueva_expira
         sus = Suscripcion(
-            usuario_id=uid,
-            plan=PlanSuscripcion.PRO,
-            telegram_payment_charge_id=telegram_payment_charge_id,
-            star_amount=star_amount,
-            expira_en=datetime.utcnow() + timedelta(days=dias),
+            usuario_id=usuario.id,
+            plan=plan,
+            metodo_pago=metodo,
+            monto_cop=monto_cop,
+            comprobante_id=comprobante_id,
+            iniciada_en=ahora,
+            expira_en=nueva_expira,
             activa=True,
         )
         session.add(sus)
@@ -913,22 +1026,280 @@ async def activar_suscripcion_pro(
         return sus
 
 
-async def es_usuario_pro(telegram_id: int) -> bool:
-    """Devuelve True si tiene suscripcion activa Pro no expirada."""
-    ahora = datetime.utcnow()
+async def desactivar_plan(telegram_id: int) -> bool:
+    """Revoca el plan actual (downgrade a FREE)."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Usuario).where(Usuario.telegram_id == telegram_id)
+        )
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
+            return False
+        usuario.plan_actual = PlanSuscripcion.FREE
+        usuario.plan_expira_en = None
+        await session.execute(
+            select(Suscripcion).where(
+                Suscripcion.usuario_id == usuario.id,
+                Suscripcion.activa == True,  # noqa: E712
+            )
+        )
+        await session.commit()
+    _FEATURE_CACHE.clear()
+    return True
+
+
+async def activar_suscripcion_pro(
+    telegram_id: int,
+    telegram_payment_charge_id: str,
+    star_amount: int,
+    dias: int = 30,
+) -> Suscripcion:
+    """Backwards-compat: activa Pro via Telegram Stars."""
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            raise ValueError(f"Usuario {telegram_id} no existe")
+        result = await session.execute(
+            select(Usuario).where(Usuario.telegram_id == telegram_id)
+        )
+        usuario = result.scalar_one()
+        ahora = datetime.utcnow()
+        base = usuario.plan_expira_en or ahora
+        if base < ahora:
+            base = ahora
+        nueva_expira = base + timedelta(days=dias)
+        usuario.plan_actual = PlanSuscripcion.PRO
+        usuario.plan_expira_en = nueva_expira
+        sus = Suscripcion(
+            usuario_id=uid,
+            plan=PlanSuscripcion.PRO,
+            telegram_payment_charge_id=telegram_payment_charge_id,
+            star_amount=star_amount,
+            metodo_pago=MetodoPago.TELEGRAM_STARS,
+            monto_cop=None,
+            iniciada_en=ahora,
+            expira_en=nueva_expira,
+            activa=True,
+        )
+        session.add(sus)
+        await session.commit()
+        await session.refresh(sus)
+        return sus
+
+
+# --- Pagos por comprobante ---
+
+
+async def guardar_comprobante(
+    telegram_id: int,
+    foto_file_id: str,
+    foto_sha256: str,
+    plan_solicitado: PlanSuscripcion,
+    duracion: DuracionPago,
+    monto_esperado_cop: int,
+    dias_otorgados: int,
+    vision_payload: dict,
+    referido_codigo: Optional[str] = None,
+) -> PagoComprobante:
+    """Inserta nuevo comprobante con estado=pendiente_humano."""
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            raise ValueError(f"Usuario {telegram_id} no existe")
+        monto_cop = int(vision_payload.get("monto_cop") or 0)
+        tolerancia = 500
+        monto_match = (
+            monto_cop > 0
+            and abs(monto_cop - monto_esperado_cop) <= tolerancia
+        )
+        metodo_str = (vision_payload.get("metodo") or "otro").lower()
+        try:
+            metodo_enum = MetodoPago(metodo_str)
+        except ValueError:
+            metodo_enum = MetodoPago.OTRO
+        comp = PagoComprobante(
+            usuario_id=uid,
+            foto_file_id=foto_file_id,
+            foto_sha256=foto_sha256,
+            monto_cop=monto_cop,
+            monto_extraido_raw=vision_payload.get("monto_extraido_raw", ""),
+            monto_esperado_cop=monto_esperado_cop,
+            monto_match=monto_match,
+            referencia=vision_payload.get("referencia", ""),
+            cuenta_origen=vision_payload.get("cuenta_origen", ""),
+            cuenta_destino=vision_payload.get("cuenta_destino", ""),
+            fecha_pago=vision_payload.get("fecha_pago"),
+            hora_pago=vision_payload.get("hora_pago"),
+            metodo=metodo_enum,
+            plan_solicitado=plan_solicitado,
+            duracion_solicitada=duracion,
+            dias_otorgados=dias_otorgados,
+            estado=EstadoPago.PENDIENTE_HUMANO,
+            vision_payload=vision_payload.get("raw", {}),
+            referido_codigo=referido_codigo,
+        )
+        session.add(comp)
+        await session.commit()
+        await session.refresh(comp)
+        return comp
+
+
+async def marcar_comprobante_duplicado(comp_id: int, razon: str) -> None:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PagoComprobante).where(PagoComprobante.id == comp_id)
+        )
+        comp = result.scalar_one_or_none()
+        if comp:
+            comp.estado = EstadoPago.DUPLICADO
+            comp.motivo_rechazo = razon
+            comp.revisado_en = datetime.utcnow()
+            await session.commit()
+
+
+async def obtener_comprobante(comp_id: int) -> Optional[PagoComprobante]:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PagoComprobante).where(PagoComprobante.id == comp_id)
+        )
+        return result.scalar_one_or_none()
+
+
+async def aprobar_comprobante(
+    comp_id: int, admin_email: str, notas: str = ""
+) -> Optional[PagoComprobante]:
+    """Aprueba un comprobante y activa el plan asociado."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PagoComprobante).where(PagoComprobante.id == comp_id)
+        )
+        comp = result.scalar_one_or_none()
+        if comp is None or comp.estado == EstadoPago.APROBADO:
+            return None
+        comp.estado = EstadoPago.APROBADO
+        comp.revisado_por = admin_email
+        comp.revisado_en = datetime.utcnow()
+        if notas:
+            comp.notas_admin = notas
+        usuario_result = await session.execute(
+            select(Usuario).where(Usuario.id == comp.usuario_id)
+        )
+        usuario = usuario_result.scalar_one()
+        await session.commit()
+        await session.refresh(comp)
+    await activar_plan(
+        telegram_id=usuario.telegram_id,
+        plan=comp.plan_solicitado,
+        dias=comp.dias_otorgados,
+        duracion=comp.duracion_solicitada,
+        metodo=comp.metodo,
+        monto_cop=comp.monto_cop,
+        comprobante_id=comp.id,
+    )
+    return comp
+
+
+async def rechazar_comprobante(
+    comp_id: int, admin_email: str, motivo: str, bloquear: bool = False
+) -> Optional[PagoComprobante]:
+    """Rechaza un comprobante, revoca activacion provisional, opcionalmente bloquea usuario."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(PagoComprobante).where(PagoComprobante.id == comp_id)
+        )
+        comp = result.scalar_one_or_none()
+        if comp is None:
+            return None
+        comp.estado = EstadoPago.RECHAZADO
+        comp.motivo_rechazo = motivo
+        comp.revisado_por = admin_email
+        comp.revisado_en = datetime.utcnow()
+        usuario_result = await session.execute(
+            select(Usuario).where(Usuario.id == comp.usuario_id)
+        )
+        usuario = usuario_result.scalar_one()
+        await session.commit()
+        await session.refresh(comp)
+    other_pendientes = await listar_comprobantes_activos(usuario.telegram_id)
+    if not other_pendientes:
+        await desactivar_plan(usuario.telegram_id)
+    if bloquear:
+        await bloquear_usuario(usuario.telegram_id, admin_email, motivo)
+    return comp
+
+
+async def listar_comprobantes_activos(telegram_id: int) -> list[PagoComprobante]:
+    """Comprobantes en estado pendiente_humano o aprobado del usuario."""
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return []
+        result = await session.execute(
+            select(PagoComprobante).where(
+                PagoComprobante.usuario_id == uid,
+                PagoComprobante.estado.in_(
+                    [EstadoPago.PENDIENTE_HUMANO, EstadoPago.APROBADO]
+                ),
+            )
+        )
+        return list(result.scalars().all())
+
+
+async def listar_comprobantes_admin(
+    estado: Optional[EstadoPago] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[PagoComprobante]:
+    async with async_session_factory() as session:
+        query = select(PagoComprobante)
+        if estado:
+            query = query.where(PagoComprobante.estado == estado)
+        query = query.order_by(PagoComprobante.creado_en.desc()).limit(limit).offset(offset)
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+
+# --- Bloqueo de usuarios ---
+
+
+async def bloquear_usuario(
+    telegram_id: int, admin_email: str, motivo: str
+) -> bool:
+    async with async_session_factory() as session:
+        uid = await _get_usuario_id(session, telegram_id)
+        if uid is None:
+            return False
+        existente = await session.execute(
+            select(UsuarioBloqueado).where(UsuarioBloqueado.usuario_id == uid)
+        )
+        if existente.scalar_one_or_none() is not None:
+            return False
+        bloqueo = UsuarioBloqueado(
+            usuario_id=uid,
+            motivo=motivo,
+            bloqueado_por=admin_email,
+        )
+        session.add(bloqueo)
+        await session.commit()
+    _FEATURE_CACHE.clear()
+    return True
+
+
+async def desbloquear_usuario(telegram_id: int) -> bool:
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
             return False
         result = await session.execute(
-            select(Suscripcion).where(
-                Suscripcion.usuario_id == uid,
-                Suscripcion.plan == PlanSuscripcion.PRO,
-                Suscripcion.activa == True,  # noqa: E712
-                Suscripcion.expira_en > ahora,
-            )
+            select(UsuarioBloqueado).where(UsuarioBloqueado.usuario_id == uid)
         )
-        return result.scalar_one_or_none() is not None
+        bloqueo = result.scalar_one_or_none()
+        if bloqueo is None:
+            return False
+        await session.delete(bloqueo)
+        await session.commit()
+    _FEATURE_CACHE.clear()
+    return True
 
 
 async def cambiar_tono(telegram_id: int, tono: str) -> Optional[Usuario]:

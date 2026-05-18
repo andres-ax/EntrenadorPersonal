@@ -68,7 +68,38 @@ class TipoAccionEscalacion(str, enum.Enum):
 
 class PlanSuscripcion(str, enum.Enum):
     FREE = "free"
+    STARTER = "starter"
     PRO = "pro"
+    ELITE = "elite"
+    LIFETIME = "lifetime"
+
+
+class MetodoPago(str, enum.Enum):
+    BRE_B = "bre_b"
+    NEQUI = "nequi"
+    DAVIPLATA = "daviplata"
+    BANCOLOMBIA = "bancolombia"
+    MANUAL_ADMIN = "manual_admin"
+    TELEGRAM_STARS = "telegram_stars"
+    OTRO = "otro"
+
+
+class DuracionPago(str, enum.Enum):
+    MENSUAL = "mensual"
+    ANUAL = "anual"
+    LIFETIME = "lifetime"
+
+
+class EstadoPago(str, enum.Enum):
+    PENDIENTE_HUMANO = "pendiente_humano"
+    APROBADO = "aprobado"
+    RECHAZADO = "rechazado"
+    DUPLICADO = "duplicado"
+
+
+class RolAdmin(str, enum.Enum):
+    SUPER = "super"
+    SOPORTE = "soporte"
 
 
 class Usuario(Base):
@@ -95,6 +126,17 @@ class Usuario(Base):
     quiet_hours_inicio = Column(Time, default=time(22, 0), nullable=False)
     quiet_hours_fin = Column(Time, default=time(7, 0), nullable=False)
     pais = Column(String(8), default="CO", nullable=False)
+
+    plan_actual = Column(
+        Enum(PlanSuscripcion), default=PlanSuscripcion.FREE, nullable=False, index=True
+    )
+    plan_expira_en = Column(DateTime, nullable=True)
+    referido_por = Column(BigInteger, nullable=True, index=True)
+    codigo_referido = Column(String(32), unique=True, nullable=True)
+
+    email = Column(String(180), unique=True, nullable=True, index=True)
+    email_verified_at = Column(DateTime, nullable=True)
+    auth_method = Column(String(16), default="telegram", nullable=False)
 
     created_at = Column(DateTime, server_default=func.now())
 
@@ -367,4 +409,266 @@ class Suscripcion(Base):
     expira_en = Column(DateTime)
     activa = Column(Boolean, default=True, nullable=False)
 
+    metodo_pago = Column(Enum(MetodoPago), default=MetodoPago.MANUAL_ADMIN, nullable=False)
+    monto_cop = Column(Integer, nullable=True)
+    comprobante_id = Column(
+        Integer, ForeignKey("pagos_comprobantes.id", ondelete="SET NULL"), nullable=True
+    )
+    referido_aplicado = Column(Boolean, default=False, nullable=False)
+
     usuario = relationship("Usuario", back_populates="suscripciones")
+
+
+class PlanDefinicion(Base):
+    """Configuracion dinamica de planes (precios + features)."""
+
+    __tablename__ = "plan_definicion"
+
+    id = Column(Integer, primary_key=True)
+    plan = Column(Enum(PlanSuscripcion), unique=True, nullable=False)
+    precio_cop_mensual = Column(Integer, nullable=False, default=0)
+    precio_cop_anual = Column(Integer, nullable=False, default=0)
+    features = Column(JSON, nullable=False, default=dict)
+    activo = Column(Boolean, default=True, nullable=False)
+    actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class PagoComprobante(Base):
+    """Comprobante de pago subido por el usuario, validado por admin."""
+
+    __tablename__ = "pagos_comprobantes"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    foto_file_id = Column(String(256))
+    foto_sha256 = Column(String(64), unique=True, index=True)
+
+    monto_cop = Column(Integer, nullable=True)
+    monto_extraido_raw = Column(String(64), default="")
+    monto_esperado_cop = Column(Integer, nullable=False, default=0)
+    monto_match = Column(Boolean, default=False, nullable=False)
+    referencia = Column(String(120), default="")
+    cuenta_origen = Column(String(120), default="")
+    cuenta_destino = Column(String(120), default="")
+
+    fecha_pago = Column(DateTime, nullable=True)
+    hora_pago = Column(Time, nullable=True)
+    metodo = Column(Enum(MetodoPago), default=MetodoPago.OTRO, nullable=False)
+
+    plan_solicitado = Column(
+        Enum(PlanSuscripcion), default=PlanSuscripcion.STARTER, nullable=False
+    )
+    duracion_solicitada = Column(
+        Enum(DuracionPago), default=DuracionPago.MENSUAL, nullable=False
+    )
+    dias_otorgados = Column(Integer, default=30, nullable=False)
+
+    estado = Column(
+        Enum(EstadoPago), default=EstadoPago.PENDIENTE_HUMANO, nullable=False, index=True
+    )
+    motivo_rechazo = Column(Text, nullable=True)
+
+    vision_payload = Column(JSON, default=dict)
+    revisado_por = Column(String(180), nullable=True)
+    revisado_en = Column(DateTime, nullable=True)
+    notas_admin = Column(Text, default="")
+    referido_codigo = Column(String(32), nullable=True)
+
+    creado_en = Column(DateTime, server_default=func.now(), index=True)
+
+
+class UsuarioBloqueado(Base):
+    """Usuario bloqueado por admin (fraude, comportamiento abusivo, etc)."""
+
+    __tablename__ = "usuarios_bloqueados"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    motivo = Column(Text, nullable=False)
+    bloqueado_por = Column(String(180), nullable=False)
+    bloqueado_en = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class Admin(Base):
+    """Cuenta administrativa con acceso al panel web."""
+
+    __tablename__ = "admins"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(180), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    rol = Column(Enum(RolAdmin), default=RolAdmin.SOPORTE, nullable=False)
+    activo = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    last_login_at = Column(DateTime, nullable=True)
+
+
+class IntegracionWearable(Base):
+    """Conexion OAuth con un wearable (Whoop, Garmin, Strava, etc)."""
+
+    __tablename__ = "integraciones_wearables"
+    __table_args__ = ()
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    proveedor = Column(String(32), nullable=False)
+    access_token = Column(Text)
+    refresh_token = Column(Text)
+    expires_at = Column(DateTime, nullable=True)
+    external_user_id = Column(String(120), default="")
+    last_sync_at = Column(DateTime, nullable=True)
+    sync_status = Column(String(32), default="pendiente")
+    error_msg = Column(Text, default="")
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class DatosWearableRaw(Base):
+    """Cada workout/sleep/etc descargado de un wearable."""
+
+    __tablename__ = "datos_wearables_raw"
+
+    id = Column(Integer, primary_key=True)
+    integracion_id = Column(
+        Integer, ForeignKey("integraciones_wearables.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    tipo = Column(String(32), nullable=False)
+    external_id = Column(String(120), nullable=False, index=True)
+    fecha = Column(Date, nullable=False, index=True)
+    payload = Column(JSON, default=dict)
+    procesado = Column(Boolean, default=False, nullable=False)
+    procesado_en = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class PlanSemanal(Base):
+    """Plan semanal generado por LLM o manual."""
+
+    __tablename__ = "planes_semanales"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    semana_inicio = Column(Date, nullable=False, index=True)
+    plan_json = Column(JSON, nullable=False, default=dict)
+    generado_por = Column(String(16), default="llm")
+    creado_en = Column(DateTime, server_default=func.now())
+
+
+class ConsumoAgua(Base):
+    """Registro de hidratacion."""
+
+    __tablename__ = "consumo_agua"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ml = Column(Integer, nullable=False)
+    registrado_en = Column(DateTime, server_default=func.now(), index=True)
+
+
+class Desafio(Base):
+    """Desafios semanales/mensuales de la comunidad."""
+
+    __tablename__ = "desafios"
+
+    id = Column(Integer, primary_key=True)
+    slug = Column(String(64), unique=True, nullable=False)
+    titulo = Column(String(180), nullable=False)
+    descripcion = Column(Text, default="")
+    fecha_inicio = Column(Date, nullable=False)
+    fecha_fin = Column(Date, nullable=False)
+    tipo = Column(String(32), default="dias")
+    creado_en = Column(DateTime, server_default=func.now())
+
+
+class DesafioParticipante(Base):
+    __tablename__ = "desafios_participantes"
+
+    id = Column(Integer, primary_key=True)
+    desafio_id = Column(
+        Integer, ForeignKey("desafios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    valor_actual = Column(Float, default=0.0, nullable=False)
+    posicion = Column(Integer, nullable=True)
+    inscripto_en = Column(DateTime, server_default=func.now())
+
+
+class Kudos(Base):
+    """Kudos entre usuarios (PR, streak, etc)."""
+
+    __tablename__ = "kudos"
+
+    id = Column(Integer, primary_key=True)
+    usuario_origen = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    usuario_destino = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    tipo = Column(String(32), default="pr")
+    creado_en = Column(DateTime, server_default=func.now(), index=True)
+
+
+class MagicLink(Base):
+    """Magic links para auth web (Fase 9)."""
+
+    __tablename__ = "magic_links"
+
+    id = Column(Integer, primary_key=True)
+    token = Column(String(128), unique=True, nullable=False, index=True)
+    email = Column(String(180), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class DeporteCatalogo(Base):
+    """Catalogo de deportes soportados (60+ del research)."""
+
+    __tablename__ = "deportes_catalogo"
+
+    id = Column(Integer, primary_key=True)
+    slug = Column(String(64), unique=True, nullable=False, index=True)
+    nombre_es = Column(String(120), nullable=False)
+    nombre_en = Column(String(120), default="")
+    categoria = Column(String(32), nullable=False, index=True)
+    metricas = Column(JSON, default=dict)
+    vocabulario = Column(JSON, default=list)
+    plataforma_externa = Column(String(32), default="")
+    equipamiento = Column(JSON, default=list)
+    escena_co = Column(Text, default="")
+
+
+class RealtimeSesion(Base):
+    """Sesion de llamada con coach via OpenAI Realtime API."""
+
+    __tablename__ = "realtime_sesiones"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    iniciada_en = Column(DateTime, server_default=func.now(), index=True)
+    terminada_en = Column(DateTime, nullable=True)
+    duracion_segundos = Column(Integer, default=0)
+    tono_usado = Column(String(16), default="firme")
+    tokens_input = Column(Integer, default=0)
+    tokens_output = Column(Integer, default=0)
+    costo_estimado_usd = Column(Float, default=0.0)
+    transcript = Column(Text, default="")
