@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     comprobante_model: str = "gpt-4o-mini"
     transcription_model: str = "gpt-4o-mini-transcribe"
 
-    session_limit: int = 40
+    session_limit: int = 60
     session_ttl_seconds: int = 60 * 60 * 24 * 30
 
     rate_limit_per_minute: int = 10
