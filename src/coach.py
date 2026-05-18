@@ -751,14 +751,17 @@ Comandos del bot (NO los procesa el agente, los procesa el handler de Telegram):
 async def guardrail_anti_spam(ctx, agent, input_data):
     """Rechaza mensajes con contenido repetitivo/spam que desperdician tokens."""
     texto = input_data if isinstance(input_data, str) else str(input_data)
-    texto_limpio = texto.strip()
-    if len(texto_limpio) > 3000:
+    # El input incluye el bloque [uid=... | perfil...] antes del mensaje real.
+    # Extraemos solo la parte del usuario (despues del ] de cierre).
+    bracket_end = texto.rfind("] ")
+    msg = texto[bracket_end + 2:].strip() if bracket_end != -1 else texto.strip()
+    if len(msg) > 3500:
         return GuardrailFunctionOutput(
             output_info={"reason": "mensaje_muy_largo"},
             tripwire_triggered=True,
         )
-    if len(texto_limpio) > 50:
-        chars = set(texto_limpio.replace(" ", ""))
+    if len(msg) > 100:
+        chars = set(msg.replace(" ", ""))
         if len(chars) <= 3:
             return GuardrailFunctionOutput(
                 output_info={"reason": "spam_repetitivo"},
