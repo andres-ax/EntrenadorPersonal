@@ -850,37 +850,47 @@ def upgrade() -> None:
 
     import json as _json
     is_pg = bind.dialect.name == "postgresql"
-    insert_sql = (
-        "INSERT INTO deportes_catalogo "
-        "(slug, nombre_es, nombre_en, categoria, escena_co, plataforma_externa, "
-        "vocabulario, metricas, equipamiento, spots_colombia, referentes_colombia, "
-        "federacion) VALUES "
-        + ("(%(slug)s, %(nes)s, %(nen)s, %(cat)s, %(esc)s, %(plat)s, "
-           "%(voc)s::jsonb, %(met)s::jsonb, %(eq)s::jsonb, %(sp)s::jsonb, "
-           "%(ref)s::jsonb, %(fed)s) "
-           "ON CONFLICT (slug) DO NOTHING"
-           if is_pg
-           else "(:slug, :nes, :nen, :cat, :esc, :plat, :voc, :met, :eq, :sp, :ref, :fed)")
-    )
-    if not is_pg:
-        insert_sql = "INSERT OR IGNORE INTO " + insert_sql.split("INSERT INTO ", 1)[1]
+    # Usamos op.execute(sa.text(...)) con parametros named (:slug) en lugar
+    # de bind.exec_driver_sql(..., %(slug)s) porque asyncpg NO entiende el
+    # paramstyle "pyformat" (%(name)s) y lanza:
+    #   asyncpg.exceptions.PostgresSyntaxError: syntax error at or near "%"
+    # sa.text() acepta :name (named) y SQLAlchemy lo traduce al paramstyle
+    # nativo del driver (asyncpg -> $1, $2, ...).
+    if is_pg:
+        insert_sql = sa.text(
+            "INSERT INTO deportes_catalogo "
+            "(slug, nombre_es, nombre_en, categoria, escena_co, plataforma_externa, "
+            "vocabulario, metricas, equipamiento, spots_colombia, referentes_colombia, "
+            "federacion) VALUES "
+            "(:slug, :nes, :nen, :cat, :esc, :plat, "
+            "CAST(:voc AS JSONB), CAST(:met AS JSONB), CAST(:eq AS JSONB), "
+            "CAST(:sp AS JSONB), CAST(:ref AS JSONB), :fed) "
+            "ON CONFLICT (slug) DO NOTHING"
+        )
+    else:
+        insert_sql = sa.text(
+            "INSERT OR IGNORE INTO deportes_catalogo "
+            "(slug, nombre_es, nombre_en, categoria, escena_co, plataforma_externa, "
+            "vocabulario, metricas, equipamiento, spots_colombia, referentes_colombia, "
+            "federacion) VALUES "
+            "(:slug, :nes, :nen, :cat, :esc, :plat, :voc, :met, :eq, :sp, :ref, :fed)"
+        )
     for d in DEPORTES_SEED:
-        bind.exec_driver_sql(
-            insert_sql,
-            {
-                "slug": d["slug"],
-                "nes": d["nombre_es"],
-                "nen": d.get("nombre_en", ""),
-                "cat": d["categoria"],
-                "esc": d.get("escena_co", ""),
-                "plat": d.get("plataforma_externa", ""),
-                "voc": _json.dumps(d.get("vocabulario", [])),
-                "met": _json.dumps(d.get("metricas", [])),
-                "eq": _json.dumps(d.get("equipamiento", [])),
-                "sp": _json.dumps(d.get("spots_colombia", [])),
-                "ref": _json.dumps(d.get("referentes_colombia", [])),
-                "fed": d.get("federacion", ""),
-            },
+        op.execute(
+            insert_sql.bindparams(
+                slug=d["slug"],
+                nes=d["nombre_es"],
+                nen=d.get("nombre_en", ""),
+                cat=d["categoria"],
+                esc=d.get("escena_co", ""),
+                plat=d.get("plataforma_externa", ""),
+                voc=_json.dumps(d.get("vocabulario", [])),
+                met=_json.dumps(d.get("metricas", [])),
+                eq=_json.dumps(d.get("equipamiento", [])),
+                sp=_json.dumps(d.get("spots_colombia", [])),
+                ref=_json.dumps(d.get("referentes_colombia", [])),
+                fed=d.get("federacion", ""),
+            )
         )
 
 
