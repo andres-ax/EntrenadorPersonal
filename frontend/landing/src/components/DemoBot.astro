@@ -1,0 +1,78 @@
+---
+const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
+
+const conversacion = [
+  { rol: "user", texto: "Acabe entreno: 5x5 sentadilla 100kg, todas RPE 8" },
+  { rol: "bot", texto: "Anote 5x5 100kg sentadilla RPE 8. Es PR? El ultimo fue 5x5 95kg. <b>+5kg en 3 semanas.</b> Comiste despues?" },
+  { rol: "user", texto: "Aun no" },
+  { rol: "bot", texto: "Ve a comer en los proximos 30 min. Objetivo: 30g proteina + 60g carbo. Mandame foto del plato y te ayudo con macros." },
+  { rol: "user", texto: "Manana no voy a poder entrenar, viaje" },
+  { rol: "bot", texto: "Anotado. Te muevo el entreno al jueves. Usaste 1/4 dias_libre del mes. <b>Recuerda tu compromiso:</b> 4 sesiones esta semana. Aun puedes." },
+];
+---
+<section id="demo" class="mx-auto max-w-6xl px-4 py-20">
+  <div class="grid md:grid-cols-2 gap-12 items-center">
+    <div>
+      <h2 class="text-3xl font-bold">Asi se siente conversar con el coach</h2>
+      <p class="mt-4 text-lg text-slate-600">
+        No tienes que abrir formularios. Le escribes como le escribirias a un amigo entrenador.
+        El entiende contexto, recuerda tu historial y te confronta con datos cuando flojeas.
+      </p>
+      <ul class="mt-6 space-y-3 text-sm text-slate-700">
+        <li class="flex gap-2">
+          <span class="text-brand-600 font-bold">+</span>
+          <span><b>Memoria persistente:</b> recuerda PRs, lesiones, tono que prefieres.</span>
+        </li>
+        <li class="flex gap-2">
+          <span class="text-brand-600 font-bold">+</span>
+          <span><b>Cross-reference:</b> compara hoy vs semana pasada vs mes.</span>
+        </li>
+        <li class="flex gap-2">
+          <span class="text-brand-600 font-bold">+</span>
+          <span><b>Proactivo:</b> escribe primero si no apareces.</span>
+        </li>
+        <li class="flex gap-2">
+          <span class="text-brand-600 font-bold">+</span>
+          <span><b>Voz:</b> en plan Pro puede mandar mensaje de voz o llamarte.</span>
+        </li>
+      </ul>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a
+          href={`https://t.me/${botUsername}?start=ref_landing_demo`}
+          class="rounded-lg bg-brand-600 text-white px-6 py-3 font-semibold hover:bg-brand-700"
+        >
+          Probarlo ahora gratis
+        </a>
+        <a
+          href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+          class="rounded-lg border border-slate-300 px-6 py-3 hover:bg-slate-50"
+        >
+          Ver video 90 seg
+        </a>
+      </div>
+    </div>
+
+    <div class="rounded-2xl bg-slate-50 border border-slate-200 p-6 shadow-sm">
+      <div class="flex items-center gap-2 border-b border-slate-200 pb-3">
+        <div class="h-10 w-10 rounded-full bg-brand-600 text-white grid place-items-center text-sm font-bold">AX</div>
+        <div>
+          <div class="font-semibold text-sm">EntrenadorAX</div>
+          <div class="text-xs text-slate-500">online ahora</div>
+        </div>
+      </div>
+      <div class="mt-4 space-y-3 max-h-[450px] overflow-y-auto pr-2">
+        {conversacion.map((m) => (
+          <div class={`flex ${m.rol === "user" ? "justify-end" : "justify-start"}`}>
+            <div
+              class={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${m.rol === "user" ? "bg-brand-600 text-white rounded-br-md" : "bg-white border border-slate-200 rounded-bl-md"}`}
+              set:html={m.texto}
+            />
+          </div>
+        ))}
+      </div>
+      <p class="mt-4 text-center text-xs text-slate-500">
+        Demo simplificado. El bot real procesa entreno + nutricion + sueno + peso en un mismo chat.
+      </p>
+    </div>
+  </div>
+</section>

@@ -3,16 +3,53 @@ import Base from "../layouts/Base.astro";
 import Navbar from "../components/Navbar.astro";
 import Hero from "../components/Hero.astro";
 import Secciones from "../components/Secciones.astro";
----
+import DemoBot from "../components/DemoBot.astro";
+import Pricing from "../components/Pricing.astro";
+import Testimonios from "../components/Testimonios.astro";
 
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "Es seguro pagar por comprobante?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Si. El bot extrae datos del comprobante con Vision API (OCR de OpenAI), detecta duplicados por hash de imagen y un admin valida cada pago manualmente en menos de 24h. La activacion del plan es provisional inmediata al subir el comprobante.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Funciona si no uso Telegram?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Si. Tenemos web alternativa con auth por magic link (email). Mismo coach, mismo backend, misma persistencia de datos. Puedes alternar entre Telegram y web cuando quieras.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Que pasa si rompo mi compromiso?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "El bot escala los recordatorios (5 niveles de creciente urgencia). Pero siempre respeta tus quiet hours y puedes pausarlo con /pausa N. La idea es accountability con respeto, no acoso.",
+      },
+    },
+  ],
+};
+---
 <Base
-  title="EntrenadorAX - Coach IA que NO te deja en paz cuando fallas"
-  description="Bot Telegram con coach AI proactivo. Te persigue hasta que cumples tu compromiso. 60+ deportes. Pagos por Bre-B desde $5.000 COP."
+  title="EntrenadorAX - El coach IA que NO te deja en paz cuando fallas"
+  description="Bot Telegram con coach AI proactivo. Te persigue (con humor y respeto) hasta que cumples tu compromiso. 67 deportes soportados incluyendo BMX, skate, rollers, MMA, climbing. Pagos por Bre-B desde $5.000 COP. Beta cerrada en Colombia."
   canonical="https://entrenadorax.com"
 >
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
   <Navbar />
   <main>
     <Hero />
     <Secciones />
+    <DemoBot />
+    <Pricing />
+    <Testimonios />
   </main>
 </Base>

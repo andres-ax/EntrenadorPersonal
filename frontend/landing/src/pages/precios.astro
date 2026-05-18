@@ -1,0 +1,121 @@
+---
+import Base from "../layouts/Base.astro";
+import Navbar from "../components/Navbar.astro";
+import Pricing from "../components/Pricing.astro";
+
+const comparacionFeatures = [
+  { label: "Chat conversacional 24/7", free: true, starter: true, pro: true, elite: true },
+  { label: "Onboarding + compromiso firmado", free: true, starter: true, pro: true, elite: true },
+  { label: "Escalation diario (5 niveles)", free: true, starter: true, pro: true, elite: true },
+  { label: "Photo comida (Vision AI)", free: "1/dia", starter: "ilimitado", pro: "ilimitado", elite: "ilimitado" },
+  { label: "PRs registrados", free: "1", starter: "ilimitado", pro: "ilimitado", elite: "ilimitado" },
+  { label: "Charts (peso/volumen/macros/streak)", free: "basicos", starter: "avanzados", pro: "avanzados", elite: "avanzados" },
+  { label: "Mini App Telegram", free: false, starter: true, pro: true, elite: true },
+  { label: "Voz TTS en escalation", free: false, starter: false, pro: "ilimitada", elite: "ilimitada" },
+  { label: "Llamadas Realtime (voz)", free: false, starter: "5 min/mes", pro: "30 min/mes", elite: "120 min/mes" },
+  { label: "Wearables conectados", free: false, starter: false, pro: "1", elite: "ilimitados" },
+  { label: "Plan generator semanal LLM", free: false, starter: false, pro: true, elite: true },
+  { label: "Analisis mensual PDF", free: false, starter: "1/mes", pro: "1/mes", elite: "ilimitado" },
+  { label: "Deportes soportados", free: "1 principal", starter: "2 (1 secundario)", pro: "ilimitados", elite: "ilimitados" },
+  { label: "Stickers exclusivos", free: false, starter: false, pro: true, elite: true },
+  { label: "Export CSV", free: false, starter: "limitado", pro: "ilimitado", elite: "ilimitado" },
+  { label: "Coach humano hibrido", free: false, starter: false, pro: false, elite: "1 sesion/mes" },
+  { label: "Beta features early access", free: false, starter: false, pro: false, elite: true },
+  { label: "Priority support", free: false, starter: false, pro: false, elite: true },
+];
+
+function renderCell(v: any) {
+  if (v === true) return "OK";
+  if (v === false) return "-";
+  return v;
+}
+---
+<Base
+  title="Precios EntrenadorAX - Desde $5.000 COP/mes"
+  description="4 tiers desde Free hasta Elite + Lifetime. Pagos por Bre-B/Nequi/Daviplata. Tabla comparativa de features y precios para tu coach IA personal."
+  canonical="https://entrenadorax.com/precios"
+>
+  <Navbar />
+  <main>
+    <header class="bg-slate-900 text-white py-16">
+      <div class="mx-auto max-w-6xl px-4 text-center">
+        <h1 class="text-4xl md:text-5xl font-bold">Precios completos</h1>
+        <p class="mt-4 max-w-2xl mx-auto text-slate-300 text-lg">
+          Comparativa detallada de los 4 tiers + Lifetime. Pagas por Bre-B, Nequi, Daviplata, Bancolombia o transferencia.
+        </p>
+      </div>
+    </header>
+
+    <Pricing />
+
+    <section class="mx-auto max-w-6xl px-4 py-20">
+      <h2 class="text-3xl font-bold text-center">Comparativa detallada</h2>
+      <div class="mt-8 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-left">
+              <th class="py-3 px-2 font-semibold">Feature</th>
+              <th class="py-3 px-2 font-semibold text-center">Free</th>
+              <th class="py-3 px-2 font-semibold text-center text-brand-700">Starter</th>
+              <th class="py-3 px-2 font-semibold text-center text-brand-700">Pro</th>
+              <th class="py-3 px-2 font-semibold text-center text-brand-700">Elite</th>
+            </tr>
+          </thead>
+          <tbody>
+            {comparacionFeatures.map((f) => (
+              <tr class="border-b border-slate-100">
+                <td class="py-2 px-2">{f.label}</td>
+                <td class="py-2 px-2 text-center text-slate-600">{renderCell(f.free)}</td>
+                <td class="py-2 px-2 text-center">{renderCell(f.starter)}</td>
+                <td class="py-2 px-2 text-center">{renderCell(f.pro)}</td>
+                <td class="py-2 px-2 text-center">{renderCell(f.elite)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="bg-slate-50 py-16">
+      <div class="mx-auto max-w-3xl px-4">
+        <h2 class="text-2xl font-bold">FAQ de pagos</h2>
+        <div class="mt-6 space-y-3">
+          <details class="rounded-lg border border-slate-200 bg-white p-5">
+            <summary class="cursor-pointer font-semibold">Como pago si no tengo Bre-B?</summary>
+            <p class="mt-2 text-sm text-slate-700">
+              Aceptamos Nequi, Daviplata, transferencia Bancolombia o cualquier otro metodo. Solo necesitas
+              mandar foto del comprobante al bot. Vision lo lee, detecta duplicados y un admin valida.
+            </p>
+          </details>
+          <details class="rounded-lg border border-slate-200 bg-white p-5">
+            <summary class="cursor-pointer font-semibold">Que pasa si pago de menos?</summary>
+            <p class="mt-2 text-sm text-slate-700">
+              Activamos provisional, pero el admin podra rechazar si la diferencia es alta. Te avisamos por
+              chat y puedes completar el pago en 24h sin perder progreso.
+            </p>
+          </details>
+          <details class="rounded-lg border border-slate-200 bg-white p-5">
+            <summary class="cursor-pointer font-semibold">Puedo cancelar?</summary>
+            <p class="mt-2 text-sm text-slate-700">
+              Si, sin friccion con /salir. Tus datos siguen disponibles hasta que pidas /borrar_datos.
+              Reembolso de 72h post-aprobacion si no quedaste satisfecho.
+            </p>
+          </details>
+          <details class="rounded-lg border border-slate-200 bg-white p-5">
+            <summary class="cursor-pointer font-semibold">Hay descuento para estudiantes?</summary>
+            <p class="mt-2 text-sm text-slate-700">
+              Si: 50% off permanente en Starter y Pro si pagas con tarjeta .edu.co. Manda foto del carnet vigente.
+            </p>
+          </details>
+          <details class="rounded-lg border border-slate-200 bg-white p-5">
+            <summary class="cursor-pointer font-semibold">Como funcionan los referidos?</summary>
+            <p class="mt-2 text-sm text-slate-700">
+              Cada usuario tiene codigo unico. Si alguien paga su primer plan usando tu codigo, ambos reciben
+              1 mes Pro gratis. Acumulable hasta 6 meses por persona.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>

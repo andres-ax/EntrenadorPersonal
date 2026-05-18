@@ -1,67 +1,132 @@
 ---
 import Base from "../../layouts/Base.astro";
 import Navbar from "../../components/Navbar.astro";
+import { DEPORTES, CATEGORIA_LABELS, type Deporte } from "../../data/deportes";
 
 export async function getStaticPaths() {
-  const deportes = [
-    { slug: "bmx", nombre: "BMX", metricas: "sesiones, trucos aterrizados, alturas (m), gates ganadas", escena: "Bogota (El Salitre), Medellin, Cali (Pance)" },
-    { slug: "skate", nombre: "Skate", metricas: "sesiones, trucos aterrizados, lineas filmadas, make rate", escena: "Bogota, Medellin, Cali, Envigado" },
-    { slug: "rollers", nombre: "Patinaje rollers", metricas: "tiempos por vuelta, distancia, trucos aterrizados", escena: "Bogota (Patinodromo Salitre), Cali, Pereira" },
-    { slug: "climbing", nombre: "Climbing", metricas: "vias enviadas, grado max, sesiones (h)", escena: "Suesca, San Gil, Macheta, Mongui" },
-    { slug: "surf", nombre: "Surf", metricas: "sesiones (h), olas surfeadas, swell maximo (ft)", escena: "Nuqui, Cabo de la Vela, Palomino" },
-    { slug: "boxeo", nombre: "Boxeo", metricas: "rounds, sparring, peleas, peso peleado", escena: "Todo el pais" },
-    { slug: "bjj", nombre: "Brazilian Jiu-Jitsu", metricas: "rolls, cinturon, sumisiones, torneos", escena: "Medellin, Bogota" },
-    { slug: "muay-thai", nombre: "Muay Thai", metricas: "rounds, sparring, peleas, combos", escena: "Bogota, Medellin, Cali" },
-    { slug: "mma", nombre: "MMA", metricas: "rounds, peleas, sumisiones, KOs, weight cuts", escena: "Medellin, Bogota" },
-    { slug: "padel", nombre: "Padel", metricas: "partidos, sets/games, ranking nacional", escena: "53 ciudades, 687 pistas (2026)" },
-    { slug: "trail", nombre: "Trail running", metricas: "distancia (km), desnivel (m+), tiempo, ritmo", escena: "Cundinamarca, Boyaca, paramo" },
-    { slug: "triatlon", nombre: "Triatlon", metricas: "tiempos por segmento, T1/T2, volumen semanal", escena: "Cartagena, Bogota" },
-    { slug: "mtb", nombre: "Mountain bike", metricas: "distancia, desnivel, ritmo, segmentos Strava", escena: "Boyaca, Antioquia" },
-    { slug: "ciclismo", nombre: "Ciclismo de ruta", metricas: "distancia, FTP, desnivel, KOM Strava", escena: "Boyaca, Antioquia, Cundinamarca" },
-    { slug: "natacion", nombre: "Natacion", metricas: "tiempos por prueba, splits, SWOLF, distancia semanal", escena: "Medellin, Cali, Bogota" },
-    { slug: "apnea", nombre: "Apnea / freediving", metricas: "profundidad max (m), tiempo apnea (min:seg)", escena: "San Andres, Santa Marta, Providencia" },
-    { slug: "crossfit", nombre: "CrossFit", metricas: "WODs firmados, 1RM, gimnastica, AMRAP", escena: "Bogota, Medellin, Cali, Monteria" },
-    { slug: "powerlifting", nombre: "Powerlifting", metricas: "Squat/Bench/Deadlift max (kg), Total, Wilks", escena: "Todo el pais" },
-    { slug: "halterofilia", nombre: "Halterofilia", metricas: "Snatch max, C&J max, Total", escena: "Colombia campeon mundial 2022" },
-    { slug: "yoga", nombre: "Yoga", metricas: "sesiones (min), posturas dominadas, tiempo en hold", escena: "Todo el pais" },
-  ];
-  return deportes.map((d) => ({ params: { slug: d.slug }, props: d }));
+  return DEPORTES.map((d) => ({ params: { slug: d.slug }, props: { deporte: d } }));
 }
 
-const { nombre, metricas, escena, slug } = Astro.props;
+interface Props { deporte: Deporte }
+const { deporte } = Astro.props;
 const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
+
+// Sugerir 3 deportes relacionados de la misma categoria (excluyendo el actual).
+const relacionados = DEPORTES.filter(
+  (d) => d.categoria === deporte.categoria && d.slug !== deporte.slug,
+).slice(0, 3);
+
+const categoriaLabel = CATEGORIA_LABELS[deporte.categoria];
+
+const schemaOrg = {
+  "@context": "https://schema.org",
+  "@type": "SportsActivityLocation",
+  name: `EntrenadorAX para ${deporte.nombre}`,
+  description: `Coach AI en Telegram especializado en ${deporte.nombre} (${categoriaLabel}). Trackea ${deporte.metricas}.`,
+  url: `https://entrenadorax.com/deportes/${deporte.slug}`,
+  inLanguage: "es-CO",
+  sport: deporte.nombre,
+  audience: {
+    "@type": "Audience",
+    audienceType: `Atletas de ${deporte.nombre} en Colombia`,
+  },
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "COP",
+    availability: "https://schema.org/InStock",
+    url: `https://t.me/${botUsername}?start=ref_landing_${deporte.slug}`,
+  },
+};
 ---
 <Base
-  title={`EntrenadorAX para ${nombre} - Coach IA personalizado`}
-  description={`Coach IA en Telegram especializado en ${nombre}. Trackea ${metricas}. Escena en ${escena}. Empieza gratis.`}
-  canonical={`https://entrenadorax.com/deportes/${slug}`}
+  title={`EntrenadorAX para ${deporte.nombre} - Coach IA en Telegram`}
+  description={`Coach IA especializado en ${deporte.nombre} (${categoriaLabel}). Trackea ${deporte.metricas}. Escena CO: ${deporte.escena}. Empieza gratis en Telegram.`}
+  canonical={`https://entrenadorax.com/deportes/${deporte.slug}`}
 >
+  <script type="application/ld+json" set:html={JSON.stringify(schemaOrg)} />
   <Navbar />
-  <main class="mx-auto max-w-3xl px-4 py-12">
-    <a href="/deportes" class="text-sm text-brand-600">&larr; Todos los deportes</a>
-    <h1 class="mt-4 text-4xl font-bold">EntrenadorAX para {nombre}</h1>
-    <p class="mt-4 text-lg text-slate-600">
-      Tu coach IA personalizado para {nombre}. Trackea lo que importa, recibe
-      recordatorios proactivos y firma un compromiso real con tu progreso.
-    </p>
+  <main class="mx-auto max-w-4xl px-4 py-12">
+    <a href="/deportes" class="text-sm text-brand-600 hover:underline">&larr; Todos los deportes</a>
 
-    <div class="mt-8 rounded-xl border border-slate-200 p-6">
-      <h2 class="text-xl font-semibold">Que registra el bot para {nombre}</h2>
-      <p class="mt-2 text-slate-700">{metricas}.</p>
-    </div>
+    <header class="mt-4">
+      <p class="text-xs uppercase tracking-wider text-brand-600 font-semibold">{categoriaLabel}</p>
+      <h1 class="mt-1 text-4xl md:text-5xl font-bold leading-tight">
+        EntrenadorAX para {deporte.nombre}
+      </h1>
+      <p class="mt-4 text-lg text-slate-700">
+        Tu coach IA personalizado para {deporte.nombre.toLowerCase()}. Trackea lo que realmente importa
+        en {deporte.nombre.toLowerCase()}, recibe recordatorios proactivos y firma un compromiso real con tu progreso.
+      </p>
+    </header>
 
-    <div class="mt-4 rounded-xl border border-slate-200 p-6">
-      <h2 class="text-xl font-semibold">Escena en Colombia</h2>
-      <p class="mt-2 text-slate-700">{escena}.</p>
-    </div>
+    <section class="mt-10 grid gap-4 md:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 p-6">
+        <h2 class="text-xl font-semibold">Modalidades</h2>
+        <ul class="mt-3 flex flex-wrap gap-2">
+          {deporte.modalidades.map((m) => (
+            <li class="rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-700">{m}</li>
+          ))}
+        </ul>
+      </div>
 
-    <div class="mt-8 text-center">
+      <div class="rounded-xl border border-slate-200 p-6">
+        <h2 class="text-xl font-semibold">Que registra el bot</h2>
+        <p class="mt-3 text-sm text-slate-700">{deporte.metricas}.</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-6">
+        <h2 class="text-xl font-semibold">Vocabulario que entiende</h2>
+        <p class="mt-3 text-sm text-slate-700">{deporte.vocabulario}.</p>
+        <p class="mt-3 text-xs text-slate-500">
+          El coach interpreta tus mensajes con jerga del deporte. No tienes que adaptar como escribes.
+        </p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-6">
+        <h2 class="text-xl font-semibold">Escena en Colombia</h2>
+        <p class="mt-3 text-sm text-slate-700">{deporte.escena}.</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-6">
+        <h2 class="text-xl font-semibold">Equipamiento minimo</h2>
+        <p class="mt-3 text-sm text-slate-700">{deporte.equipamiento}.</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-6">
+        <h2 class="text-xl font-semibold">Plataforma de la escena</h2>
+        <p class="mt-3 text-sm text-slate-700">{deporte.plataforma}.</p>
+      </div>
+    </section>
+
+    <section class="mt-10 rounded-2xl bg-brand-900 text-white p-8 text-center">
+      <h2 class="text-2xl font-bold">Empieza gratis con tu coach para {deporte.nombre}</h2>
+      <p class="mt-2 text-brand-100/90 text-sm">
+        Sin tarjeta. Sin formularios. Solo abre Telegram y dale /start.
+      </p>
       <a
-        href={`https://t.me/${botUsername}?start=ref_landing_${slug}`}
-        class="rounded-lg bg-brand-600 text-white px-6 py-3 font-semibold hover:bg-brand-700"
+        href={`https://t.me/${botUsername}?start=ref_landing_${deporte.slug}`}
+        class="mt-6 inline-block rounded-lg bg-white text-brand-700 px-6 py-3 font-semibold hover:bg-brand-50"
       >
-        Probar EntrenadorAX gratis para {nombre}
+        Probar EntrenadorAX para {deporte.nombre}
       </a>
-    </div>
+    </section>
+
+    {relacionados.length > 0 && (
+      <section class="mt-12">
+        <h2 class="text-xl font-semibold">Otros deportes de la categoria {categoriaLabel.toLowerCase()}</h2>
+        <div class="mt-4 grid sm:grid-cols-3 gap-3">
+          {relacionados.map((d) => (
+            <a
+              href={`/deportes/${d.slug}`}
+              class="rounded-lg border border-slate-200 p-4 hover:border-brand-500 transition"
+            >
+              <div class="font-semibold">{d.nombre}</div>
+              <div class="mt-1 text-xs text-slate-500 line-clamp-2">{d.metricas}</div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
   </main>
 </Base>

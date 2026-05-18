@@ -1,5 +1,15 @@
 ---
+import { DEPORTES } from "../data/deportes";
 const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
+const totalDeportes = DEPORTES.length;
+const deportesDestacados = [
+  "BMX", "Skateboarding", "Patinaje rollers", "Climbing / Escalada", "Padel",
+  "MMA", "Boxeo", "Brazilian Jiu-Jitsu", "Muay Thai", "Karate",
+  "Futbol", "Baloncesto / Basquetbol", "Voleibol", "Rugby", "Tenis",
+  "Natacion deportiva", "Surf", "Kitesurf / Windsurf", "Apnea / Freediving", "Buceo deportivo (con tanque)",
+  "Trail running / Ultrarunning", "Triatlon", "Mountain bike", "Ciclismo de ruta / pista", "OCR / Spartan Race",
+  "CrossFit", "Powerlifting", "Halterofilia", "Pilates", "Yoga",
+];
 ---
 
 <section id="problema" class="mx-auto max-w-6xl px-4 py-20">
@@ -66,26 +76,20 @@ const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
 
 <section id="deportes" class="bg-slate-50 py-20">
   <div class="mx-auto max-w-6xl px-4">
-    <h2 class="text-3xl font-bold text-center">60+ deportes soportados</h2>
-    <p class="text-center text-slate-600 mt-2">
-      No solo gym. BMX, skate, rollers, climbing, padel, MMA, surf, trail running...
+    <h2 class="text-3xl font-bold text-center">{totalDeportes} deportes soportados</h2>
+    <p class="text-center text-slate-600 mt-2 max-w-3xl mx-auto">
+      No solo gym. BMX, skate, rollers, climbing, padel, MMA, surf, trail, halterofilia... Cada deporte
+      tiene metricas propias (no peso x reps generico) y vocabulario reconocido.
     </p>
     <div class="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-      {[
-        "BMX","Skate","Rollers","Climbing","Padel",
-        "MMA","Boxeo","BJJ","Muay Thai","Karate",
-        "Futbol","Basquetbol","Voleibol","Rugby","Tenis",
-        "Natacion","Surf","Kitesurf","Apnea","Buceo",
-        "Trail","Triatlon","MTB","Ciclismo","OCR",
-        "CrossFit","Powerlifting","Halterofilia","Pilates","Yoga"
-      ].map((d) => (
+      {deportesDestacados.map((d) => (
         <div class="rounded-lg bg-white p-3 text-center text-sm border border-slate-200 hover:border-brand-500 transition">
           {d}
         </div>
       ))}
     </div>
     <p class="text-center mt-6 text-sm text-slate-500">
-      Y mas en <a href="/deportes" class="text-brand-600 underline">/deportes</a>.
+      Ver los {totalDeportes} en <a href="/deportes" class="text-brand-600 underline font-medium">/deportes</a>.
     </p>
   </div>
 </section>
@@ -109,42 +113,6 @@ const botUsername = import.meta.env.PUBLIC_BOT_USERNAME || "entrenadorax_bot";
         <p class="text-sm text-slate-600 mt-2">{d}</p>
       </div>
     ))}
-  </div>
-</section>
-
-<section id="precios" class="bg-slate-900 text-white py-20">
-  <div class="mx-auto max-w-6xl px-4">
-    <h2 class="text-3xl font-bold text-center">Precios desde $5.000 COP</h2>
-    <p class="text-center text-slate-300 mt-2">Pagos por Bre-B/Nequi/Daviplata/Bancolombia.</p>
-    <div class="mt-10 grid md:grid-cols-4 gap-4">
-      {[
-        {n:"Free", p:"$0", x:"Gratis", desc:"Bot conversacional, 1 foto/dia, charts basicos."},
-        {n:"Starter", p:"$5.000", x:"/mes", desc:"Photo ilimitado, charts avanzados, Mini App, 5min Realtime trial."},
-        {n:"Pro", p:"$14.990", x:"/mes", desc:"+ voz + 30min Realtime + 1 wearable + plan generator. Popular.", popular:true},
-        {n:"Elite", p:"$39.990", x:"/mes", desc:"+ 120min Realtime + wearables ilimitados + PDFs ilimitados."}
-      ].map((plan) => (
-        <div class={`rounded-xl p-6 border ${plan.popular ? "border-brand-400 bg-brand-900/60" : "border-slate-700 bg-slate-800"}`}>
-          {plan.popular && <div class="text-xs uppercase text-brand-400 font-semibold">Mas popular</div>}
-          <h3 class="text-xl font-bold mt-1">{plan.n}</h3>
-          <div class="mt-2">
-            <span class="text-3xl font-bold">{plan.p}</span>
-            <span class="text-slate-400 text-sm">{plan.x}</span>
-          </div>
-          <p class="text-sm text-slate-300 mt-3">{plan.desc}</p>
-          <a
-            href={`https://t.me/${botUsername}?start=ref_landing_${plan.n.toLowerCase()}`}
-            class="mt-4 block text-center rounded-lg bg-brand-600 px-3 py-2 text-sm hover:bg-brand-700"
-          >
-            Elegir {plan.n}
-          </a>
-        </div>
-      ))}
-    </div>
-    <div class="mt-6 rounded-xl bg-brand-700/40 border border-brand-500 p-4 text-center">
-      <p class="text-sm">
-        <b>Lifetime $399.000</b> unico - Elite para siempre. Solo 100 cupos en launch.
-      </p>
-    </div>
   </div>
 </section>
 
