@@ -5,15 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>{% block title %}EntrenadorAX{% endblock %}</title>
 
-{# SEO / Open Graph (los bloques se sobreescriben por pagina) #}
+{# URL base absoluta para OG images y canonical. WhatsApp/Telegram necesitan
+   URLs absolutas; las relativas no funcionan. #}
+{% set base_url = (settings.landing_url|string).rstrip('/') if settings.landing_url else 'https://entrenadorax.axsoftware.codes' %}
+
+{# SEO / Open Graph #}
 <meta name="description" content="{% block description %}Coach AI 24/7 dentro de Telegram. Entreno, comida, sueno, peso.{% endblock %}" />
 {% if canonical %}<link rel="canonical" href="{{ canonical }}" />{% endif %}
+
+{# Open Graph (Facebook, WhatsApp, Telegram, LinkedIn) #}
 <meta property="og:type" content="{% block og_type %}website{% endblock %}" />
+<meta property="og:site_name" content="EntrenadorAX" />
+<meta property="og:locale" content="es_CO" />
 <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}" />
 <meta property="og:description" content="{% block og_description %}{{ self.description() }}{% endblock %}" />
-<meta property="og:url" content="{{ canonical|default('') }}" />
-<meta property="og:image" content="{% block og_image %}/static/img/og-image.png{% endblock %}" />
+<meta property="og:url" content="{{ canonical|default(base_url) }}" />
+<meta property="og:image" content="{% block og_image %}{{ base_url }}/static/img/og-image.png{% endblock %}" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="EntrenadorAX - Tu coach IA 24/7 dentro de Telegram" />
+
+{# Twitter / X #}
 <meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{% block twitter_title %}{{ self.og_title() }}{% endblock %}" />
+<meta name="twitter:description" content="{% block twitter_description %}{{ self.og_description() }}{% endblock %}" />
+<meta name="twitter:image" content="{% block twitter_image %}{{ base_url }}/static/img/og-image.png{% endblock %}" />
 
 {# Tailwind via CDN (sin build, sin Node). Para produccion con mayor performance
    se podria cambiar a un CSS estatico generado por Tailwind CLI standalone,
