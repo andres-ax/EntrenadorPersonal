@@ -107,8 +107,10 @@ cryptography>=42.0,<46.0
 # -----------------------------------------------------------------------------
 # Tareas asincronas (worker)
 # -----------------------------------------------------------------------------
-# Worker liviano para sync de wearables, recalcular rankings, etc.
-arq>=0.26,<1.0
+# arq se MUEVE a requirements-worker.txt porque su redis<5 entra en conflicto
+# con openai-agents[redis] que requiere redis>=7. El worker es un servicio
+# Railway aparte (`arq src.worker.main.WorkerSettings`); cuando se despliegue
+# se instala con `pip install -r requirements.txt -r requirements-worker.txt`.
 
 # Cliente WebSocket async para conectar a OpenAI Realtime API.
 websockets>=13.0,<16.0
