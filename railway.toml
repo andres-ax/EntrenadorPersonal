@@ -3,9 +3,12 @@
   dockerfilePath = "Dockerfile"
 
 [deploy]
-  startCommand = "uvicorn src.main:app --host 0.0.0.0 --port $PORT"
+  # Shell wrapper (sh -c) para expandir $PORT que Railway inyecta.
+  # alembic upgrade head ANTES de arrancar uvicorn para que el schema este al dia.
+  startCommand = "sh -c 'alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8080}'"
   healthcheckPath = "/health"
+  healthcheckTimeout = 60
   restartPolicyType = "ON_FAILURE"
 
 [service]
-  port = 8000
+  port = 8080

@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 RUN pip install --no-cache-dir -e . --no-deps
 
-EXPOSE 8000
+EXPOSE 8080
 
 # Aplica migraciones antes de arrancar el servidor.
-CMD alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000
+# Shell form para expandir $PORT (Railway inyecta su propio puerto).
+CMD ["sh", "-c", "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
