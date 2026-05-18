@@ -220,7 +220,8 @@ async def guardar_sesion(
 
         await session.commit()
         await session.refresh(sesion_entreno, ["ejercicios"])
-        return sesion_entreno
+    await _auto_streak_safe(telegram_id, "entreno")
+    return sesion_entreno
 
 
 async def obtener_ultimas_sesiones(
@@ -330,7 +331,8 @@ async def guardar_metrica_corporal(
         session.add(metrica)
         await session.commit()
         await session.refresh(metrica)
-        return metrica
+    await _auto_streak_safe(telegram_id, "peso")
+    return metrica
 
 
 async def historial_peso(telegram_id: int, limit: int = 10) -> list[MetricaCorporal]:
@@ -381,7 +383,8 @@ async def guardar_comida(
         session.add(comida)
         await session.commit()
         await session.refresh(comida)
-        return comida
+    await _auto_streak_safe(telegram_id, "comida")
+    return comida
 
 
 async def resumen_nutricional_dia(
@@ -447,7 +450,8 @@ async def guardar_sueno(
         session.add(sueno)
         await session.commit()
         await session.refresh(sueno)
-        return sueno
+    await _auto_streak_safe(telegram_id, "sueno")
+    return sueno
 
 
 async def _resumen_sueno_semanal_internal(session, uid: int) -> dict:
@@ -865,6 +869,25 @@ async def guardar_checkin_nocturno(
 # --- Eventos bot (audit) ---
 
 
+async def _auto_streak_safe(telegram_id: int, tipo_streak: str) -> None:
+    """Llama `incrementar_streak` sin tirar excepciones.
+
+    Pensado para invocarse desde `guardar_sesion`/`guardar_sueno`/
+    `guardar_comida` y mantener los contadores de streak al dia sin que
+    el coach tenga que recordarlo en cada turno. Si falla (p. ej. usuario
+    se borro justo despues), solo logueamos y seguimos: el registro
+    principal ya esta hecho.
+    """
+    try:
+        await incrementar_streak(telegram_id, tipo_streak)
+    except Exception:
+        logger.exception(
+            "auto_streak: incrementar_streak fallo uid=%s tipo=%s",
+            telegram_id,
+            tipo_streak,
+        )
+
+
 async def log_evento(
     telegram_id: Optional[int], tipo_evento: str, payload: Optional[dict] = None
 ) -> None:
@@ -874,6 +897,7 @@ async def log_evento(
             uid = await _get_usuario_id(session, telegram_id)
         evento = EventoBot(
             usuario_id=uid,
+            telegram_id=telegram_id,
             tipo_evento=tipo_evento,
             payload=payload or {},
         )

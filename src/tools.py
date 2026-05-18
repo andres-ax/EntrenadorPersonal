@@ -594,19 +594,38 @@ async def registrar_sueno(
 ) -> str:
     """Registra horas y calidad de sueno.
 
+    REQUISITO: `horas` debe ser un numero > 0 y <= 16. Si el usuario solo
+    dice "dormi" sin dar las horas, PIDESELAS antes de llamar esta tool.
+    NUNCA llames con `horas=0` o un valor inventado: ensucia el reporte.
+
     Args:
         telegram_id: ID de Telegram del usuario
         fecha: formato YYYY-MM-DD (la fecha en que se desperto)
-        horas: horas de sueno (ej: 7.5)
+        horas: horas de sueno > 0 y <= 16 (ej: 7.5). Si no las sabes, NO
+            llames esta tool y pide el dato al usuario.
         calidad: 1=pesimo, 2=malo, 3=normal, 4=bueno, 5=excelente
         notas: notas opcionales
     """
     try:
-        fecha = _validar_fecha(fecha)
+        if horas is None or horas <= 0:
+            return _error(
+                "horas requerido (1-16). Pidele al usuario cuantas horas durmio "
+                "antes de llamar esta tool."
+            )
+        if horas > 16:
+            return _error(
+                "horas fuera de rango (max 16). Verifica el dato con el usuario."
+            )
+        fecha_norm = _validar_fecha(fecha) if fecha else ""
+        fecha_use = fecha_norm or (await _hoy_usuario(telegram_id)).isoformat()
         calidad = max(1, min(5, calidad))
-        await repo_guardar_sueno(telegram_id, fecha, horas, calidad, notas)
-        await log_evento(telegram_id, "registro_sueno", {"horas": horas, "calidad": calidad})
-        return _ok({"horas": horas, "calidad": calidad})
+        await repo_guardar_sueno(telegram_id, fecha_use, horas, calidad, notas)
+        await log_evento(
+            telegram_id,
+            "registro_sueno",
+            {"horas": horas, "calidad": calidad, "fecha": fecha_use},
+        )
+        return _ok({"horas": horas, "calidad": calidad, "fecha": fecha_use})
     except Exception:
         logger.exception("Error en registrar_sueno")
         return _error("no pude registrar el sueno")

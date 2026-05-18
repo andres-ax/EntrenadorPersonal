@@ -1330,38 +1330,98 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         return
 
+    # Saneamos lo que viene de Vision (puede devolver dict en alimentos).
+    alimentos_raw = result.get("alimentos") or []
+    alimentos_clean: list[str] = []
+    for item in alimentos_raw:
+        if isinstance(item, str):
+            s = item.strip()
+            if s:
+                alimentos_clean.append(s[:80])
+        elif isinstance(item, dict):
+            nombre = (
+                item.get("nombre")
+                or item.get("name")
+                or item.get("alimento")
+                or item.get("item")
+                or ""
+            )
+            if isinstance(nombre, str) and nombre.strip():
+                alimentos_clean.append(nombre.strip()[:80])
+
+    calorias = int(result.get("calorias") or 0)
+    proteinas = float(result.get("proteinas_g") or 0)
+    carbs = float(result.get("carbohidratos_g") or 0)
+    grasas = float(result.get("grasas_g") or 0)
+    feedback_txt = (result.get("feedback") or "").strip()
+
+    # Log de la intencion ANTES de guardar para tener trazabilidad incluso
+    # si los inserts fallan (bug detectado en auditoria: comidas=0,
+    # feedback_comida=0 pese a que el bot respondia con macros).
+    logger.info(
+        "photo_meal flow uid=%s tipo=%s fecha=%s n_alim=%d kcal=%d "
+        "P=%.1f C=%.1f G=%.1f",
+        uid, tipo_comida, fecha_user, len(alimentos_clean),
+        calorias, proteinas, carbs, grasas,
+    )
+
+    # Guardamos en 3 pasos separados para que la falla de uno NO mate los
+    # otros. Antes un solo try englobaba los 3 y un error temprano dejaba
+    # la DB vacia.
+    feedback_ok = False
     try:
         await guardar_feedback_comida(
             uid,
             foto_file_id=photo.file_id,
-            alimentos=result.get("alimentos", []),
-            calorias=result.get("calorias", 0),
-            proteinas=result.get("proteinas_g", 0),
-            carbs=result.get("carbohidratos_g", 0),
-            grasas=result.get("grasas_g", 0),
-            feedback_texto=result.get("feedback", ""),
+            alimentos=alimentos_clean,
+            calorias=calorias,
+            proteinas=proteinas,
+            carbs=carbs,
+            grasas=grasas,
+            feedback_texto=feedback_txt,
         )
+        feedback_ok = True
+    except Exception:
+        logger.exception(
+            "photo_meal: guardar_feedback_comida fallo uid=%s n_alim=%d kcal=%d",
+            uid, len(alimentos_clean), calorias,
+        )
+
+    comida_ok = False
+    try:
         await guardar_comida(
             uid,
             fecha_user,
             tipo_comida,
-            result.get("alimentos", []),
-            calorias=result.get("calorias", 0),
-            proteinas=result.get("proteinas_g", 0),
-            carbs=result.get("carbohidratos_g", 0),
-            grasas=result.get("grasas_g", 0),
+            alimentos_clean,
+            calorias=calorias,
+            proteinas=proteinas,
+            carbs=carbs,
+            grasas=grasas,
         )
+        comida_ok = True
+    except Exception:
+        logger.exception(
+            "photo_meal: guardar_comida fallo uid=%s tipo=%s fecha=%s "
+            "alimentos=%r",
+            uid, tipo_comida, fecha_user, alimentos_clean[:5],
+        )
+
+    try:
         await log_evento(
             uid,
             "photo_meal",
             {
-                "calorias": result.get("calorias", 0),
+                "calorias": calorias,
                 "tipo": tipo_comida,
                 "fecha": fecha_user,
+                "feedback_ok": feedback_ok,
+                "comida_ok": comida_ok,
+                "n_alimentos": len(alimentos_clean),
             },
         )
     except Exception:
-        logger.exception("Error guardando feedback uid=%s", uid)
+        logger.exception("photo_meal: log_evento fallo uid=%s", uid)
 
     alimentos = ", ".join(result.get("alimentos", [])) or "alimentos"
     respuesta = (

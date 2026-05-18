@@ -454,9 +454,15 @@ class EventoBot(Base):
     __tablename__ = "eventos_bot"
 
     id = Column(Integer, primary_key=True)
+    # `usuario_id` queda NULL cuando el usuario se borra (CASCADE no aplica
+    # porque eventos_bot.usuario_id es nullable; el SET NULL no esta
+    # configurado pero asyncpg lo deja igual asi de facto en delete).
     usuario_id = Column(
         Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
     )
+    # Denormalizamos telegram_id para mantener trazabilidad despues de un
+    # borrar_datos (usuario_id queda huerfano pero telegram_id se conserva).
+    telegram_id = Column(BigInteger, nullable=True, index=True)
     tipo_evento = Column(String(64), nullable=False, index=True)
     payload = Column(JSON)
     creado_en = Column(DateTime, server_default=func.now(), index=True)
