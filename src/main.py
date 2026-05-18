@@ -30,7 +30,7 @@ from src.log_setup import (
     setup_logging,
     telegram_id_ctx,
 )
-from src.telegram.bot_setup import setup_bot
+from src.telegram.bot_setup import set_application, setup_bot
 from src.telegram.handlers import registrar
 from src.telegram.pubsub_listener import start_pubsub_listener
 from src.telegram.scheduler import registrar_jobs
@@ -135,6 +135,7 @@ async def lifespan(app: FastAPI):
         .post_init(setup_bot)
         .build()
     )
+    set_application(telegram_app)
     registrar(telegram_app)
     registrar_jobs(telegram_app)
     telegram_app.add_error_handler(error_handler)

@@ -764,6 +764,33 @@ class RealtimeSesion(Base):
     transcript = Column(Text, default="")
 
 
+class Recordatorio(Base):
+    """Recordatorio/alarma personalizado configurado por el usuario via chat.
+
+    - One-shot: `fecha_unica` con la fecha exacta y `dias_semana=""`.
+    - Recurrente semanal: `dias_semana="0,1,2,3,4,5,6"` (0=lunes..6=domingo)
+      y `fecha_unica=None`.
+    - `activo=False` lo desactiva sin borrarlo (auditoria + reactivacion).
+    - `tz` se almacena explicito para no asumir el del usuario (puede viajar).
+    """
+
+    __tablename__ = "recordatorios"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    telegram_id = Column(BigInteger, nullable=False, index=True)
+    mensaje = Column(String(500), nullable=False)
+    hora = Column(Time, nullable=False)
+    dias_semana = Column(String(32), default="", nullable=False)
+    fecha_unica = Column(Date, nullable=True)
+    tz = Column(String(64), default="America/Bogota", nullable=False)
+    activo = Column(Boolean, default=True, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    ultimo_envio = Column(DateTime, nullable=True)
+
+
 class DeporteCatalogo(Base):
     """Catalogo maestro de los 67+ deportes soportados en Colombia.
 

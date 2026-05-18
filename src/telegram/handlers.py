@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import date, datetime
 
+import openai
 import telegram.error
 from telegram import (
     ForceReply,
@@ -180,9 +181,39 @@ async def _procesar(
         ttl=settings.session_ttl_seconds,
     )
     try:
-        result = await Runner.run(
-            coach, prompt, session=session, run_config=RUN_CONFIG
-        )
+        try:
+            result = await Runner.run(
+                coach, prompt, session=session, run_config=RUN_CONFIG
+            )
+        except openai.BadRequestError as e:
+            # Recupera sesion corrupta: tool call output sin su call padre
+            # (truncado por session_limit o crash mid-turn multi-tool).
+            if "No tool call found" not in str(e):
+                raise
+            logger.warning(
+                "Sesion Redis corrupta uid=%s, limpiando y reintentando. "
+                "Error original: %s",
+                uid,
+                str(e)[:200],
+            )
+            try:
+                await session.close()
+            except Exception:
+                logger.debug("Error cerrando session corrupta uid=%s", uid, exc_info=True)
+            await limpiar_keys_usuario(uid)
+            await log_evento(
+                uid,
+                "sesion_redis_recuperada",
+                {"error": str(e)[:200]},
+            )
+            session = RedisSession.from_url(
+                str(uid),
+                url=settings.redis_url_str,
+                ttl=settings.session_ttl_seconds,
+            )
+            result = await Runner.run(
+                coach, prompt, session=session, run_config=RUN_CONFIG
+            )
         output = result.final_output
 
         diag = detectar_diagnostico_output(output)
@@ -1243,6 +1274,101 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(respuesta)
 
 
+async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Recibe nota de voz / audio, transcribe con Whisper y procesa como texto.
+
+    Acepta `message.voice` (notas grabadas en Telegram) y `message.audio`
+    (archivos enviados). Reaplica el mismo flujo que `mensaje()`: crisis,
+    rate-limit, escalation y `_procesar`.
+    """
+    from src.services.tts import transcribir_audio
+
+    uid = update.effective_user.id
+    voice = update.message.voice or update.message.audio
+    if voice is None:
+        return
+
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+
+    duration = getattr(voice, "duration", 0) or 0
+    if duration > 300:
+        await update.message.reply_text(
+            "Ese audio es muy largo (limite 5 min). Mandame uno mas corto."
+        )
+        return
+
+    await update.message.chat.send_action(ChatAction.TYPING)
+
+    try:
+        file = await ctx.bot.get_file(voice.file_id)
+        audio_bytes = bytes(await file.download_as_bytearray())
+    except Exception:
+        logger.exception("Error descargando audio uid=%s", uid)
+        await update.message.reply_text("No pude descargar tu audio. Intenta de nuevo.")
+        return
+
+    if not audio_bytes:
+        await update.message.reply_text("El audio llego vacio. Intenta de nuevo.")
+        return
+
+    file_path = getattr(file, "file_path", "") or ""
+    filename = file_path.rsplit("/", 1)[-1] or "voice.ogg"
+
+    texto = await transcribir_audio(audio_bytes, filename=filename)
+    if not texto:
+        await update.message.reply_text(
+            "No pude entender tu audio. Intenta hablar mas claro o mandame texto."
+        )
+        return
+
+    logger.info(
+        "Audio transcrito uid=%s dur=%ss bytes=%d preview=%r",
+        uid,
+        duration,
+        len(audio_bytes),
+        texto[:120],
+    )
+    await log_evento(
+        uid,
+        "audio_transcrito",
+        {"duracion_s": duration, "chars": len(texto)},
+    )
+
+    user = await obtener_o_crear_usuario(uid)
+    pais = user.pais if user else "CO"
+    peso = user.peso_kg if user else None
+    crisis = detectar_crisis(texto[:8000], pais=pais, peso_actual_kg=peso)
+    if crisis is not None:
+        try:
+            sent = await update.message.reply_text(crisis.mensaje_contenedor)
+            await log_crisis(
+                uid,
+                nivel=crisis.nivel,
+                keywords=crisis.keywords,
+                mensaje_usuario=texto[:500],
+                mensaje_enviado_id=sent.message_id,
+                derivado_a=crisis.lineas_crisis[:120],
+            )
+            await log_evento(uid, "crisis_detected", {"nivel": crisis.nivel, "via": "voz"})
+        except Exception:
+            logger.exception("Error manejando crisis (voz) uid=%s", uid)
+        return
+
+    await reaccionar(update.message, ctx)
+
+    if _CONFIRMACION_ENTRENO.search(texto):
+        try:
+            from src.telegram.escalation import cancelar_escalado_hoy
+
+            await cancelar_escalado_hoy(uid, ctx, "entreno")
+        except ImportError:
+            pass
+
+    await _procesar(update.message, texto, uid, ctx=ctx)
+
+
 async def _procesar_comprobante(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE, uid: int
 ) -> None:
@@ -1640,6 +1766,7 @@ def registrar(app: Application) -> None:
     app.add_handler(
         MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler)
     )
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, recibir_voz))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensaje))
     app.add_handler(MessageHandler(filters.PHOTO, recibir_foto))
     app.add_handler(CallbackQueryHandler(boton))

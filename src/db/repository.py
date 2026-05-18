@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
 
 from sqlalchemy import func, select
@@ -35,6 +35,7 @@ from src.db.models import (
     PersonalRecord,
     PlanDefinicion,
     PlanSuscripcion,
+    Recordatorio,
     RolAdmin,
     SesionEntrenamiento,
     Streak,
@@ -1727,3 +1728,100 @@ async def listar_sparring_reciente(
             ).order_by(SesionEntrenamiento.fecha.desc())
         )
         return list(result.scalars().all())
+
+
+# --- Recordatorios personalizados ---
+
+
+async def crear_recordatorio(
+    telegram_id: int,
+    mensaje: str,
+    hora: time,
+    dias_semana: str = "",
+    fecha_unica: Optional[date] = None,
+    tz: Optional[str] = None,
+) -> Optional[Recordatorio]:
+    """Crea un recordatorio one-shot o recurrente. Devuelve el modelo persistido."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Usuario).where(Usuario.telegram_id == telegram_id)
+        )
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
+            return None
+        rec = Recordatorio(
+            usuario_id=usuario.id,
+            telegram_id=telegram_id,
+            mensaje=mensaje[:500],
+            hora=hora,
+            dias_semana=(dias_semana or "").strip(),
+            fecha_unica=fecha_unica,
+            tz=tz or usuario.timezone or "America/Bogota",
+            activo=True,
+        )
+        session.add(rec)
+        await session.commit()
+        await session.refresh(rec)
+        return rec
+
+
+async def listar_recordatorios(
+    telegram_id: int, solo_activos: bool = True
+) -> list[Recordatorio]:
+    """Lista recordatorios del usuario (activos por defecto)."""
+    async with async_session_factory() as session:
+        query = select(Recordatorio).where(Recordatorio.telegram_id == telegram_id)
+        if solo_activos:
+            query = query.where(Recordatorio.activo.is_(True))
+        query = query.order_by(Recordatorio.hora.asc(), Recordatorio.id.asc())
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+
+async def listar_recordatorios_activos_global() -> list[Recordatorio]:
+    """Todos los recordatorios activos del sistema. Uso: scheduler loader al boot."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Recordatorio).where(Recordatorio.activo.is_(True))
+        )
+        return list(result.scalars().all())
+
+
+async def obtener_recordatorio(recordatorio_id: int) -> Optional[Recordatorio]:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Recordatorio).where(Recordatorio.id == recordatorio_id)
+        )
+        return result.scalar_one_or_none()
+
+
+async def desactivar_recordatorio(recordatorio_id: int, telegram_id: int) -> bool:
+    """Marca el recordatorio como inactivo. Verifica ownership via telegram_id."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Recordatorio).where(
+                Recordatorio.id == recordatorio_id,
+                Recordatorio.telegram_id == telegram_id,
+            )
+        )
+        rec = result.scalar_one_or_none()
+        if rec is None:
+            return False
+        rec.activo = False
+        await session.commit()
+        return True
+
+
+async def marcar_recordatorio_enviado(recordatorio_id: int) -> None:
+    """Actualiza `ultimo_envio` y, si es one-shot, lo desactiva."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Recordatorio).where(Recordatorio.id == recordatorio_id)
+        )
+        rec = result.scalar_one_or_none()
+        if rec is None:
+            return
+        rec.ultimo_envio = datetime.utcnow()
+        if rec.fecha_unica is not None and not rec.dias_semana:
+            rec.activo = False
+        await session.commit()

@@ -14,6 +14,25 @@ from src.i18n import IDIOMAS_SOPORTADOS, t
 
 logger = logging.getLogger(__name__)
 
+
+# --- Singleton de la Application activa ---
+# Permite a tools como `programar_recordatorio` acceder al JobQueue sin
+# pasar la app por todo el stack. Se setea desde run_bot.py / src/main.py
+# despues de construir la Application y antes de start_polling/initialize.
+_APP: Application | None = None
+
+
+def set_application(app: Application) -> None:
+    """Registra la Application como singleton accesible desde el resto del codigo."""
+    global _APP
+    _APP = app
+
+
+def obtener_application() -> Application | None:
+    """Devuelve la Application activa o None si aun no se inicializo."""
+    return _APP
+
+
 # Lista canonica de comandos del bot. La descripcion se traduce via i18n key `cmd_<name>`.
 # Cada lang puede omitir comandos avanzados (ej: en/pt solo muestran los basicos).
 COMANDOS_CORE = [

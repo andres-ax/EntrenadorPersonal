@@ -11,7 +11,7 @@ import json
 import logging
 import random
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dtime, timedelta
 from typing import Any, Callable
 
 from agents import function_tool
@@ -21,6 +21,8 @@ from src.db.repository import (
     aceptar_modo_militar,
     cambiar_tono as repo_cambiar_tono,
     crear_compromiso,
+    crear_recordatorio as repo_crear_recordatorio,
+    desactivar_recordatorio as repo_desactivar_recordatorio,
     guardar_comida as repo_guardar_comida,
     guardar_metrica_corporal,
     guardar_pr as repo_guardar_pr,
@@ -35,6 +37,7 @@ from src.db.repository import (
     incrementar_citado_compromiso,
     incrementar_streak,
     listar_prs,
+    listar_recordatorios as repo_listar_recordatorios,
     listar_sesiones_skill as repo_listar_sesiones_skill,
     listar_sparring_reciente as repo_listar_sparring_reciente,
     listar_trucos_aterrizados as repo_listar_trucos,
@@ -49,6 +52,11 @@ from src.db.repository import (
     usar_freeze_streak,
 )
 from src.db.repository import log_evento
+from src.telegram.bot_setup import obtener_application
+from src.telegram.scheduler import (
+    cancelar_recordatorio_jobs,
+    programar_recordatorio_en_jobqueue,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1511,3 +1519,210 @@ async def evaluar_concusion_simplificado(
     except Exception:
         logger.exception("Error en evaluar_concusion_simplificado")
         return _error("no pude evaluar")
+
+
+# ============================================================================
+# Recordatorios personalizados
+# ============================================================================
+
+
+_DIAS_MAP = {
+    "lun": 0, "lunes": 0, "mon": 0, "monday": 0,
+    "mar": 1, "martes": 1, "tue": 1, "tuesday": 1,
+    "mie": 2, "mié": 2, "miercoles": 2, "miércoles": 2, "wed": 2, "wednesday": 2,
+    "jue": 3, "jueves": 3, "thu": 3, "thursday": 3,
+    "vie": 4, "viernes": 4, "fri": 4, "friday": 4,
+    "sab": 5, "sáb": 5, "sabado": 5, "sábado": 5, "sat": 5, "saturday": 5,
+    "dom": 6, "domingo": 6, "sun": 6, "sunday": 6,
+}
+
+
+def _parse_dias_semana(raw: str) -> str:
+    """Normaliza dias_semana a la forma '0,1,2,3,4,5,6'.
+
+    Acepta "lun,mar,vie", "0,2,4", "diario", "todos", "L,M,V" o cadena vacia.
+    Devuelve "" si es one-shot (sin dias).
+    """
+    if not raw:
+        return ""
+    s = raw.strip().lower()
+    if s in {"diario", "todos", "todos_los_dias", "todos los dias", "daily", "everyday"}:
+        return "0,1,2,3,4,5,6"
+    if s in {"finde", "fin_de_semana", "fin de semana", "weekend"}:
+        return "5,6"
+    if s in {"laborales", "entre_semana", "entre semana", "weekdays"}:
+        return "0,1,2,3,4"
+    partes = [p.strip() for p in s.replace(";", ",").split(",") if p.strip()]
+    dias: set[int] = set()
+    for p in partes:
+        if p.isdigit():
+            n = int(p)
+            if 0 <= n <= 6:
+                dias.add(n)
+            continue
+        n = _DIAS_MAP.get(p)
+        if n is not None:
+            dias.add(n)
+    return ",".join(str(d) for d in sorted(dias))
+
+
+def _parse_hora(raw: str) -> dtime | None:
+    """Parsea HH:MM 24h. Acepta "5:30", "05:30", "23:00"."""
+    if not raw or ":" not in raw:
+        return None
+    try:
+        hh, mm = raw.strip().split(":", 1)
+        h, m = int(hh), int(mm[:2])
+        if 0 <= h <= 23 and 0 <= m <= 59:
+            return dtime(h, m)
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+@function_tool
+@_log_tool
+async def programar_recordatorio(
+    telegram_id: int,
+    mensaje: str,
+    hora: str,
+    dias_semana: str = "",
+    fecha_unica: str = "",
+) -> str:
+    """Programa un recordatorio personalizado para el usuario.
+
+    Casos de uso: "despiertame a las 5:30am", "recuerdame tomar creatina a las
+    3pm de lunes a viernes", "recordatorio manana 7am de la cita". El bot
+    enviara el mensaje a la hora indicada en la zona horaria del usuario.
+
+    Args:
+        telegram_id: ID de Telegram del usuario.
+        mensaje: texto del recordatorio (ej: "Hora de entrenar!", "Toma creatina").
+          Maximo 500 caracteres.
+        hora: hora en formato HH:MM 24h en la zona horaria del usuario
+          (ej "05:30", "15:00", "22:45").
+        dias_semana: dias separados por coma (0=lun..6=dom). Tambien acepta
+          "lun,mar,vie", "diario", "finde", "laborales". Vacio = one-shot.
+        fecha_unica: fecha YYYY-MM-DD para recordatorio one-shot (ignorada si
+          dias_semana esta definido). Vacio = manana si tampoco hay dias_semana.
+    """
+    try:
+        if not mensaje or not mensaje.strip():
+            return _error("mensaje vacio")
+        t = _parse_hora(hora)
+        if t is None:
+            return _error("hora invalida, usa HH:MM 24h (ej 05:30)")
+        dias = _parse_dias_semana(dias_semana)
+        fecha: date | None = None
+        if not dias:
+            if fecha_unica.strip():
+                try:
+                    fecha = date.fromisoformat(fecha_unica.strip())
+                except ValueError:
+                    return _error("fecha_unica invalida, usa YYYY-MM-DD")
+            else:
+                fecha = date.today() + timedelta(days=1)
+
+        rec = await repo_crear_recordatorio(
+            telegram_id=telegram_id,
+            mensaje=mensaje.strip(),
+            hora=t,
+            dias_semana=dias,
+            fecha_unica=fecha,
+        )
+        if rec is None:
+            return _error("no encontre tu usuario; manda /start primero")
+
+        try:
+            app = obtener_application()
+            if app is not None and app.job_queue is not None:
+                programar_recordatorio_en_jobqueue(app, rec)
+        except Exception:
+            logger.exception(
+                "Recordatorio %s creado en DB pero no se pudo programar en JobQueue",
+                rec.id,
+            )
+
+        await log_evento(
+            telegram_id,
+            "recordatorio_creado",
+            {
+                "id": rec.id,
+                "hora": t.strftime("%H:%M"),
+                "dias_semana": dias or "one-shot",
+                "fecha_unica": fecha.isoformat() if fecha else None,
+            },
+        )
+        return _ok({
+            "id": rec.id,
+            "mensaje": rec.mensaje,
+            "hora": t.strftime("%H:%M"),
+            "dias_semana": dias or "",
+            "fecha_unica": fecha.isoformat() if fecha else None,
+            "tz": rec.tz,
+        })
+    except Exception:
+        logger.exception("Error en programar_recordatorio")
+        return _error("no pude programar el recordatorio")
+
+
+@function_tool
+@_log_tool
+async def listar_recordatorios(telegram_id: int) -> str:
+    """Lista los recordatorios activos del usuario.
+
+    Args:
+        telegram_id: ID de Telegram del usuario.
+    """
+    try:
+        recs = await repo_listar_recordatorios(telegram_id, solo_activos=True)
+        items = [
+            {
+                "id": r.id,
+                "mensaje": r.mensaje,
+                "hora": r.hora.strftime("%H:%M") if r.hora else "",
+                "dias_semana": r.dias_semana or "",
+                "fecha_unica": r.fecha_unica.isoformat() if r.fecha_unica else None,
+                "tz": r.tz,
+            }
+            for r in recs
+        ]
+        return _ok({"total": len(items), "recordatorios": items})
+    except Exception:
+        logger.exception("Error en listar_recordatorios")
+        return _error("no pude listar tus recordatorios")
+
+
+@function_tool
+@_log_tool
+async def cancelar_recordatorio(telegram_id: int, recordatorio_id: int) -> str:
+    """Cancela (desactiva) un recordatorio del usuario por id.
+
+    Args:
+        telegram_id: ID de Telegram del usuario (validacion de ownership).
+        recordatorio_id: id devuelto por listar_recordatorios.
+    """
+    try:
+        ok = await repo_desactivar_recordatorio(recordatorio_id, telegram_id)
+        if not ok:
+            return _error("no existe ese recordatorio o no es tuyo")
+
+        try:
+            app = obtener_application()
+            if app is not None and app.job_queue is not None:
+                cancelar_recordatorio_jobs(app, recordatorio_id)
+        except Exception:
+            logger.exception(
+                "Recordatorio %s desactivado en DB pero quedo el job activo",
+                recordatorio_id,
+            )
+
+        await log_evento(
+            telegram_id,
+            "recordatorio_cancelado",
+            {"id": recordatorio_id},
+        )
+        return _ok({"id": recordatorio_id, "cancelado": True})
+    except Exception:
+        logger.exception("Error en cancelar_recordatorio")
+        return _error("no pude cancelar el recordatorio")

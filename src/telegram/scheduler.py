@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, time
+from datetime import date, datetime, time, timedelta
 from typing import Awaitable, Callable
+from zoneinfo import ZoneInfo
 
 import telegram.error
 from sqlalchemy import func, select
@@ -16,13 +17,16 @@ from src.db.models import (
     Comida,
     MetricaCorporal,
     MetricaSueno,
+    Recordatorio,
     SesionEntrenamiento,
     TipoComida,
     Usuario,
 )
 from src.db.repository import (
+    listar_recordatorios_activos_global,
     listar_usuarios_activos,
     marcar_bot_bloqueado,
+    marcar_recordatorio_enviado,
     reporte_semanal,
 )
 
@@ -327,6 +331,167 @@ async def reconsent_militar_mensual(context) -> None:
         logger.exception("Error en reconsent_militar_mensual")
 
 
+async def enviar_recordatorio_personalizado(context) -> None:
+    """Callback de JobQueue para un recordatorio del usuario.
+
+    `context.job.data` trae {'recordatorio_id': int, 'telegram_id': int, 'mensaje': str}.
+    Marca `ultimo_envio` y, si es one-shot, lo desactiva (ver repository).
+    """
+    data = (context.job.data or {}) if context.job else {}
+    chat_id = data.get("telegram_id")
+    mensaje = data.get("mensaje") or ""
+    rid = data.get("recordatorio_id")
+    if not chat_id or not mensaje:
+        logger.warning("Recordatorio sin chat_id/mensaje data=%s", data)
+        return
+    try:
+        await _enviar_safe(context.bot, int(chat_id), f"<b>Recordatorio:</b> {mensaje}")
+        if rid is not None:
+            try:
+                await marcar_recordatorio_enviado(int(rid))
+            except Exception:
+                logger.exception("Error marcando recordatorio %s enviado", rid)
+    except Exception:
+        logger.exception("Error enviando recordatorio_personalizado id=%s", rid)
+
+
+def _job_names_para(recordatorio_id: int) -> str:
+    return f"recordatorio_{recordatorio_id}"
+
+
+def _normalizar_dias(raw: str) -> tuple[int, ...]:
+    """'0,1,4' -> (0,1,4). PTB JobQueue.run_daily acepta tuple de ints 0-6."""
+    if not raw:
+        return ()
+    out: list[int] = []
+    for p in raw.split(","):
+        p = p.strip()
+        if not p.isdigit():
+            continue
+        n = int(p)
+        if 0 <= n <= 6 and n not in out:
+            out.append(n)
+    return tuple(out)
+
+
+def programar_recordatorio_en_jobqueue(app: Application, rec: Recordatorio) -> int:
+    """Programa un Recordatorio en el JobQueue de la app.
+
+    Devuelve la cantidad de jobs registrados (1 para one-shot/recurrente).
+    Para evitar duplicados cuando se reprograma, cancela jobs previos con
+    el mismo `name`.
+    """
+    jq = app.job_queue
+    if jq is None:
+        logger.warning("JobQueue no disponible; no programo recordatorio %s", rec.id)
+        return 0
+
+    name = _job_names_para(rec.id)
+    cancelar_recordatorio_jobs(app, rec.id)
+
+    tz = ZoneInfo(rec.tz or "America/Bogota")
+    data = {
+        "recordatorio_id": rec.id,
+        "telegram_id": rec.telegram_id,
+        "mensaje": rec.mensaje,
+    }
+
+    if rec.dias_semana:
+        dias = _normalizar_dias(rec.dias_semana)
+        if not dias:
+            logger.warning("Recordatorio %s sin dias validos: %r", rec.id, rec.dias_semana)
+            return 0
+        hora_tz = rec.hora.replace(tzinfo=tz)
+        jq.run_daily(
+            enviar_recordatorio_personalizado,
+            time=hora_tz,
+            days=dias,
+            name=name,
+            data=data,
+        )
+        logger.info(
+            "Recordatorio %s programado recurrente hora=%s dias=%s tz=%s",
+            rec.id,
+            rec.hora.strftime("%H:%M"),
+            dias,
+            rec.tz,
+        )
+        return 1
+
+    fecha = rec.fecha_unica or (datetime.now(tz).date() + timedelta(days=1))
+    when_local = datetime.combine(fecha, rec.hora, tzinfo=tz)
+    ahora_local = datetime.now(tz)
+    if when_local <= ahora_local:
+        logger.info(
+            "Recordatorio %s one-shot ya paso (%s <= %s), no programo",
+            rec.id, when_local, ahora_local,
+        )
+        return 0
+
+    jq.run_once(
+        enviar_recordatorio_personalizado,
+        when=when_local,
+        name=name,
+        data=data,
+    )
+    logger.info(
+        "Recordatorio %s programado one-shot when=%s tz=%s",
+        rec.id,
+        when_local.isoformat(),
+        rec.tz,
+    )
+    return 1
+
+
+def cancelar_recordatorio_jobs(app: Application, recordatorio_id: int) -> int:
+    """Cancela todos los jobs del JobQueue asociados a `recordatorio_id`."""
+    jq = app.job_queue
+    if jq is None:
+        return 0
+    name = _job_names_para(recordatorio_id)
+    jobs = jq.get_jobs_by_name(name)
+    for job in jobs:
+        try:
+            job.schedule_removal()
+        except Exception:
+            logger.exception("Error removiendo job %s", name)
+    return len(jobs)
+
+
+async def _cargar_recordatorios_db(app: Application) -> int:
+    """Lee todos los recordatorios activos y los registra en el JobQueue."""
+    try:
+        recordatorios = await listar_recordatorios_activos_global()
+    except Exception:
+        logger.exception("Error cargando recordatorios activos de DB")
+        return 0
+    total = 0
+    for rec in recordatorios:
+        try:
+            total += programar_recordatorio_en_jobqueue(app, rec)
+        except Exception:
+            logger.exception("Error programando recordatorio %s al boot", rec.id)
+    logger.info("Cargados %d recordatorios al JobQueue", total)
+    return total
+
+
+def cargar_recordatorios_al_jobqueue(app: Application) -> None:
+    """Wrapper sync: programa la carga inicial via JobQueue.run_once(t=0).
+
+    Se llama desde `registrar_jobs` antes de que el JobQueue arranque, asi
+    que no podemos hacer await aqui. Lanzamos un job 1s diferido para
+    correr la carga cuando el loop ya este vivo.
+    """
+    jq = app.job_queue
+    if jq is None:
+        return
+
+    async def _bootstrap(context) -> None:
+        await _cargar_recordatorios_db(context.application)
+
+    jq.run_once(_bootstrap, when=1, name="bootstrap_recordatorios")
+
+
 def registrar_jobs(app: Application) -> None:
     """Registra los jobs recurrentes en el JobQueue de la app."""
     jq = app.job_queue
@@ -383,9 +548,14 @@ def registrar_jobs(app: Application) -> None:
     except Exception:
         logger.exception("Error registrando jobs_deportes")
 
+    try:
+        cargar_recordatorios_al_jobqueue(app)
+    except Exception:
+        logger.exception("Error programando bootstrap de recordatorios personalizados")
+
     logger.info(
         "13 jobs registrados: escalation, quiz_nocturno, quiz_sabado, checkin, "
         "peso_lunes, resumen_domingo, hidratacion_2h, reconsent_militar, "
         "recordar_sesion_skill, peso_diario_camp, recovery_post_sparring, "
-        "taper_alert, weekly_load_endurance"
+        "taper_alert, weekly_load_endurance, bootstrap_recordatorios_personalizados"
     )

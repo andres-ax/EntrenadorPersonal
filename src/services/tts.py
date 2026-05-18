@@ -34,6 +34,36 @@ def _get_client() -> AsyncOpenAI:
     return _client
 
 
+async def transcribir_audio(
+    file_bytes: bytes,
+    filename: str = "voice.ogg",
+    language: str = "es",
+) -> str:
+    """Transcribe audio con Whisper de OpenAI.
+
+    Args:
+        file_bytes: bytes del audio (ogg/opus/m4a/mp3/wav).
+        filename: nombre logico (el suffix orienta al modelo a detectar el formato).
+        language: ISO-639-1; "es" por defecto para EntrenadorAX.
+
+    Returns:
+        Texto transcrito (string vacio si el audio no contiene voz audible o
+        falla la API). NUNCA levanta excepciones para no romper el handler.
+    """
+    if not file_bytes:
+        return ""
+    try:
+        response = await _get_client().audio.transcriptions.create(
+            model="whisper-1",
+            file=(filename, file_bytes),
+            language=language,
+        )
+        return (response.text or "").strip()
+    except Exception:
+        logger.exception("Error transcribiendo audio (%d bytes)", len(file_bytes))
+        return ""
+
+
 async def generar_voz(texto: str, voice: str = "alloy") -> BytesIO | None:
     """Genera audio opus a partir de texto. Cachea por sha256(voz+texto)."""
     if not texto.strip():

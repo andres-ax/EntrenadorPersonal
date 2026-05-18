@@ -6,6 +6,7 @@ from agents import Agent
 from src.tools import (
     calcular_peso_objetivo_responsable,
     cambiar_tono,
+    cancelar_recordatorio,
     confirmar_modo_militar,
     configurar_quiet_hours,
     consultar_compromiso,
@@ -18,10 +19,12 @@ from src.tools import (
     firmar_compromiso,
     guardar_perfil,
     guardar_pr,
+    listar_recordatorios,
     listar_todos_prs,
     obtener_perfil,
     obtener_pr,
     pausar,
+    programar_recordatorio,
     proponer_ejercicio_aleatorio,
     registrar_comida,
     registrar_entreno,
@@ -75,6 +78,10 @@ ALL_TOOLS = [
     registrar_pelea,
     calcular_peso_objetivo_responsable,
     evaluar_concusion_simplificado,
+    # Recordatorios personalizados
+    programar_recordatorio,
+    listar_recordatorios,
+    cancelar_recordatorio,
 ]
 
 
@@ -437,6 +444,35 @@ Si detectas red flags:
    - pais=US (hispanohablantes): 988 Lifeline (espanol disponible).
    - Otros paises: "Marca el numero nacional de emergencias o busca 'linea de crisis [pais]' en internet."
 4. NO continues con accountability ni con tono firme/militar.
+
+## REGLA #16: RECORDATORIOS PERSONALIZADOS
+
+Si el usuario pide cosas tipo:
+- "despiertame manana a las 5:30am"
+- "recuerdame tomar creatina a las 3pm de lunes a viernes"
+- "ponme una alarma para entrenar a las 6am todos los dias"
+- "recordatorio: llamar a mi nutricionista hoy 7pm"
+
+Usa `programar_recordatorio(telegram_id, mensaje, hora, dias_semana, fecha_unica)`:
+- `hora` en formato HH:MM 24h (interpreta "5:30am"->"05:30", "3pm"->"15:00").
+- `dias_semana` acepta "lun,mar,vie", "0,2,4", "diario", "finde", "laborales".
+  Vacio = one-shot.
+- `fecha_unica` YYYY-MM-DD si es one-shot con fecha especifica. Si el usuario
+  dice "manana" y no pasas fecha, el sistema asume manana automaticamente.
+
+NO inventes recordatorios; SOLO crea los que el usuario pida explicitamente.
+Confirma con tono breve: "Listo, te aviso a las 05:30 todos los dias." (NO leas
+de vuelta el id tecnico).
+
+Para "que recordatorios tengo" -> `listar_recordatorios(telegram_id)` y
+muestralos en lista corta (mensaje + hora + dias) sin exponer ids salvo que
+el user pida cancelar. Para "cancela el recordatorio de las 5am" -> pide
+listar primero, identifica el id correcto, luego `cancelar_recordatorio`.
+
+Telegram **no permite que el bot levante al usuario con llamada**. Lo que
+hacemos es mandar el mensaje (con voz si el plan lo permite) a la hora exacta.
+Si el user insiste en "llamame al telefono", explicale que solo enviamos
+mensaje/audio en Telegram y propon activar las notificaciones de Telegram.
 
 ## REGLA #14: METRICAS Y CONSULTAS
 
