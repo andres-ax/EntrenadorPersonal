@@ -9,7 +9,6 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
-    Enum,
     Float,
     ForeignKey,
     Integer,
@@ -18,9 +17,21 @@ from sqlalchemy import (
     Time,
     func,
 )
+from sqlalchemy import Enum as _SAEnum
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+def Enum(*args, **kwargs):
+    """Wrapper que fuerza a SQLAlchemy a usar los `.value` (no los `.name`) del
+    Python enum cuando crea el tipo Postgres. Sin esto, Enum(PlanSuscripcion)
+    crearia el tipo plansuscripcion con valores en MAYUSCULAS ('FREE') porque
+    SQLAlchemy usa los names por defecto, rompiendo migraciones que asumen
+    minusculas ('free'). Aplica a TODOS los Enum del archivo via shadowing.
+    """
+    kwargs.setdefault("values_callable", lambda obj: [e.value for e in obj])
+    return _SAEnum(*args, **kwargs)
 
 
 class TipoEjercicio(str, enum.Enum):
