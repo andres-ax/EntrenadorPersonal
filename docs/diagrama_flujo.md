@@ -3,18 +3,18 @@
 A continuación hay un diagrama de flujo en Mermaid que describe el flujo principal del sistema.
 
 ```mermaid
-flowchart LR
+graph LR
   subgraph Clientes
-    U_TG[Usuario (Telegram)]
-    U_WEB[Usuario (Web / Browser)]
+    U_TG["Usuario (Telegram)"]
+    U_WEB["Usuario (Web / Browser)"]
   end
 
   subgraph Backend
-    API[FastAPI (src/main.py)]
-    TB[Bot Telegram / Handlers (src/telegram/)]
-    AG[OpenAI Agent (src/coach.py)]
-    TO[Herramientas (src/tools.py)]
-    WS[WebSocket Realtime (src/realtime/)]
+    API["FastAPI (src/main.py)"]
+    TB["Bot Telegram / Handlers (src/telegram/)"]
+    AG["OpenAI Agent (src/coach.py)"]
+    TO["Herramientas (src/tools.py)"]
+    WS["WebSocket Realtime (src/realtime/)"]
   end
 
   subgraph Servicios
