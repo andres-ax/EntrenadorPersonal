@@ -1,125 +1,186 @@
 # DEPLOY.md - Deploy de EntrenadorAX
 
-Stack consolidado: **un solo proceso Python en Railway** que sirve el bot,
-el admin panel, la mini app y la landing. Cero servicios extra.
+Deploy de EntrenadorAX en Railway con un solo servicio Python que sirve:
+- bot Telegram
+- panel admin HTML
+- mini app HTML
+- landing HTML
+- WebSocket realtime
+- APIs JSON
+
+## Tabla de contenidos
+
+1. [Servicios Railway](#servicios-railway)
+2. [Setup inicial](#setup-inicial)
+3. [Variables de entorno](#variables-de-entorno)
+4. [Migraciones DB](#migraciones-db)
+5. [Crear primer admin](#crear-primer-admin)
+6. [Configurar webhook Telegram](#configurar-webhook-telegram)
+7. [Endpoints públicos](#endpoints-publicos)
+8. [Health checks](#health-checks)
+9. [Wearables OAuth](#wearables-oauth)
+10. [Cuentas de pago](#cuentas-de-pago)
+
+---
 
 ## Servicios Railway
 
 | Servicio | Rol | Dockerfile |
 |---|---|---|
 | `EntrenadorPersonal` | FastAPI + bot + admin HTML + mini app HTML + landing | `Dockerfile` |
-| `Postgres` | DB managed | (Railway addon) |
-| `Redis` | cache / pubsub / sesiones managed | (Railway addon) |
+| `Postgres` | Base de datos gestionada | Railway addon |
+| `Redis` | cache / pubsub / sesiones gestionadas | Railway addon |
 
-> Antes existian servicios separados `realtime-ws`, `worker`,
-> `entrenadorax-admin`, y frontends en Cloudflare Pages (Astro / Vite /
-> Next.js). Todos consolidados en el unico FastAPI con templates Jinja2.
+> Nota: el stack está consolidado en un único servicio FastAPI. Antes había servicios separados de realtime, worker y frontends en Cloudflare Pages.
 
-## Setup inicial Railway
+## Setup inicial
 
 1. Crear proyecto en Railway.
-2. Anadir addons: Postgres + Redis.
-3. Crear servicio `EntrenadorPersonal` apuntando al repo (usa `Dockerfile`).
-4. Setear variables (las mas importantes):
+2. Añadir los addons `Postgres` y `Redis`.
+3. Crear el servicio `EntrenadorPersonal` apuntando al repo y usando el `Dockerfile`.
+4. Configurar las variables de entorno.
 
-```
+## Variables de entorno
+
+Cargar al menos estas variables:
+
+```env
 TELEGRAM_TOKEN=...
-OPENAI_API_KEY=sk-proj-...
-DATABASE_URL=postgresql://...   # Railway lo da automatico si haces ref
-REDIS_URL=redis://...           # idem
-JWT_SECRET=...                  # python3 -c "import secrets; print(secrets.token_urlsafe(48))"
-ADMIN_TOKEN=...                 # idem
-WEBHOOK_SECRET=...              # openssl rand -hex 32
-FERNET_KEY=...                  # Fernet.generate_key().decode()
+OPENAI_API_KEY=sk-...
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+JWT_SECRET=...
+ADMIN_TOKEN=...
+WEBHOOK_SECRET=...
+FERNET_KEY=...
 ENV=prod
+```
 
-# URLs (Railway expone *.up.railway.app automaticamente)
+Variables de URL:
+
+```env
 WEBHOOK_BASE_URL=https://entrenadorax.axsoftware.codes
 MINIAPP_URL=https://entrenadorax.axsoftware.codes/app
 LANDING_URL=https://entrenadorax.axsoftware.codes
 ADMIN_URL=https://entrenadorax.axsoftware.codes/admin
+```
 
-# Seed del primer admin (solo en primer deploy)
+Seed de admin inicial (solo primer deploy):
+
+```env
 ADMIN_SEED_EMAIL=entrenadorax@axsoftware.codes
 ADMIN_SEED_PASSWORD=...
+```
 
-# Pricing
+Precios opcionales:
+
+```env
 PRECIO_STARTER_COP=5000
 PRECIO_PRO_COP=14990
 PRECIO_ELITE_COP=39990
 PRECIO_LIFETIME_COP=399000
+```
 
-# Opcional: Sentry / Plausible
+Opcionales:
+
+```env
 SENTRY_DSN=...
 PLAUSIBLE_DOMAIN=entrenadorax.axsoftware.codes
 ```
 
 ## Migraciones DB
 
+Ejecutar migraciones manualmente:
+
 ```bash
 railway run alembic upgrade head
 ```
 
-Tambien corren automaticamente al arrancar el contenedor (`start.sh`).
+> En producción, el contenedor también puede ejecutar migraciones al inicio si el script `start.sh` está configurado para ello.
 
 ## Crear primer admin
 
-Si seteas `ADMIN_SEED_EMAIL` + `ADMIN_SEED_PASSWORD`, el bot crea el admin
-en el primer arranque (idempotente). Alternativa manual:
+Si configuras `ADMIN_SEED_EMAIL` y `ADMIN_SEED_PASSWORD`, el admin se crea automáticamente en el primer arranque.
+
+Alternativa manual:
 
 ```bash
 railway run python scripts/crear_admin.py \
-  --email tu@email.com --password "tuPasswordSeguro" --rol super
+  --email tu@email.com \
+  --password "tuPasswordSeguro" \
+  --rol super
 ```
 
 ## Configurar webhook Telegram
 
-El bot setea el webhook automaticamente al arrancar si `WEBHOOK_BASE_URL`
-esta configurado. Si necesitas hacerlo manualmente:
+El bot configura el webhook automáticamente al arrancar si `WEBHOOK_BASE_URL` está presente.
+
+Si necesitas hacerlo manualmente:
 
 ```bash
 curl -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/setWebhook" \
   -d "url=https://entrenadorax.axsoftware.codes/webhook" \
   -d "secret_token=$WEBHOOK_SECRET" \
-  -d "allowed_updates=[\"message\",\"callback_query\",\"poll_answer\",\"message_reaction\",\"successful_payment\",\"pre_checkout_query\",\"inline_query\"]"
+  -d 'allowed_updates=["message","callback_query","poll_answer","message_reaction","successful_payment","pre_checkout_query","inline_query"]'
 ```
 
-Inspeccionar config actual:
+Consultar la configuración actual del webhook:
 
 ```bash
-curl https://entrenadorax.axsoftware.codes/webhook-info \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+curl https://entrenadorax.axsoftware.codes/webhook-info   -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
-## Endpoints publicos del servicio unico
+## Endpoints publicos
 
 - `/` -> landing HTML
 - `/precios`, `/deportes`, `/deportes/{slug}`, `/politicas/*` -> landing
 - `/sitemap.xml`, `/robots.txt` -> SEO
-- `/admin/login` -> panel HTML (Jinja2)
-- `/admin/`, `/admin/usuarios`, `/admin/pagos`, etc. -> panel HTML
-- `/admin/auth/login`, `/admin/usuarios`, ... -> JSON API (X-Admin-Token o JWT)
-- `/app/dashboard`, `/app/llamar`, etc. -> mini app HTML (cookie user_jwt)
-- `/api/me/*`, `/api/auth/*`, `/api/public/*`, `/api/integraciones/*` -> JSON API
+- `/admin/login` -> panel admin HTML
+- `/admin/`, `/admin/usuarios`, `/admin/pagos`, etc. -> panel admin HTML
+- `/admin/auth/login`, `/admin/usuarios`, ... -> API JSON (X-Admin-Token o JWT)
+- `/app/dashboard`, `/app/llamar`, etc. -> mini app HTML (cookie `user_jwt`)
+- `/api/me/*`, `/api/auth/*`, `/api/public/*`, `/api/integraciones/*` -> API JSON
 - `/webhook` -> Telegram bot
-- `/ws/realtime` -> WebSocket llamada de voz
+- `/ws/realtime` -> WebSocket de voz
 - `/health` -> healthcheck
 
 ## Health checks
 
 ```bash
 curl https://entrenadorax.axsoftware.codes/health
-# {"status":"ok","bot":true,"db":true,"redis":true,"db_pool":{...}}
+```
+
+Ejemplo de respuesta:
+
+```json
+{"status":"ok","bot":true,"db":true,"redis":true,"db_pool":{...}}
 ```
 
 ## Wearables OAuth
 
-Registrar redirect URI en cada developer portal:
-- `https://entrenadorax.axsoftware.codes/api/integraciones/{whoop|strava|garmin|google_fit}/callback`
+Registrar redirect URI en cada portal de desarrollador:
 
-Setear `<PROVEEDOR>_CLIENT_ID` y `<PROVEEDOR>_CLIENT_SECRET` en el servicio.
+- `https://entrenadorax.axsoftware.codes/api/integraciones/whoop/callback`
+- `https://entrenadorax.axsoftware.codes/api/integraciones/strava/callback`
+- `https://entrenadorax.axsoftware.codes/api/integraciones/garmin/callback`
+- `https://entrenadorax.axsoftware.codes/api/integraciones/google_fit/callback`
+
+Configurar estas variables en Railway:
+
+- `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`
+- `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`
+- `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET`
+- `GOOGLE_FIT_CLIENT_ID`, `GOOGLE_FIT_CLIENT_SECRET`
 
 ## Cuentas de pago
 
 - `CUENTA_DESTINO_PAGO` -> llave Bre-B principal
 - `CUENTA_DESTINO_ALT` -> alternativa Bancolombia
+
+---
+
+## Notas adicionales
+
+- Railway expone automáticamente el dominio `*.up.railway.app`.
+- Si cambias el `WEBHOOK_BASE_URL`, reconfigura el webhook y reinicia el servicio.
+- Asegúrate de que el contenedor use el `Dockerfile` correcto y que el servicio principal sea `EntrenadorPersonal`.
