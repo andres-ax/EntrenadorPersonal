@@ -687,7 +687,7 @@ def _make_menu_slash_handler(prompt: str):
 
 
 async def cmd_quiet_hours(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00"""
+    """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00."""
     uid = update.effective_user.id
     args = ctx.args or []
     if len(args) != 2:
@@ -1057,7 +1057,7 @@ async def inline_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @requiere_tier(PlanSuscripcion.STARTER)
 async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]"""
+    """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]."""
     from src.services.charts import (chart_macros_dia, chart_peso,
                                      chart_reporte_semanal,
                                      chart_streak_calendario,

@@ -59,7 +59,8 @@ async def close_redis() -> None:
 async def limpiar_keys_usuario(uid: int) -> int:
     """Elimina todas las keys de sesion del agente para un usuario.
 
-    Returns:
+    Returns
+    -------
         Numero de keys eliminadas.
 
     """

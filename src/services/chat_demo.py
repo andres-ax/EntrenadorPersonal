@@ -58,7 +58,8 @@ demo_coach = Agent(
 async def chat_demo(session_id: str | None, mensaje: str) -> dict:
     """Procesa un mensaje del widget demo.
 
-    Returns:
+    Returns
+    -------
         dict con keys: respuesta, session_id, restantes, cta_url (o None).
 
     """

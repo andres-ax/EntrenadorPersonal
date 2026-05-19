@@ -326,7 +326,7 @@ class PersonalRecord(Base):
     - VELOCIDAD (patinaje velocidad, MTB)
     - RONDAS (combate: ej "primer KO en round 2")
     - CINTURON (BJJ/karate/TKD/judo: ej "purple belt BJJ")
-    - DISTANCIA (running/ciclismo PR de distancia nueva)
+    - DISTANCIA (running/ciclismo PR de distancia nueva).
     """
 
     __tablename__ = "personal_records"

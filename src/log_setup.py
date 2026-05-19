@@ -109,6 +109,7 @@ def setup_logging(level: int | None = None) -> None:
     realtime startup). No falla si se llama mas veces; solo recalcula handlers.
 
     Args:
+    ----
         level: nivel base (DEBUG/INFO/WARNING). Si es None, se decide segun
             settings.env: DEBUG en dev, INFO en prod/test.
 

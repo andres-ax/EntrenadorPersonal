@@ -733,7 +733,7 @@ async def crear_compromiso(
 
         await session.execute(
             select(Compromiso).where(
-                Compromiso.usuario_id == uid, Compromiso.activo == True
+                Compromiso.usuario_id == uid, Compromiso.activo is True
             )  # noqa: E712
         )
         existentes = (
@@ -1585,7 +1585,8 @@ _CATALOG_FULL_CACHE: dict[str, dict] = {}
 async def cargar_catalog_en_cache() -> int:
     """Carga catalog de deportes a cache en memoria. Llamar al startup.
 
-    Returns:
+    Returns
+    -------
         Numero de deportes cargados.
 
     """

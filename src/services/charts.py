@@ -12,8 +12,8 @@ matplotlib.use("Agg")
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
-from src.db.repository import (historial_peso,  # noqa: E402
-                               obtener_ultimas_sesiones, reporte_semanal,
+from src.db.repository import historial_peso  # noqa: E402
+from src.db.repository import (obtener_ultimas_sesiones, reporte_semanal,
                                resumen_nutricional_dia)
 
 logger = logging.getLogger(__name__)

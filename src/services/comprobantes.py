@@ -110,7 +110,8 @@ def _parse_monto(raw_str: str, raw_int) -> int:
 async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
     """Llama Vision API y devuelve dict estructurado del comprobante.
 
-    Returns:
+    Returns
+    -------
         dict con keys: ok (bool), es_comprobante (bool), monto_cop (int),
         fecha_pago (datetime|None), hora_pago (time|None), referencia (str),
         cuenta_origen (str), cuenta_destino (str), metodo (str), confianza (float),

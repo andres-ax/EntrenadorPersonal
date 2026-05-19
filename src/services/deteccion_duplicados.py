@@ -30,7 +30,8 @@ async def es_duplicado(
 ) -> dict:
     """Devuelve info sobre si el comprobante es duplicado de otro previo.
 
-    Returns:
+    Returns
+    -------
         {
             "es_duplicado": bool,
             "razon": "sha_exacto" | "semantico" | "no",

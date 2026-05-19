@@ -71,7 +71,8 @@ async def generar_codigo(telegram_id: int) -> str:
 async def validar_y_consumir(codigo: str) -> int | None:
     """Valida un codigo y lo elimina si es correcto (single-use).
 
-    Returns:
+    Returns
+    -------
         telegram_id si el codigo es valido y no estaba expirado.
         None si no existe, expiro, o ya fue usado.
 

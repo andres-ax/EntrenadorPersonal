@@ -356,6 +356,7 @@ def detectar(
     """Analiza texto. Devuelve CrisisDetected si encuentra red flag.
 
     Args:
+    ----
         texto: mensaje del usuario.
         pais: codigo ISO-2 para lineas locales.
         peso_actual_kg: peso del usuario para evaluar cut numerico (opcional).

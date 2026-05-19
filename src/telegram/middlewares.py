@@ -71,7 +71,8 @@ async def check_daily_quota(
 
     Planes pagos no tienen limite diario.
 
-    Returns:
+    Returns
+    -------
         (puede_continuar, mensajes_usados, limite)
         limite=0 significa ilimitado.
 

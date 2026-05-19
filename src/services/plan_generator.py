@@ -66,7 +66,8 @@ PROMPT_PLAN = (
 async def generar_plan_semanal_para(telegram_id: int) -> dict:
     """Llama LLM para generar plan semanal estructurado.
 
-    Returns:
+    Returns
+    -------
         dict con la forma PlanSemanal (validado pydantic).
 
     """

@@ -49,11 +49,13 @@ async def transcribir_audio(
     por defecto (gpt-4o-mini-transcribe) falla.
 
     Args:
+    ----
         file_bytes: bytes del audio (ogg/opus/m4a/mp3/wav).
         filename: nombre logico (el suffix orienta al modelo a detectar el formato).
         language: ISO-639-1; "es" por defecto para EntrenadorAX.
 
     Returns:
+    -------
         Texto transcrito (string vacio si el audio no contiene voz audible o
         falla la API). NUNCA levanta excepciones para no romper el handler.
 
@@ -143,7 +145,8 @@ async def enviar_voz(
 ) -> bool:
     """Envia voz con send_action record_voice. Si falla, fallback a texto.
 
-    Returns:
+    Returns
+    -------
         True si envio voz exitosamente, False si hubo que hacer fallback a texto.
 
     """

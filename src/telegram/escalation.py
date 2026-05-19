@@ -631,11 +631,13 @@ async def cancelar_escalado_hoy(
     Llamado desde el handler cuando el usuario confirma una accion.
 
     Args:
+    ----
         uid: telegram_id del usuario.
         ctx: contexto con ctx.job_queue.
         tipo_accion: si None, cancela todos los tipos.
 
     Returns:
+    -------
         Numero de jobs cancelados.
 
     """
