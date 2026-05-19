@@ -1,72 +1,100 @@
-# Documentación Interna de EntrenadorAX V2
+# Documentación Interna - EntrenadorAX
 
-Plataforma multi-servicio: bot Telegram + Mini App + Admin web + WebSocket
-Realtime + Worker + Landing. Deployada en Railway + Cloudflare Pages.
+**Versión:** 2.0  
+**Plataforma:** Multi-servicio (Bot Telegram + Mini App + Admin + Realtime + Worker + Landing)  
+**Infraestructura:** Railway + Cloudflare Pages
 
-## Arquitectura V2
+## Tabla de contenidos
+
+1. [Arquitectura General](#arquitectura-general)
+2. [Cómo usa el agente el perfil y las herramientas](#1-cómo-usa-el-agente-el-perfil-y-las-herramientas)
+3. [Transformación de mensajes Telegram](#2-cómo-se-transforma-cada-mensaje-de-telegram-en-una-pregunta-para-el-agente)
+4. [Recordatorios y programaciones](#3-recordatorios-y-programaciones)
+5. [Modelo de datos](#4-modelo-de-datos-y-persistencia)
+6. [Flujo completo de interacción](#5-flujo-completo-de-una-interacción)
+7. [Aspectos de diseño](#6-aspectos-importantes-del-diseño)
+8. [Extensiones recomendadas](#7-recomendaciones-para-extender-o-modificar)
+
+---
+
+## Arquitectura General
+
+### Diagrama de arquitectura V2
 
 ```mermaid
-flowchart TB
-    subgraph Frontends
-        MINIAPP["frontend/miniapp<br/>Vite+React+tma.js"]
-        ADMIN["frontend/admin<br/>Next.js 15+shadcn"]
-        LANDING["frontend/landing<br/>Astro 5+Tailwind"]
-    end
-    subgraph Backend["Backend (Railway)"]
-        BOT["bot-api<br/>FastAPI + python-telegram-bot"]
-        REALTIME["realtime-ws<br/>FastAPI WebSocket relay"]
-        WORKER["worker<br/>arq async"]
-        DB[("Postgres managed")]
-        REDIS[("Redis managed")]
-    end
-    USER["Usuario"] -- "Telegram" --> BOT
-    USER -- "tap MainButton" --> MINIAPP
-    MINIAPP -- "JWT initData" --> BOT
-    MINIAPP -- "WSS audio" --> REALTIME
-    REALTIME -- "WSS" --> OAI["OpenAI Realtime API"]
-    ADMIN -- "Bearer JWT" --> BOT
-    LANDING -- "API publica" --> BOT
-    WEARABLE["Whoop/Garmin/Strava"] -- "OAuth+API" --> WORKER
-    BOT --> DB
-    BOT --> REDIS
-    REALTIME --> DB
-    REALTIME --> REDIS
-    WORKER --> DB
-    WORKER --> REDIS
-    BOT -- "Vision" --> OPENAI["OpenAI API"]
+graph TB
+  USER[Usuario]
+  BOT[FastAPI-Bot]
+  MINIAPP[Frontend-MiniApp]
+  ADMIN[Frontend-Admin]
+  LANDING[Frontend-Landing]
+  REALTIME[WebSocket-Relay]
+  WORKER[Worker-arq]
+  DB[(Postgres)]
+  REDIS[(Redis)]
+  OAI[OpenAI-API]
+  WEARABLE[Wearables]
+  
+  USER -->|Telegram| BOT
+  USER -->|MainButton| MINIAPP
+  MINIAPP -->|JWT| BOT
+  MINIAPP -->|WSS-audio| REALTIME
+  ADMIN -->|Bearer-JWT| BOT
+  LANDING -->|API| BOT
+  WEARABLE -->|OAuth| WORKER
+  
+  BOT --> DB
+  BOT --> REDIS
+  REALTIME --> DB
+  REALTIME --> REDIS
+  WORKER --> DB
+  WORKER --> REDIS
+  BOT --> OAI
+  REALTIME --> OAI
 ```
 
-## Diagrama de arquitectura interna del bot
+### Diagrama de arquitectura interna del bot
 
 ```mermaid
 graph TD
-    A["Telegram / Webhook"] --> B["Handlers"]
-    B --> C["Prompt builder con perfil de usuario"]
-    C --> D["Agente EntrenadorAX (Agents SDK)"]
-    D --> E["23+ function_tools"]
-    E --> F["Repository (SQLAlchemy async)"]
-    E --> G["Redis sesión + cache features"]
-    B --> H["Menu y callbacks"]
-    B --> I["Pagos / Wearables / Comunidad"]
-    J["JobQueue scheduler"] --> K["8 jobs: escalation, hidratacion, quiz, etc"]
-    L["Redis pubsub"] --> M["pubsub_listener (notif al usuario)"]
-    L --> N["broadcasts admin"]
-    L --> O["pr canal logros"]
+  TG[Telegram-Webhook]
+  H[Handlers]
+  PB[Prompt-Builder]
+  AG[OpenAI-Agent]
+  TOOLS[23-Tools]
+  REPO[Repository]
+  REDIS_S[Redis-Session]
+  MENU[Menu-Callbacks]
+  PAY[Payments-Wearables]
+  SCHED[JobQueue]
+  JOBS[8-Jobs]
+  PS[Pubsub-Listener]
+  
+  TG --> H
+  H --> PB
+  PB --> AG
+  AG --> TOOLS
+  TOOLS --> REPO
+  TOOLS --> REDIS_S
+  H --> MENU
+  H --> PAY
+  SCHED --> JOBS
+  PS --> JOBS
 ```
 
-## Capas
+### Capas de la arquitectura
 
-| Capa | Modulos | Responsabilidad |
+| Capa | Módulos | Responsabilidad |
 |---|---|---|
-| API HTTP | `src/main.py`, `src/api/*` | FastAPI + webhook + REST + admin |
-| Realtime WS | `src/realtime/server.py`, `src/realtime/*` | Relay WebSocket OpenAI |
-| Worker | `src/worker/main.py`, `src/worker/jobs_*` | Sync wearables, rankings, procesado |
-| Bot | `src/telegram/handlers.py`, `src/telegram/*` | Handlers, escalation, scheduler |
-| Coach | `src/coach.py`, `src/tools.py` | Agente IA + tools |
-| Services | `src/services/*` | TTS, Vision, Crisis, Pricing, etc |
-| Persistence | `src/db/repository.py`, `src/db/models.py` | ORM + queries |
-| Config | `src/config.py`, `src/cache.py` | Settings + Redis singleton |
-| i18n | `src/i18n/{es,en,pt}.json` | Traducciones |
+| **API HTTP** | `src/main.py`, `src/api/*` | FastAPI + webhook + REST + admin |
+| **Realtime WS** | `src/realtime/server.py`, `src/realtime/*` | Relay WebSocket para OpenAI |
+| **Worker** | `src/worker/main.py`, `src/worker/jobs_*` | Sincronización wearables, rankings |
+| **Bot** | `src/telegram/handlers.py`, `src/telegram/*` | Handlers, escalation, scheduler |
+| **Coach** | `src/coach.py`, `src/tools.py` | Agente IA + tools |
+| **Services** | `src/services/*` | TTS, Vision, Crisis, Pricing, etc |
+| **Persistence** | `src/db/repository.py`, `src/db/models.py` | ORM + queries |
+| **Config** | `src/config.py`, `src/cache.py` | Settings + Redis singleton |
+| **i18n** | `src/i18n/{es,en,pt}.json` | Traducciones |
 
 ## 1. Cómo usa el agente el perfil y las herramientas
 
@@ -393,13 +421,38 @@ Contiene funciones que interactúan con la base de datos.
   - deporte principal
 - Hasta entonces, el agente debe hacer preguntas para completar el perfil.
 
+---
+
 ## 7. Recomendaciones para extender o modificar
 
-- Para agregar un nuevo tipo de herramienta, crea la función en `src/tools.py` y añádela a `ALL_TOOLS` en `src/coach.py`.
-- Para cambiar la personalidad del bot, modifica el texto de `instructions` en `src/coach.py`.
-- Para ajustar recordatorios, modifica los horarios y la lógica en `src/telegram/scheduler.py`.
-- Para extender el modelo de datos, agrega nuevas columnas y tablas en `src/db/models.py` y actualiza `repository.py`.
+### Agregar nuevas herramientas
 
-## 8. Archivo generado
+1. Crea la función en `src/tools.py` con decorador `@function_tool`.
+2. Añádela a `ALL_TOOLS` en `src/coach.py`.
+3. Actualiza las instrucciones del agente si es necesario.
 
-- `INTERNAL_ARCHITECTURE.md` contiene esta documentación profunda del proyecto.
+### Cambiar la personalidad del bot
+
+- Modifica el texto de `instructions` en `src/coach.py`.
+- El agente usará las nuevas reglas en el siguiente mensaje.
+
+### Ajustar recordatorios
+
+- Modifica los horarios y la lógica en `src/telegram/scheduler.py`.
+- Recarga la app para que tomen efecto.
+
+### Extender el modelo de datos
+
+1. Agrega nuevas columnas y tablas en `src/db/models.py`.
+2. Crea migraciones con Alembic si es necesario.
+3. Actualiza `src/db/repository.py` con nuevas consultas.
+4. Añade herramientas en `src/tools.py` para exponer los datos.
+
+---
+
+## Notas finales
+
+- Esta documentación describe la arquitectura interna de EntrenadorAX.
+- Para cambios rápidos, consulta los archivos de configuración en `src/config.py`.
+- Para entender el flujo de mensajes, sigue los handlers en `src/telegram/handlers.py`.
+- Para depuración, revisa los logs en Redis y la base de datos.
