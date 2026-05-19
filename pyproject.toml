@@ -36,3 +36,5 @@ include = ["src*"]
 
 [tool.ruff]
 line-length = 100
+select = ["E", "F", "W", "C90", "D", "S", "T", "I"]
+ignore = ["E501"]

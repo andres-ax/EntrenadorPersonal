@@ -1,4 +1,5 @@
 """setMessageReaction heuristica por keywords. Cero tokens IA, personalidad instantanea."""
+
 from __future__ import annotations
 
 import logging

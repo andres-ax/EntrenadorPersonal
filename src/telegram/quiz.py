@@ -1,18 +1,15 @@
 """Polls de Telegram: check-in nocturno + quiz educativo semanal."""
+
 from __future__ import annotations
 
 import logging
 import random
 
+from src.db.repository import (guardar_checkin_nocturno,
+                               listar_usuarios_activos, log_evento)
 from telegram import Poll, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, ContextTypes, PollAnswerHandler
-
-from src.db.repository import (
-    guardar_checkin_nocturno,
-    listar_usuarios_activos,
-    log_evento,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +49,7 @@ QUIZ_EDUCATIVO = [
     },
     {
         "q": "El deficit calorico optimo para perder grasa sin perder musculo es:",
-        "options": [
-            "5% de TDEE",
-            "10-20% de TDEE",
-            "30%+ de TDEE",
-            "Ayuno total"
-        ],
+        "options": ["5% de TDEE", "10-20% de TDEE", "30%+ de TDEE", "Ayuno total"],
         "correct": 1,
         "explanation": "Helms et al 2014 JISSN: 10-20% TDEE es sweet spot. >25% TDEE = riesgo perdida muscular.",
     },
@@ -106,9 +98,7 @@ async def quiz_educativo_semanal(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Error en quiz_educativo_semanal")
 
 
-async def manejar_poll_answer(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def manejar_poll_answer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """PollAnswerHandler: registra respuesta del checkin nocturno."""
     ans = update.poll_answer
     if not ans or not ans.option_ids:

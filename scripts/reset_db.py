@@ -1,4 +1,5 @@
 """Recrea TODAS las tablas. SOLO PARA DESARROLLO. Destruye todos los datos."""
+
 import asyncio
 import os
 import sys
@@ -10,11 +11,13 @@ if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("PRODUCTION"):
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
+
 load_dotenv()
+
+from sqlalchemy import text
 
 from src.db.connection import engine
 from src.db.models import Base
-from sqlalchemy import text
 
 
 async def reset_db():

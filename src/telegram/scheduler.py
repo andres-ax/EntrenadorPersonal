@@ -1,4 +1,5 @@
 """Recordatorios proactivos con JobQueue (APScheduler) + rate-limit safe."""
+
 from __future__ import annotations
 
 import asyncio
@@ -7,28 +8,17 @@ from datetime import date, datetime, time, timedelta
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-import telegram.error
 from sqlalchemy import func, select
+
+import telegram.error
+from src.db.connection import async_session_factory
+from src.db.models import (Comida, MetricaCorporal, MetricaSueno, Recordatorio,
+                           SesionEntrenamiento, TipoComida, Usuario)
+from src.db.repository import (listar_recordatorios_activos_global,
+                               listar_usuarios_activos, marcar_bot_bloqueado,
+                               marcar_recordatorio_enviado, reporte_semanal)
 from telegram.constants import ParseMode
 from telegram.ext import Application
-
-from src.db.connection import async_session_factory
-from src.db.models import (
-    Comida,
-    MetricaCorporal,
-    MetricaSueno,
-    Recordatorio,
-    SesionEntrenamiento,
-    TipoComida,
-    Usuario,
-)
-from src.db.repository import (
-    listar_recordatorios_activos_global,
-    listar_usuarios_activos,
-    marcar_bot_bloqueado,
-    marcar_recordatorio_enviado,
-    reporte_semanal,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -399,7 +389,9 @@ def programar_recordatorio_en_jobqueue(app: Application, rec: Recordatorio) -> i
     if rec.dias_semana:
         dias = _normalizar_dias(rec.dias_semana)
         if not dias:
-            logger.warning("Recordatorio %s sin dias validos: %r", rec.id, rec.dias_semana)
+            logger.warning(
+                "Recordatorio %s sin dias validos: %r", rec.id, rec.dias_semana
+            )
             return 0
         hora_tz = rec.hora.replace(tzinfo=tz)
         jq.run_daily(
@@ -424,7 +416,9 @@ def programar_recordatorio_en_jobqueue(app: Application, rec: Recordatorio) -> i
     if when_local <= ahora_local:
         logger.info(
             "Recordatorio %s one-shot ya paso (%s <= %s), no programo",
-            rec.id, when_local, ahora_local,
+            rec.id,
+            when_local,
+            ahora_local,
         )
         return 0
 
@@ -513,9 +507,7 @@ def registrar_jobs(app: Application) -> None:
         days=(5,),
         name="quiz_educativo_sabado",
     )
-    jq.run_daily(
-        checkin_nocturno, time=HORA_CHECKIN_NOCTURNO, name="checkin_nocturno"
-    )
+    jq.run_daily(checkin_nocturno, time=HORA_CHECKIN_NOCTURNO, name="checkin_nocturno")
     jq.run_daily(
         recordatorio_peso,
         time=HORA_RECORDATORIO_ENTRENO,

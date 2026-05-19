@@ -1,4 +1,5 @@
 """Rate limit y cuota diaria por usuario usando Redis."""
+
 from __future__ import annotations
 
 import logging
@@ -15,9 +16,7 @@ logger = logging.getLogger(__name__)
 FREE_DAILY_LIMIT = settings.free_daily_msg_limit
 
 
-async def check_rate_limit(
-    telegram_id: int, max_per_minute: int | None = None
-) -> bool:
+async def check_rate_limit(telegram_id: int, max_per_minute: int | None = None) -> bool:
     """Devuelve True si el usuario puede continuar.
 
     Sliding window de 60s con sorted set por usuario. Si Redis falla,
@@ -75,6 +74,7 @@ async def check_daily_quota(
     Returns:
         (puede_continuar, mensajes_usados, limite)
         limite=0 significa ilimitado.
+
     """
     try:
         plan = await obtener_plan_actual(telegram_id)

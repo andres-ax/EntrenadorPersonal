@@ -2,6 +2,7 @@
 
 Lee precios desde Settings (override via env vars) y aplica descuento anual.
 """
+
 from __future__ import annotations
 
 import logging

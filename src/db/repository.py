@@ -1,4 +1,5 @@
 """Capa de persistencia. Todo SQL vive aqui (no en tools, no en handlers)."""
+
 from __future__ import annotations
 
 import json
@@ -12,44 +13,16 @@ from sqlalchemy.orm import selectinload
 logger = logging.getLogger(__name__)
 
 from src.db.connection import async_session_factory
-from src.db.models import (
-    Admin,
-    CategoriaDeporte,
-    CheckinNocturno,
-    DeporteCatalogo,
-    SubtipoSesion,
-    TipoPR,
-    Comida,
-    Compromiso,
-    CrisisLog,
-    DuracionPago,
-    EjercicioRealizado,
-    EscalacionState,
-    EstadoPago,
-    EventoBot,
-    FeedbackComida,
-    MetodoPago,
-    MetricaCorporal,
-    MetricaSueno,
-    PagoComprobante,
-    LlmUsage,
-    PersonalRecord,
-    PlanDefinicion,
-    PlanSuscripcion,
-    Recordatorio,
-    RolAdmin,
-    SesionEntrenamiento,
-    Streak,
-    Suscripcion,
-    TipoAccionEscalacion,
-    TipoComida,
-    TipoCompromiso,
-    TipoEjercicio,
-    TipoStreak,
-    TonoCoach,
-    Usuario,
-    UsuarioBloqueado,
-)
+from src.db.models import (CheckinNocturno, Comida, Compromiso, CrisisLog,
+                           DeporteCatalogo, DuracionPago, EjercicioRealizado,
+                           EscalacionState, EstadoPago, EventoBot,
+                           FeedbackComida, LlmUsage, MetodoPago,
+                           MetricaCorporal, MetricaSueno, PagoComprobante,
+                           PersonalRecord, PlanSuscripcion, Recordatorio,
+                           SesionEntrenamiento, Streak, SubtipoSesion,
+                           Suscripcion, TipoAccionEscalacion, TipoComida,
+                           TipoCompromiso, TipoEjercicio, TipoPR, TipoStreak,
+                           TonoCoach, Usuario, UsuarioBloqueado)
 
 
 async def _get_usuario_id(session, telegram_id: int) -> Optional[int]:
@@ -241,7 +214,10 @@ async def guardar_sesion(
             await session.refresh(existente, ["ejercicios"])
             logger.info(
                 "guardar_sesion UPDATE uid=%s sesion_id=%s tipo=%s ejercicios+=%d",
-                telegram_id, existente.id, tipo, len(ejercicios),
+                telegram_id,
+                existente.id,
+                tipo,
+                len(ejercicios),
             )
             return existente
 
@@ -604,8 +580,12 @@ async def _resumen_sueno_semanal_internal(session, uid: int) -> dict:
     if not registros:
         return {"promedio_horas": 0, "promedio_calidad": 0, "dias_registrados": 0}
     return {
-        "promedio_horas": round(sum(r.horas or 0 for r in registros) / len(registros), 1),
-        "promedio_calidad": round(sum(r.calidad or 0 for r in registros) / len(registros), 1),
+        "promedio_horas": round(
+            sum(r.horas or 0 for r in registros) / len(registros), 1
+        ),
+        "promedio_calidad": round(
+            sum(r.calidad or 0 for r in registros) / len(registros), 1
+        ),
         "dias_registrados": len(registros),
     }
 
@@ -752,17 +732,22 @@ async def crear_compromiso(
             raise ValueError(f"Usuario {telegram_id} no existe")
 
         await session.execute(
-            select(Compromiso)
-            .where(Compromiso.usuario_id == uid, Compromiso.activo == True)  # noqa: E712
+            select(Compromiso).where(
+                Compromiso.usuario_id == uid, Compromiso.activo == True
+            )  # noqa: E712
         )
         existentes = (
-            await session.execute(
-                select(Compromiso).where(
-                    Compromiso.usuario_id == uid,
-                    Compromiso.activo == True,  # noqa: E712
+            (
+                await session.execute(
+                    select(Compromiso).where(
+                        Compromiso.usuario_id == uid,
+                        Compromiso.activo == True,  # noqa: E712
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for c in existentes:
             c.activo = False
 
@@ -1191,9 +1176,7 @@ async def obtener_plan_actual(telegram_id: int) -> PlanSuscripcion:
         return plan
 
 
-async def es_plan_minimo(
-    telegram_id: int, tier_minimo: PlanSuscripcion
-) -> bool:
+async def es_plan_minimo(telegram_id: int, tier_minimo: PlanSuscripcion) -> bool:
     """True si el plan vigente cumple o supera el tier minimo."""
     actual = await obtener_plan_actual(telegram_id)
     return PLAN_RANKING.get(actual, 0) >= PLAN_RANKING.get(tier_minimo, 0)
@@ -1240,7 +1223,9 @@ async def activar_plan(
         if base < ahora:
             base = ahora
         nueva_expira = (
-            None if plan == PlanSuscripcion.LIFETIME else base + timedelta(days=dias_real)
+            None
+            if plan == PlanSuscripcion.LIFETIME
+            else base + timedelta(days=dias_real)
         )
         usuario.plan_actual = plan
         usuario.plan_expira_en = nueva_expira
@@ -1343,8 +1328,7 @@ async def guardar_comprobante(
         monto_cop = int(vision_payload.get("monto_cop") or 0)
         tolerancia = 500
         monto_match = (
-            monto_cop > 0
-            and abs(monto_cop - monto_esperado_cop) <= tolerancia
+            monto_cop > 0 and abs(monto_cop - monto_esperado_cop) <= tolerancia
         )
         metodo_str = (vision_payload.get("metodo") or "otro").lower()
         try:
@@ -1504,7 +1488,9 @@ async def listar_comprobantes_admin(
         query = select(PagoComprobante)
         if estado:
             query = query.where(PagoComprobante.estado == estado)
-        query = query.order_by(PagoComprobante.creado_en.desc()).limit(limit).offset(offset)
+        query = (
+            query.order_by(PagoComprobante.creado_en.desc()).limit(limit).offset(offset)
+        )
         result = await session.execute(query)
         return list(result.scalars().all())
 
@@ -1512,23 +1498,17 @@ async def listar_comprobantes_admin(
 # --- Bloqueo de usuarios ---
 
 
-async def bloquear_usuario(
-    telegram_id: int, admin_email: str, motivo: str
-) -> bool:
+async def bloquear_usuario(telegram_id: int, admin_email: str, motivo: str) -> bool:
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
-            logger.warning(
-                "bloquear_usuario uid=%s: usuario no existe", telegram_id
-            )
+            logger.warning("bloquear_usuario uid=%s: usuario no existe", telegram_id)
             return False
         existente = await session.execute(
             select(UsuarioBloqueado).where(UsuarioBloqueado.usuario_id == uid)
         )
         if existente.scalar_one_or_none() is not None:
-            logger.info(
-                "bloquear_usuario uid=%s: ya estaba bloqueado", telegram_id
-            )
+            logger.info("bloquear_usuario uid=%s: ya estaba bloqueado", telegram_id)
             return False
         bloqueo = UsuarioBloqueado(
             usuario_id=uid,
@@ -1607,6 +1587,7 @@ async def cargar_catalog_en_cache() -> int:
 
     Returns:
         Numero de deportes cargados.
+
     """
     global _CATALOG_CACHE, _CATALOG_FULL_CACHE
     async with async_session_factory() as session:
@@ -1819,11 +1800,11 @@ async def guardar_sesion_skill(
             # max() para tomar el valor mas alto reportado.
             existente.duracion_min = max(existente.duracion_min or 0, duracion_min)
             existente.trucos_intentados = (
-                (existente.trucos_intentados or 0) + trucos_intentados
-            )
+                existente.trucos_intentados or 0
+            ) + trucos_intentados
             existente.trucos_aterrizados = (
-                (existente.trucos_aterrizados or 0) + trucos_aterrizados
-            )
+                existente.trucos_aterrizados or 0
+            ) + trucos_aterrizados
             existente.num_caidas = (existente.num_caidas or 0) + num_caidas
             existente.sensacion_1_5 = sensacion_norm
             if foco_sesion:
@@ -1841,9 +1822,12 @@ async def guardar_sesion_skill(
             logger.info(
                 "guardar_sesion_skill UPDATE uid=%s sesion_id=%s deporte=%s "
                 "duracion=%d trucos+=%d caidas+=%d",
-                telegram_id, existente.id, deporte,
+                telegram_id,
+                existente.id,
+                deporte,
                 existente.duracion_min,
-                trucos_intentados, num_caidas,
+                trucos_intentados,
+                num_caidas,
             )
             return existente
 
@@ -1872,7 +1856,10 @@ async def guardar_sesion_skill(
     await _auto_streak_safe(telegram_id, "entreno")
     logger.info(
         "guardar_sesion_skill INSERT uid=%s sesion_id=%s deporte=%s duracion=%d",
-        telegram_id, sesion.id, deporte, duracion_min,
+        telegram_id,
+        sesion.id,
+        deporte,
+        duracion_min,
     )
     return sesion
 
@@ -1920,7 +1907,8 @@ async def cerrar_sesion_abierta(
         await session.refresh(sesion)
     logger.info(
         "cerrar_sesion_abierta uid=%s sesion_id=%s cerrada",
-        telegram_id, sesion.id,
+        telegram_id,
+        sesion.id,
     )
     return sesion
 
@@ -2014,16 +2002,17 @@ async def actualizar_sesion_skill_set(
                 SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
             )
             if deporte:
-                query = query.where(
-                    SesionEntrenamiento.deporte_slug == deporte
-                )
+                query = query.where(SesionEntrenamiento.deporte_slug == deporte)
             query = query.order_by(SesionEntrenamiento.updated_at.desc()).limit(1)
             result = await session.execute(query)
         sesion = result.scalar_one_or_none()
         if sesion is None:
             logger.info(
                 "actualizar_sesion_skill_set uid=%s sin sesion (id=%s deporte=%s fecha=%s)",
-                telegram_id, sesion_id, deporte, fecha_use,
+                telegram_id,
+                sesion_id,
+                deporte,
+                fecha_use,
             )
             return None
         # Restriccion: solo hoy. Para historico, requeriria flag explicito.
@@ -2031,7 +2020,9 @@ async def actualizar_sesion_skill_set(
             logger.warning(
                 "actualizar_sesion_skill_set uid=%s sesion_id=%s rechazada "
                 "(fecha=%s != hoy)",
-                telegram_id, sesion.id, sesion.fecha,
+                telegram_id,
+                sesion.id,
+                sesion.fecha,
             )
             return None
 
@@ -2050,7 +2041,8 @@ async def actualizar_sesion_skill_set(
         if not despues:
             logger.info(
                 "actualizar_sesion_skill_set uid=%s sesion_id=%s sin cambios",
-                telegram_id, sesion.id,
+                telegram_id,
+                sesion.id,
             )
             return sesion
         sesion.updated_at = datetime.utcnow()
@@ -2058,7 +2050,10 @@ async def actualizar_sesion_skill_set(
         await session.refresh(sesion)
     logger.info(
         "actualizar_sesion_skill_set uid=%s sesion_id=%s antes=%s despues=%s",
-        telegram_id, sesion.id, antes, despues,
+        telegram_id,
+        sesion.id,
+        antes,
+        despues,
     )
     return sesion
 
@@ -2120,7 +2115,8 @@ async def eliminar_comida(
             except ValueError:
                 logger.warning(
                     "eliminar_comida uid=%s: tipo invalido %s",
-                    telegram_id, tipo,
+                    telegram_id,
+                    tipo,
                 )
                 return None
             result = await session.execute(
@@ -2137,13 +2133,18 @@ async def eliminar_comida(
         if comida is None:
             logger.info(
                 "eliminar_comida uid=%s no encontro (id=%s tipo=%s fecha=%s)",
-                telegram_id, comida_id, tipo, fecha_use,
+                telegram_id,
+                comida_id,
+                tipo,
+                fecha_use,
             )
             return None
         if comida.fecha != date.today():
             logger.warning(
                 "eliminar_comida uid=%s id=%s rechazado (fecha=%s != hoy)",
-                telegram_id, comida.id, comida.fecha,
+                telegram_id,
+                comida.id,
+                comida.fecha,
             )
             return None
         comida_id_borrada = comida.id
@@ -2151,7 +2152,10 @@ async def eliminar_comida(
         await session.commit()
     logger.info(
         "eliminar_comida uid=%s id=%s borrada (tipo=%s fecha=%s)",
-        telegram_id, comida_id_borrada, tipo, fecha_use,
+        telegram_id,
+        comida_id_borrada,
+        tipo,
+        fecha_use,
     )
     return comida_id_borrada
 
@@ -2211,12 +2215,14 @@ async def listar_sesiones_skill(
         if uid is None:
             return []
         result = await session.execute(
-            select(SesionEntrenamiento).where(
+            select(SesionEntrenamiento)
+            .where(
                 SesionEntrenamiento.usuario_id == uid,
                 SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
                 SesionEntrenamiento.deporte_slug == deporte,
                 SesionEntrenamiento.fecha >= desde,
-            ).order_by(SesionEntrenamiento.fecha.desc())
+            )
+            .order_by(SesionEntrenamiento.fecha.desc())
         )
         return list(result.scalars().all())
 
@@ -2250,11 +2256,13 @@ async def listar_sparring_reciente(
         if uid is None:
             return []
         result = await session.execute(
-            select(SesionEntrenamiento).where(
+            select(SesionEntrenamiento)
+            .where(
                 SesionEntrenamiento.usuario_id == uid,
                 SesionEntrenamiento.subtipo == SubtipoSesion.SPARRING,
                 SesionEntrenamiento.fecha >= desde,
-            ).order_by(SesionEntrenamiento.fecha.desc())
+            )
+            .order_by(SesionEntrenamiento.fecha.desc())
         )
         return list(result.scalars().all())
 
@@ -2363,7 +2371,9 @@ PRECIOS_POR_MILLON: dict[str, tuple[float, float]] = {
 
 def _estimar_costo(modelo: str, input_tokens: int, output_tokens: int) -> float:
     precio_in, precio_out = PRECIOS_POR_MILLON.get(modelo, (0.40, 1.60))
-    return (input_tokens / 1_000_000) * precio_in + (output_tokens / 1_000_000) * precio_out
+    return (input_tokens / 1_000_000) * precio_in + (
+        output_tokens / 1_000_000
+    ) * precio_out
 
 
 async def log_llm_usage(

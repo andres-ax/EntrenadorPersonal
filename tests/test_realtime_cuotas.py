@@ -1,4 +1,5 @@
 """Tests de cuotas Realtime por tier."""
+
 from __future__ import annotations
 
 from src.db.models import PlanSuscripcion

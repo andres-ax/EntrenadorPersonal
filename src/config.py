@@ -1,4 +1,5 @@
 """Configuracion central de EntrenadorAX (pydantic-settings v2)."""
+
 from __future__ import annotations
 
 import secrets

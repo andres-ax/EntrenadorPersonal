@@ -10,6 +10,7 @@ Centraliza para evitar:
 - Race conditions en singletons globales
 - Deprecation warnings (close() -> aclose())
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -60,6 +61,7 @@ async def limpiar_keys_usuario(uid: int) -> int:
 
     Returns:
         Numero de keys eliminadas.
+
     """
     client = await get_redis()
     keys: list[str] = []

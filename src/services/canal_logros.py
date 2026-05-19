@@ -3,6 +3,7 @@
 PRs anonimizados (o con nombre + ciudad si user opted-in) para social proof
 y motivacion comunitaria.
 """
+
 from __future__ import annotations
 
 import logging
@@ -50,7 +51,7 @@ async def publicar_pr(
             select(Usuario).where(Usuario.telegram_id == telegram_id)
         )
         u = result.scalar_one_or_none()
-    nombre = (u.nombre.split()[0] if u and u.nombre else "Atleta")
+    nombre = u.nombre.split()[0] if u and u.nombre else "Atleta"
     pais = (u.pais if u else "?") if not ciudad else ciudad
     mensaje = (
         f"<b>{nombre}</b> ({pais}) acaba de hacer "

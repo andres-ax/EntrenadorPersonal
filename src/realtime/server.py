@@ -9,6 +9,7 @@ Flujo:
 - Stream bidireccional audio.
 - Cuenta segundos usados y persiste sesion al terminar.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,25 +17,19 @@ import base64
 import json
 import logging
 import time
-from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from starlette.websockets import WebSocketState
 
 from src.api.auth import verify_jwt
-from src.cache import close_redis, ping as ping_redis
 from src.config import settings
-from src.db.connection import async_session_factory, close_db, init_db, ping as ping_db
+from src.db.connection import async_session_factory
 from src.db.models import RealtimeSesion, Usuario
 from src.log_setup import setup_logging
-from src.realtime.cuotas import (
-    consumir_segundos,
-    cuota_total_segundos,
-    disponible_segundos,
-)
+from src.realtime.cuotas import (consumir_segundos, cuota_total_segundos,
+                                 disponible_segundos)
 from src.realtime.openai_client import RealtimeBridge
 
 setup_logging()
@@ -106,7 +101,13 @@ async def ws_realtime(ws: WebSocket) -> None:
         await bridge.conectar()
     except Exception:
         logger.exception("No pude conectar a OpenAI Realtime uid=%s", uid)
-        await ws.send_json({"type": "error", "code": "openai_error", "message": "No pude conectar al coach"})
+        await ws.send_json(
+            {
+                "type": "error",
+                "code": "openai_error",
+                "message": "No pude conectar al coach",
+            }
+        )
         await ws.close(code=1011)
         return
 
@@ -156,7 +157,9 @@ async def ws_realtime(ws: WebSocket) -> None:
                 if t:
                     transcript_parts.append(f"coach:{t}")
                     try:
-                        await ws.send_json({"type": "transcript", "role": "coach", "text": t})
+                        await ws.send_json(
+                            {"type": "transcript", "role": "coach", "text": t}
+                        )
                     except Exception:
                         cerrado = True
                         break
@@ -165,7 +168,9 @@ async def ws_realtime(ws: WebSocket) -> None:
                 if t:
                     transcript_parts.append(f"user:{t}")
                     try:
-                        await ws.send_json({"type": "transcript", "role": "user", "text": t})
+                        await ws.send_json(
+                            {"type": "transcript", "role": "user", "text": t}
+                        )
                     except Exception:
                         cerrado = True
                         break
@@ -180,9 +185,7 @@ async def ws_realtime(ws: WebSocket) -> None:
                 restantes = (await cuota_total_segundos(uid)) - transcurridos
                 if restantes <= 0:
                     try:
-                        await ws.send_json(
-                            {"type": "cuota", "segundos_restantes": 0}
-                        )
+                        await ws.send_json({"type": "cuota", "segundos_restantes": 0})
                     except Exception:
                         pass
                     cerrado = True
@@ -192,7 +195,11 @@ async def ws_realtime(ws: WebSocket) -> None:
                 logger.warning("Realtime API error: %s", err)
                 try:
                     await ws.send_json(
-                        {"type": "error", "code": "openai_error", "message": err.get("message", "")}
+                        {
+                            "type": "error",
+                            "code": "openai_error",
+                            "message": err.get("message", ""),
+                        }
                     )
                 except Exception:
                     pass

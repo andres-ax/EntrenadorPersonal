@@ -1,4 +1,5 @@
 """Tests de tools de deportes urbanos (PR3): truco, sesion_skill, via, progreso."""
+
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -34,7 +35,9 @@ async def test_registrar_truco_aterrizado_deporte_invalido():
 
     raw = await call_tool(
         registrar_truco_aterrizado,
-        telegram_id=1, deporte="gimnasio", nombre_truco="kickflip",
+        telegram_id=1,
+        deporte="gimnasio",
+        nombre_truco="kickflip",
     )
     data = _err(raw)
     assert "deporte invalido" in data["error"]
@@ -46,7 +49,9 @@ async def test_registrar_truco_aterrizado_nombre_vacio():
 
     raw = await call_tool(
         registrar_truco_aterrizado,
-        telegram_id=1, deporte="skate", nombre_truco="",
+        telegram_id=1,
+        deporte="skate",
+        nombre_truco="",
     )
     _err(raw)
 
@@ -57,7 +62,9 @@ async def test_registrar_sesion_skill_duracion_invalida():
 
     raw = await call_tool(
         registrar_sesion_skill,
-        telegram_id=1, deporte="bmx", duracion_min=1000,
+        telegram_id=1,
+        deporte="bmx",
+        duracion_min=1000,
     )
     _err(raw)
 
@@ -68,7 +75,10 @@ async def test_registrar_sesion_skill_sensacion_fuera_rango():
 
     raw = await call_tool(
         registrar_sesion_skill,
-        telegram_id=1, deporte="skate", duracion_min=60, sensacion_1_5=10,
+        telegram_id=1,
+        deporte="skate",
+        duracion_min=60,
+        sensacion_1_5=10,
     )
     _err(raw)
 
@@ -79,7 +89,10 @@ async def test_registrar_via_escalada_grado_invalido():
 
     raw = await call_tool(
         registrar_via_escalada,
-        telegram_id=1, nombre_via="El Lobo", grado="muy dificil", spot="Suesca",
+        telegram_id=1,
+        nombre_via="El Lobo",
+        grado="muy dificil",
+        spot="Suesca",
     )
     _err(raw)
 
@@ -90,8 +103,11 @@ async def test_registrar_via_escalada_estilo_invalido():
 
     raw = await call_tool(
         registrar_via_escalada,
-        telegram_id=1, nombre_via="X", grado="5.10a",
-        spot="Suesca", estilo="xyz",
+        telegram_id=1,
+        nombre_via="X",
+        grado="5.10a",
+        spot="Suesca",
+        estilo="xyz",
     )
     _err(raw)
 
@@ -102,7 +118,9 @@ async def test_consultar_progreso_skill_ventana_invalida():
 
     raw = await call_tool(
         consultar_progreso_skill,
-        telegram_id=1, deporte="skate", ventana_dias=5,
+        telegram_id=1,
+        deporte="skate",
+        ventana_dias=5,
     )
     _err(raw)
 
@@ -118,8 +136,11 @@ async def test_registrar_via_escalada_grado_yds_valido():
         with patch("src.tools.log_evento", new=AsyncMock()):
             raw = await call_tool(
                 registrar_via_escalada,
-                telegram_id=1, nombre_via="Pino", grado="5.10a",
-                spot="Suesca", estilo="onsight",
+                telegram_id=1,
+                nombre_via="Pino",
+                grado="5.10a",
+                spot="Suesca",
+                estilo="onsight",
             )
     data = _ok(raw)
     assert data["grado"] == "5.10a"
@@ -137,8 +158,10 @@ async def test_registrar_via_escalada_grado_font_valido():
         with patch("src.tools.log_evento", new=AsyncMock()):
             raw = await call_tool(
                 registrar_via_escalada,
-                telegram_id=1, nombre_via="Boulder X",
-                grado="V6", spot="Macheta",
+                telegram_id=1,
+                nombre_via="Boulder X",
+                grado="V6",
+                spot="Macheta",
             )
     data = _ok(raw)
     assert data["grado"] == "V6"
@@ -155,8 +178,11 @@ async def test_registrar_via_escalada_alerta_dedos():
         with patch("src.tools.log_evento", new=AsyncMock()):
             raw = await call_tool(
                 registrar_via_escalada,
-                telegram_id=1, nombre_via="X", grado="5.11a",
-                spot="Suesca", lesion_dedo_si_no=True,
+                telegram_id=1,
+                nombre_via="X",
+                grado="5.11a",
+                spot="Suesca",
+                lesion_dedo_si_no=True,
             )
     data = _ok(raw)
     assert data["alerta_dedos"] is True

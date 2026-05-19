@@ -7,9 +7,11 @@ Create Date: 2026-05-17
 Recordatorios one-shot (fecha_unica) o recurrentes semanales (dias_semana).
 Cargados al JobQueue al boot (src/telegram/scheduler.py).
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0007_recordatorios"

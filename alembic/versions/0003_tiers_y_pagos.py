@@ -13,18 +13,14 @@ Cambios:
 - Crea tablas: plan_definicion, pagos_comprobantes, usuarios_bloqueados, admins.
 - Seed inicial de plan_definicion con los 4 tiers.
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
-from src.db.models import (
-    Admin,
-    PagoComprobante,
-    PlanDefinicion,
-    Usuario,
-    UsuarioBloqueado,
-)
+from alembic import op
+from src.db.models import (Admin, PagoComprobante, PlanDefinicion, Usuario,
+                           UsuarioBloqueado)
 
 revision: str = "0003_tiers_pagos"
 down_revision: Union[str, None] = "0001_initial_v1"
@@ -150,8 +146,7 @@ def upgrade() -> None:
             )
         )
 
-    op.execute(
-        """
+    op.execute("""
         INSERT INTO plan_definicion (plan, precio_cop_mensual, precio_cop_anual, features, activo)
         VALUES
         ('free', 0, 0, '{"realtime_min_mes": 0, "fotos_dia": 3, "wearables_max": 0, "voz_tts": false, "plan_generator": false, "pdf_mensual": false, "charts_avanzados": false, "miniapp": true, "export_csv_dias": 30}', true),
@@ -160,8 +155,7 @@ def upgrade() -> None:
         ('elite', 39990, 384000, '{"realtime_min_mes": 120, "fotos_dia": -1, "wearables_max": -1, "voz_tts": true, "plan_generator": true, "pdf_mensual": true, "pdf_ilimitado": true, "charts_avanzados": true, "miniapp": true, "export_csv_dias": -1, "stickers_exclusivos": true, "beta_features": true, "priority_support": true, "kudos_x3": true}', true),
         ('lifetime', 399000, 0, '{"realtime_min_mes": 120, "fotos_dia": -1, "wearables_max": -1, "voz_tts": true, "plan_generator": true, "pdf_mensual": true, "pdf_ilimitado": true, "charts_avanzados": true, "miniapp": true, "export_csv_dias": -1, "stickers_exclusivos": true, "beta_features": true, "priority_support": true, "kudos_x3": true, "lifetime": true}', true)
         ON CONFLICT (plan) DO NOTHING
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

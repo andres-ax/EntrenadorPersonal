@@ -1,4 +1,5 @@
 """Autenticacion del panel admin: login email+password -> JWT admin."""
+
 from __future__ import annotations
 
 import base64
@@ -27,7 +28,7 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _truncate(plain: str) -> str:
-    """bcrypt limita a 72 bytes. Truncamos para evitar ValueError."""
+    """Bcrypt limita a 72 bytes. Truncamos para evitar ValueError."""
     encoded = plain.encode("utf-8")
     if len(encoded) <= 72:
         return plain
@@ -147,7 +148,10 @@ async def get_admin_from_cookie(
         raise HTTPException(
             status_code=303,
             detail="Cookie expirada",
-            headers={"Location": "/admin/login", "Set-Cookie": f"{ADMIN_COOKIE_NAME}=; Max-Age=0; Path=/"},
+            headers={
+                "Location": "/admin/login",
+                "Set-Cookie": f"{ADMIN_COOKIE_NAME}=; Max-Age=0; Path=/",
+            },
         )
     return payload
 
@@ -196,9 +200,7 @@ async def seed_admin_si_falta() -> None:
         logger.warning("Skip seed admin: ADMIN_SEED_PASSWORD muy corto (<8 chars)")
         return
     async with async_session_factory() as session:
-        existente = await session.execute(
-            select(Admin).where(Admin.email == email)
-        )
+        existente = await session.execute(select(Admin).where(Admin.email == email))
         if existente.scalar_one_or_none() is not None:
             logger.info("Seed admin: ya existe admin con email %s, no creo", email)
             return

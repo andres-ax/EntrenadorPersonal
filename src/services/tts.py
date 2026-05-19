@@ -1,4 +1,5 @@
 """TTS via OpenAI con cache en disco por hash. Voz por tono."""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,12 +9,12 @@ from io import BytesIO
 from pathlib import Path
 
 import openai
-import telegram.error
 from openai import AsyncOpenAI
-from telegram.constants import ChatAction, ParseMode
 
+import telegram.error
 from src.config import settings
 from src.db.repository import log_llm_usage
+from telegram.constants import ChatAction, ParseMode
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ async def transcribir_audio(
     Returns:
         Texto transcrito (string vacio si el audio no contiene voz audible o
         falla la API). NUNCA levanta excepciones para no romper el handler.
+
     """
     if not file_bytes:
         return ""
@@ -83,7 +85,9 @@ async def transcribir_audio(
                 if i == intentos - 1:
                     logger.warning(
                         "Limite o timeout en transcripcion (modelo=%s, bytes=%d): %s",
-                        model, len(file_bytes), str(e)
+                        model,
+                        len(file_bytes),
+                        str(e),
                     )
                     break
                 wait = (i + 1) * 2
@@ -91,7 +95,9 @@ async def transcribir_audio(
             except Exception as e:
                 logger.warning(
                     "Error transcribiendo con %s (%d bytes): %s",
-                    model, len(file_bytes), str(e)
+                    model,
+                    len(file_bytes),
+                    str(e),
                 )
                 break  # Otros errores no reintentamos con el mismo modelo
 
@@ -139,6 +145,7 @@ async def enviar_voz(
 
     Returns:
         True si envio voz exitosamente, False si hubo que hacer fallback a texto.
+
     """
     voice = VOZ_POR_TONO.get(tono, "alloy")
     try:

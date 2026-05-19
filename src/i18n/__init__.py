@@ -7,6 +7,7 @@ Uso:
     plural("dias_sin_entrenar", count=3, lang="es")          # "3 dias sin entrenar"
     aplicar_jerga("amigo, vamos!", pais="CO")                # "parce, vamos!"
 """
+
 from __future__ import annotations
 
 import json
@@ -160,7 +161,9 @@ def t(key: str, lang: str = IDIOMA_DEFAULT, pais: str | None = None, **kwargs) -
     return resultado
 
 
-def plural(key: str, count: int, lang: str = IDIOMA_DEFAULT, pais: str | None = None, **kwargs) -> str:
+def plural(
+    key: str, count: int, lang: str = IDIOMA_DEFAULT, pais: str | None = None, **kwargs
+) -> str:
     """Selecciona forma plural segun CLDR simplificado.
 
     Reglas:

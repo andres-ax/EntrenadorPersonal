@@ -1,4 +1,5 @@
 """Charts en PNG via matplotlib headless. Devuelven BytesIO listo para sendPhoto."""
+
 from __future__ import annotations
 
 import logging
@@ -11,12 +12,9 @@ matplotlib.use("Agg")
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
-from src.db.repository import (  # noqa: E402
-    historial_peso,
-    obtener_ultimas_sesiones,
-    reporte_semanal,
-    resumen_nutricional_dia,
-)
+from src.db.repository import (historial_peso,  # noqa: E402
+                               obtener_ultimas_sesiones, reporte_semanal,
+                               resumen_nutricional_dia)
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +68,7 @@ async def chart_volumen_semanal(telegram_id: int) -> BytesIO | None:
             iso = s.fecha.isocalendar()
             key = (iso[0], iso[1])
             volumen = sum(
-                (e.peso_kg or 0) * (e.series or 0) * (e.reps or 0)
-                for e in s.ejercicios
+                (e.peso_kg or 0) * (e.series or 0) * (e.reps or 0) for e in s.ejercicios
             )
             semanas[key] = semanas.get(key, 0) + volumen
         if not semanas:
@@ -105,18 +102,14 @@ async def chart_macros_dia(
         sizes = [prot * 4, carb * 4, grasa * 9]
         fig, ax = plt.subplots(figsize=(6, 4))
         ax.pie(sizes, labels=labels, autopct="%1.0f%%", startangle=90)
-        ax.set_title(
-            f"Macros del dia ({resumen.get('total_calorias', 0)} kcal)"
-        )
+        ax.set_title(f"Macros del dia ({resumen.get('total_calorias', 0)} kcal)")
         return _to_png(fig)
     except Exception:
         logger.exception("Error chart_macros uid=%s", telegram_id)
         return None
 
 
-async def chart_streak_calendario(
-    telegram_id: int, dias: int = 84
-) -> BytesIO | None:
+async def chart_streak_calendario(telegram_id: int, dias: int = 84) -> BytesIO | None:
     """GitHub-style heatmap: cada dia con entreno = celda llena, sin entreno = vacia."""
     try:
         sesiones = await obtener_ultimas_sesiones(telegram_id, limite=200)

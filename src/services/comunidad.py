@@ -1,19 +1,14 @@
 """Logica de desafios + kudos para comunidad gamificada."""
+
 from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Optional
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import func, select
 
 from src.db.connection import async_session_factory
-from src.db.models import (
-    Desafio,
-    DesafioParticipante,
-    Kudos,
-    Usuario,
-)
+from src.db.models import Desafio, DesafioParticipante, Kudos, Usuario
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +17,9 @@ async def listar_desafios_activos() -> list[Desafio]:
     hoy = date.today()
     async with async_session_factory() as session:
         result = await session.execute(
-            select(Desafio).where(
-                Desafio.fecha_inicio <= hoy, Desafio.fecha_fin >= hoy
-            ).order_by(Desafio.fecha_inicio.desc())
+            select(Desafio)
+            .where(Desafio.fecha_inicio <= hoy, Desafio.fecha_fin >= hoy)
+            .order_by(Desafio.fecha_inicio.desc())
         )
         return list(result.scalars().all())
 

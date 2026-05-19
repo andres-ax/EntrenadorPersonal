@@ -1,4 +1,5 @@
 """Tests heuristica de reacciones por keyword."""
+
 from src.telegram.reacciones import _decidir_emoji
 from telegram.constants import ReactionEmoji
 

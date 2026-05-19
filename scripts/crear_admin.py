@@ -3,6 +3,7 @@
 Uso:
     python scripts/crear_admin.py --email entrenadorax@axsoftware.codes --password "secreta-larga" --rol super
 """
+
 from __future__ import annotations
 
 import argparse

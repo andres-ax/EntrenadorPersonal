@@ -4,6 +4,7 @@ Canales escuchados:
 - pagos_actualizados: admin aprobo/rechazo un pago -> notificar usuario
 - broadcast_admin: admin envia mensaje masivo -> filtrar y enviar
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -11,13 +12,13 @@ import json
 import logging
 
 from sqlalchemy import select
-from telegram.constants import ParseMode
-from telegram.ext import Application
 
 from src.cache import get_redis
 from src.db.connection import async_session_factory
 from src.db.models import PlanSuscripcion, Usuario
 from src.db.repository import PLAN_RANKING, marcar_bot_bloqueado
+from telegram.constants import ParseMode
+from telegram.ext import Application
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +94,7 @@ async def _procesar_broadcast(app: Application, raw: str) -> None:
     plan_minimo_rank = 0
     if plan_minimo_str:
         try:
-            plan_minimo_rank = PLAN_RANKING.get(
-                PlanSuscripcion(plan_minimo_str), 0
-            )
+            plan_minimo_rank = PLAN_RANKING.get(PlanSuscripcion(plan_minimo_str), 0)
         except ValueError:
             pass
 
@@ -112,7 +111,10 @@ async def _procesar_broadcast(app: Application, raw: str) -> None:
     enviados = 0
     for u in usuarios:
         if plan_minimo_rank > 0:
-            if PLAN_RANKING.get(u.plan_actual or PlanSuscripcion.FREE, 0) < plan_minimo_rank:
+            if (
+                PLAN_RANKING.get(u.plan_actual or PlanSuscripcion.FREE, 0)
+                < plan_minimo_rank
+            ):
                 continue
         try:
             await app.bot.send_message(
@@ -158,7 +160,12 @@ async def _listener_loop(app: Application) -> None:
     client = await get_redis()
     pubsub = client.pubsub()
     await pubsub.subscribe(CANAL_PAGOS, CANAL_BROADCAST, CANAL_PR)
-    logger.info("Pubsub listener escuchando %s + %s + %s", CANAL_PAGOS, CANAL_BROADCAST, CANAL_PR)
+    logger.info(
+        "Pubsub listener escuchando %s + %s + %s",
+        CANAL_PAGOS,
+        CANAL_BROADCAST,
+        CANAL_PR,
+    )
     try:
         async for message in pubsub.listen():
             if message.get("type") != "message":

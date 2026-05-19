@@ -12,6 +12,7 @@ Patrones:
   pero como aqui ya validamos el JWT desde cookie, podemos invocarlas con
   un dict `admin` valido.
 """
+
 from __future__ import annotations
 
 import csv
@@ -25,16 +26,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import Date, cast, func, select
 
 from src.api import admin as admin_api
-from src.api.admin_auth import (
-    ADMIN_COOKIE_NAME,
-    ADMIN_JWT_TTL,
-    LoginRequest,
-    autenticar_admin,
-    get_admin_from_cookie,
-    get_admin_optional,
-    require_super,
-    sign_admin_jwt,
-)
+from src.api.admin_auth import (ADMIN_COOKIE_NAME, ADMIN_JWT_TTL, LoginRequest,
+                                autenticar_admin, get_admin_from_cookie,
+                                get_admin_optional, require_super)
 from src.web.templates import render
 
 logger = logging.getLogger(__name__)
@@ -63,7 +57,9 @@ async def login_submit(
     password: str = Form(...),
 ):
     try:
-        resp_login = await autenticar_admin(LoginRequest(email=email, password=password))
+        resp_login = await autenticar_admin(
+            LoginRequest(email=email, password=password)
+        )
     except HTTPException as exc:
         return render(
             request,
@@ -82,7 +78,11 @@ async def login_submit(
         samesite="lax",
         path="/",
     )
-    logger.info("admin_login_ok email=%s ip=%s", email, request.client.host if request.client else "?")
+    logger.info(
+        "admin_login_ok email=%s ip=%s",
+        email,
+        request.client.host if request.client else "?",
+    )
     return response
 
 
@@ -99,13 +99,15 @@ async def logout():
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(
-    request: Request, admin: dict = Depends(get_admin_from_cookie)
-):
+async def dashboard(request: Request, admin: dict = Depends(get_admin_from_cookie)):
     # Llama a finanzas() directamente (es una funcion async dentro de admin_api)
     finanzas_data = await admin_api.finanzas(admin=admin, dias=30)
-    pagos_pendientes = await admin_api.listar_pagos(admin=admin, estado="pendiente_humano", limit=5)
-    crisis_recientes = await admin_api.listar_crisis(admin=admin, nivel=None, dias=7, limit=5)
+    pagos_pendientes = await admin_api.listar_pagos(
+        admin=admin, estado="pendiente_humano", limit=5
+    )
+    crisis_recientes = await admin_api.listar_crisis(
+        admin=admin, nivel=None, dias=7, limit=5
+    )
     return render(
         request,
         "admin/dashboard.html",
@@ -136,16 +138,33 @@ async def usuarios_lista(
     offset: int = 0,
 ):
     data = await admin_api.listar_usuarios(
-        admin=admin, q=q, plan=plan, pais=pais, bloqueado=bloqueado, limit=limit, offset=offset
+        admin=admin,
+        q=q,
+        plan=plan,
+        pais=pais,
+        bloqueado=bloqueado,
+        limit=limit,
+        offset=offset,
     )
-    template = "admin/_usuarios_tabla.html" if request.headers.get("hx-request") else "admin/usuarios.html"
+    template = (
+        "admin/_usuarios_tabla.html"
+        if request.headers.get("hx-request")
+        else "admin/usuarios.html"
+    )
     return render(
         request,
         template,
         {
             "admin": admin,
             "data": data,
-            "filtros": {"q": q, "plan": plan, "pais": pais, "bloqueado": bloqueado, "limit": limit, "offset": offset},
+            "filtros": {
+                "q": q,
+                "plan": plan,
+                "pais": pais,
+                "bloqueado": bloqueado,
+                "limit": limit,
+                "offset": offset,
+            },
             "active": "usuarios",
         },
     )
@@ -180,7 +199,9 @@ async def asignar_plan_form(
 async def pausar_form(
     uid: int, admin: dict = Depends(get_admin_from_cookie), dias: int = Form(7)
 ):
-    await admin_api.pausar_usuario(uid=uid, req=admin_api.PausarReq(dias=dias), admin=admin)
+    await admin_api.pausar_usuario(
+        uid=uid, req=admin_api.PausarReq(dias=dias), admin=admin
+    )
     return RedirectResponse(url=f"/admin/usuarios/{uid}", status_code=303)
 
 
@@ -190,22 +211,20 @@ async def bloquear_form(
     admin: dict = Depends(get_admin_from_cookie),
     motivo: str = Form(...),
 ):
-    await admin_api.bloquear_endpoint(uid=uid, req=admin_api.BloquearReq(motivo=motivo), admin=admin)
+    await admin_api.bloquear_endpoint(
+        uid=uid, req=admin_api.BloquearReq(motivo=motivo), admin=admin
+    )
     return RedirectResponse(url=f"/admin/usuarios/{uid}", status_code=303)
 
 
 @router.post("/usuarios/{uid}/desbloquear_form")
-async def desbloquear_form(
-    uid: int, admin: dict = Depends(get_admin_from_cookie)
-):
+async def desbloquear_form(uid: int, admin: dict = Depends(get_admin_from_cookie)):
     await admin_api.desbloquear_endpoint(uid=uid, admin=admin)
     return RedirectResponse(url=f"/admin/usuarios/{uid}", status_code=303)
 
 
 @router.post("/usuarios/{uid}/eliminar_form")
-async def eliminar_form(
-    uid: int, admin: dict = Depends(get_admin_from_cookie)
-):
+async def eliminar_form(uid: int, admin: dict = Depends(get_admin_from_cookie)):
     await require_super(admin)
     await admin_api.eliminar_endpoint(uid=uid, admin=admin)
     return RedirectResponse(url="/admin/usuarios", status_code=303)
@@ -227,7 +246,11 @@ async def pagos_lista(
     data = await admin_api.listar_pagos(
         admin=admin, estado=estado, limit=limit, offset=offset
     )
-    template = "admin/_pagos_tabla.html" if request.headers.get("hx-request") else "admin/pagos.html"
+    template = (
+        "admin/_pagos_tabla.html"
+        if request.headers.get("hx-request")
+        else "admin/pagos.html"
+    )
     return render(
         request,
         template,
@@ -241,18 +264,15 @@ async def pagos_lista(
 
 
 @router.get("/pagos/{comp_id}/foto")
-async def pago_foto_cookie(
-    comp_id: int, admin: dict = Depends(get_admin_from_cookie)
-):
+async def pago_foto_cookie(comp_id: int, admin: dict = Depends(get_admin_from_cookie)):
     """Proxy foto del comprobante via Telegram API. Autenticado por cookie.
 
     El router JSON (/admin/pagos/{id}/foto en admin.py) usa header Bearer
     que no funciona desde <img src="..."> en el browser. Esta ruta duplica
     la logica pero acepta la cookie HttpOnly del panel HTML.
     """
-    from fastapi.responses import Response
-
     import httpx
+    from fastapi.responses import Response
 
     from src.config import settings as _settings
     from src.db.repository import obtener_comprobante
@@ -297,9 +317,12 @@ async def pago_aprobar_form(
     admin: dict = Depends(get_admin_from_cookie),
     notas: str = Form(""),
 ):
-    await admin_api.aprobar(comp_id=comp_id, req=admin_api.AprobarReq(notas=notas), admin=admin)
+    await admin_api.aprobar(
+        comp_id=comp_id, req=admin_api.AprobarReq(notas=notas), admin=admin
+    )
     return RedirectResponse(
-        url=f"/admin/pagos?msg=Pago+%23{comp_id}+aprobado.+Plan+activado.", status_code=303
+        url=f"/admin/pagos?msg=Pago+%23{comp_id}+aprobado.+Plan+activado.",
+        status_code=303,
     )
 
 
@@ -311,7 +334,9 @@ async def pago_rechazar_form(
     bloquear: bool = Form(False),
 ):
     await admin_api.rechazar(
-        comp_id=comp_id, req=admin_api.RechazarReq(motivo=motivo, bloquear=bloquear), admin=admin
+        comp_id=comp_id,
+        req=admin_api.RechazarReq(motivo=motivo, bloquear=bloquear),
+        admin=admin,
     )
     return RedirectResponse(
         url=f"/admin/pagos?msg=Pago+%23{comp_id}+rechazado.", status_code=303
@@ -331,7 +356,9 @@ async def crisis_lista(
     dias: int = 30,
     limit: int = Query(100, le=500),
 ):
-    data = await admin_api.listar_crisis(admin=admin, nivel=nivel, dias=dias, limit=limit)
+    data = await admin_api.listar_crisis(
+        admin=admin, nivel=nivel, dias=dias, limit=limit
+    )
     return render(
         request,
         "admin/crisis.html",
@@ -412,9 +439,7 @@ async def broadcast_form(
 
 
 @router.get("/admins", response_class=HTMLResponse)
-async def admins_lista(
-    request: Request, admin: dict = Depends(get_admin_from_cookie)
-):
+async def admins_lista(request: Request, admin: dict = Depends(get_admin_from_cookie)):
     await require_super(admin)
     items = await admin_api.listar_admins(admin=admin)
     return render(
@@ -481,7 +506,12 @@ async def costos_dashboard(
             ).where(*base_filter)
         )
         row = tot.one()
-        totales = {"llamadas": row[0], "input": row[1], "output": row[2], "costo": row[3]}
+        totales = {
+            "llamadas": row[0],
+            "input": row[1],
+            "output": row[2],
+            "costo": row[3],
+        }
 
         srv_q = await session.execute(
             select(
@@ -490,10 +520,19 @@ async def costos_dashboard(
                 func.sum(LlmUsage.input_tokens),
                 func.sum(LlmUsage.output_tokens),
                 func.sum(LlmUsage.costo_estimado_usd),
-            ).where(*base_filter).group_by(LlmUsage.servicio).order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
+            )
+            .where(*base_filter)
+            .group_by(LlmUsage.servicio)
+            .order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
         )
         por_servicio = [
-            {"servicio": r[0], "llamadas": r[1], "input": r[2] or 0, "output": r[3] or 0, "costo": r[4] or 0}
+            {
+                "servicio": r[0],
+                "llamadas": r[1],
+                "input": r[2] or 0,
+                "output": r[3] or 0,
+                "costo": r[4] or 0,
+            }
             for r in srv_q
         ]
 
@@ -504,10 +543,19 @@ async def costos_dashboard(
                 func.sum(LlmUsage.input_tokens),
                 func.sum(LlmUsage.output_tokens),
                 func.sum(LlmUsage.costo_estimado_usd),
-            ).where(*base_filter).group_by(LlmUsage.modelo).order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
+            )
+            .where(*base_filter)
+            .group_by(LlmUsage.modelo)
+            .order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
         )
         por_modelo = [
-            {"modelo": r[0], "llamadas": r[1], "input": r[2] or 0, "output": r[3] or 0, "costo": r[4] or 0}
+            {
+                "modelo": r[0],
+                "llamadas": r[1],
+                "input": r[2] or 0,
+                "output": r[3] or 0,
+                "costo": r[4] or 0,
+            }
             for r in mod_q
         ]
 
@@ -518,7 +566,8 @@ async def costos_dashboard(
                 func.sum(LlmUsage.input_tokens),
                 func.sum(LlmUsage.output_tokens),
                 func.sum(LlmUsage.costo_estimado_usd),
-            ).where(*base_filter, LlmUsage.telegram_id.isnot(None))
+            )
+            .where(*base_filter, LlmUsage.telegram_id.isnot(None))
             .group_by(LlmUsage.telegram_id)
             .order_by(func.sum(LlmUsage.costo_estimado_usd).desc())
             .limit(10)
@@ -528,11 +577,20 @@ async def costos_dashboard(
         nombres = {}
         if tg_ids:
             n_q = await session.execute(
-                select(Usuario.telegram_id, Usuario.nombre).where(Usuario.telegram_id.in_(tg_ids))
+                select(Usuario.telegram_id, Usuario.nombre).where(
+                    Usuario.telegram_id.in_(tg_ids)
+                )
             )
             nombres = {r[0]: r[1] for r in n_q}
         top_usuarios = [
-            {"telegram_id": r[0], "nombre": nombres.get(r[0], ""), "llamadas": r[1], "input": r[2] or 0, "output": r[3] or 0, "costo": r[4] or 0}
+            {
+                "telegram_id": r[0],
+                "nombre": nombres.get(r[0], ""),
+                "llamadas": r[1],
+                "input": r[2] or 0,
+                "output": r[3] or 0,
+                "costo": r[4] or 0,
+            }
             for r in top_rows
         ]
 
@@ -541,15 +599,14 @@ async def costos_dashboard(
             select(
                 fecha_col.label("dia"),
                 func.sum(LlmUsage.costo_estimado_usd),
-            ).where(*base_filter)
+            )
+            .where(*base_filter)
             .group_by(fecha_col)
             .order_by(fecha_col)
         )
         serie_diaria = [{"fecha": str(r[0]), "costo": r[1] or 0} for r in dia_q]
 
-        srv_list_q = await session.execute(
-            select(LlmUsage.servicio).distinct()
-        )
+        srv_list_q = await session.execute(select(LlmUsage.servicio).distinct())
         servicios_disponibles = sorted([r[0] for r in srv_list_q])
 
     return render(
@@ -581,38 +638,55 @@ async def costos_csv(
 
     desde = datetime.utcnow() - timedelta(days=dias)
     async with async_session_factory() as session:
-        q = select(
-            LlmUsage.creado_en,
-            LlmUsage.telegram_id,
-            Usuario.nombre,
-            LlmUsage.servicio,
-            LlmUsage.modelo,
-            LlmUsage.input_tokens,
-            LlmUsage.output_tokens,
-            LlmUsage.costo_estimado_usd,
-            LlmUsage.rounds,
-        ).outerjoin(Usuario, Usuario.id == LlmUsage.usuario_id).where(
-            LlmUsage.creado_en >= desde
-        ).order_by(LlmUsage.creado_en.desc())
+        q = (
+            select(
+                LlmUsage.creado_en,
+                LlmUsage.telegram_id,
+                Usuario.nombre,
+                LlmUsage.servicio,
+                LlmUsage.modelo,
+                LlmUsage.input_tokens,
+                LlmUsage.output_tokens,
+                LlmUsage.costo_estimado_usd,
+                LlmUsage.rounds,
+            )
+            .outerjoin(Usuario, Usuario.id == LlmUsage.usuario_id)
+            .where(LlmUsage.creado_en >= desde)
+            .order_by(LlmUsage.creado_en.desc())
+        )
         if servicio:
             q = q.where(LlmUsage.servicio == servicio)
         rows = (await session.execute(q)).all()
 
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow(["fecha", "telegram_id", "usuario", "servicio", "modelo", "input_tokens", "output_tokens", "costo_usd", "rounds"])
+    writer.writerow(
+        [
+            "fecha",
+            "telegram_id",
+            "usuario",
+            "servicio",
+            "modelo",
+            "input_tokens",
+            "output_tokens",
+            "costo_usd",
+            "rounds",
+        ]
+    )
     for r in rows:
-        writer.writerow([
-            r[0].strftime("%Y-%m-%d %H:%M:%S") if r[0] else "",
-            r[1] or "",
-            r[2] or "",
-            r[3],
-            r[4],
-            r[5],
-            r[6],
-            f"{r[7]:.6f}",
-            r[8],
-        ])
+        writer.writerow(
+            [
+                r[0].strftime("%Y-%m-%d %H:%M:%S") if r[0] else "",
+                r[1] or "",
+                r[2] or "",
+                r[3],
+                r[4],
+                r[5],
+                r[6],
+                f"{r[7]:.6f}",
+                r[8],
+            ]
+        )
     buf.seek(0)
     filename = f"costos_api_{date.today().isoformat()}.csv"
     return StreamingResponse(

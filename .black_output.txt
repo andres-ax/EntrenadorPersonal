@@ -1,0 +1,16 @@
+Warning: Python 3.13 cannot parse code formatted for Python 3.15. To fix this: run Black with Python 3.15, set --target-version to py313, or use --fast to skip the safety check. Black's safety check verifies equivalence by parsing the AST, which fails when the running Python is older than the target version.
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/alembic/versions/0004_wearables_comunidad_planes.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/tests/test_admin_auth.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/tests/test_escalation_copy.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/alembic/versions/0003_tiers_y_pagos.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/src/telegram/quiz.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/tests/test_i18n.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/src/realtime/server.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/tests/test_pagos_comprobante.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/src/web/landing.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/src/telegram/jobs_deportes.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/src/tools.py
+reformatted /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal/src/telegram/handlers.py
+
+All done! ✨ 🍰 ✨
+12 files reformatted, 77 files left unchanged.

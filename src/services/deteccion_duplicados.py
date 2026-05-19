@@ -5,13 +5,14 @@ Dos modos:
 2. Duplicado semantico: monto + fecha + referencia + hora cercana (+/-5min)
    -> probablemente el mismo pago reutilizado con foto diferente.
 """
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, select
 
 from src.db.connection import async_session_factory
 from src.db.models import PagoComprobante
@@ -35,6 +36,7 @@ async def es_duplicado(
             "razon": "sha_exacto" | "semantico" | "no",
             "comprobantes_similares": [ids],
         }
+
     """
     async with async_session_factory() as session:
         if foto_sha256:

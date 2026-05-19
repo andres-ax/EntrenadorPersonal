@@ -14,9 +14,11 @@ Cambios:
 
 Defaults backward-compatible: PRs viejos siguen funcionando con tipo_pr=PESO_REPS.
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0006_pr_polimorfico"
@@ -64,18 +66,26 @@ def upgrade() -> None:
     for name, col_type, kw in PR_NUEVOS:
         if name not in pr_cols:
             op.add_column("personal_records", sa.Column(name, col_type, **kw))
-    op.create_index(
-        "ix_pr_tipo_pr",
-        "personal_records",
-        ["tipo_pr"],
-        if_not_exists=True if bind.dialect.name == "postgresql" else False,
-    ) if "tipo_pr" not in pr_cols else None
-    op.create_index(
-        "ix_pr_deporte",
-        "personal_records",
-        ["deporte"],
-        if_not_exists=True if bind.dialect.name == "postgresql" else False,
-    ) if "deporte" not in pr_cols else None
+    (
+        op.create_index(
+            "ix_pr_tipo_pr",
+            "personal_records",
+            ["tipo_pr"],
+            if_not_exists=True if bind.dialect.name == "postgresql" else False,
+        )
+        if "tipo_pr" not in pr_cols
+        else None
+    )
+    (
+        op.create_index(
+            "ix_pr_deporte",
+            "personal_records",
+            ["deporte"],
+            if_not_exists=True if bind.dialect.name == "postgresql" else False,
+        )
+        if "deporte" not in pr_cols
+        else None
+    )
 
     try:
         op.alter_column(
@@ -91,12 +101,16 @@ def upgrade() -> None:
     for name, col_type, kw in SESION_NUEVAS:
         if name not in sesion_cols:
             op.add_column("sesiones_entrenamiento", sa.Column(name, col_type, **kw))
-    op.create_index(
-        "ix_sesion_deporte_slug",
-        "sesiones_entrenamiento",
-        ["deporte_slug"],
-        if_not_exists=True if bind.dialect.name == "postgresql" else False,
-    ) if "deporte_slug" not in sesion_cols else None
+    (
+        op.create_index(
+            "ix_sesion_deporte_slug",
+            "sesiones_entrenamiento",
+            ["deporte_slug"],
+            if_not_exists=True if bind.dialect.name == "postgresql" else False,
+        )
+        if "deporte_slug" not in sesion_cols
+        else None
+    )
 
 
 def downgrade() -> None:

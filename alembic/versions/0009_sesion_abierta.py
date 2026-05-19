@@ -20,11 +20,12 @@ Logica nueva en repository: cuando hay una sesion del mismo usuario +
 fecha + deporte + cerrada=False + updated_at >= NOW-2h, hacemos UPDATE
 en vez de INSERT. Asi 3 mensajes del mismo entreno = 1 fila.
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 
+from alembic import op
 
 revision: str = "0009_sesion_abierta"
 down_revision: Union[str, None] = "0008_data_integrity"

@@ -1,4 +1,5 @@
 """Inicia el bot EntrenadorAX en modo polling (desarrollo local)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -14,15 +15,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from telegram.constants import ParseMode  # noqa: E402
-from telegram.ext import Application, Defaults  # noqa: E402
-
 from src.cache import close_redis  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.db.connection import close_db, init_db  # noqa: E402
 from src.telegram.bot_setup import set_application, setup_bot  # noqa: E402
 from src.telegram.handlers import registrar  # noqa: E402
 from src.telegram.scheduler import registrar_jobs  # noqa: E402
+from telegram.constants import ParseMode  # noqa: E402
+from telegram.ext import Application, Defaults  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,

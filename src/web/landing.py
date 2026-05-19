@@ -7,19 +7,17 @@ Importante: este router se incluye DESPUES de los routers de admin y app
 para que rutas dinamicas como `/admin/*` o `/app/*` ganen sobre el
 catch-all de la landing.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import (HTMLResponse, PlainTextResponse,
+                               RedirectResponse, Response)
 
-from src.api.admin_auth import (
-    ADMIN_COOKIE_NAME,
-    ADMIN_JWT_TTL,
-    LoginRequest,
-    autenticar_admin,
-)
+from src.api.admin_auth import (ADMIN_COOKIE_NAME, ADMIN_JWT_TTL, LoginRequest,
+                                autenticar_admin)
 from src.api.auth import JWT_TTL_SECONDS, _sign_jwt
 from src.config import settings
 from src.data.deportes import DEPORTES, deporte_por_slug
@@ -147,9 +145,7 @@ async def login_page(
 
 
 @router.post("/login/deportista", response_class=HTMLResponse)
-async def login_deportista_submit(
-    request: Request, codigo: str = Form(...)
-):
+async def login_deportista_submit(request: Request, codigo: str = Form(...)):
     """Valida el codigo de 6 digitos generado por /codigo_web en el bot."""
     ip = request.client.host if request.client else "unknown"
     if not await check_rate_limit_ip(ip, max_per_minute=5):

@@ -12,6 +12,7 @@ Flujo:
 
 Costos: ~$0.001-0.01 USD por visitante (3 turnos con gpt-4o-mini).
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,6 +60,7 @@ async def chat_demo(session_id: str | None, mensaje: str) -> dict:
 
     Returns:
         dict con keys: respuesta, session_id, restantes, cta_url (o None).
+
     """
     client = await get_redis()
 

@@ -31,6 +31,7 @@ Esto se ejecuta solo en lectura, sin tocar la data en Redis. El siguiente
 escrito (al final del turno via `add_items`) seguira agregando items
 normalmente; los items huerfanos quedan en Redis pero el LLM nunca los ve.
 """
+
 from __future__ import annotations
 
 import logging

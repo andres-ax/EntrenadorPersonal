@@ -18,10 +18,10 @@ y luego aplicar futuras migraciones normalmente.
 Para usuarios nuevos:
   alembic upgrade head  # crea todo desde cero
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 from src.db.models import Base
 
 revision: str = "0001_initial_v1"
