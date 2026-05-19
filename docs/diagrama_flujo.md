@@ -4,19 +4,25 @@ A continuación hay un diagrama de flujo en Mermaid que describe el flujo princi
 
 ```mermaid
 graph LR
-  %% Nodos principales (nombres simples para compatibilidad con GitHub)
-  U_TG[Usuario-Telegram]
-  U_WEB[Usuario-Web]
-  API[FastAPI]
-  TB[Bot-Telegram]
-  AG[OpenAI-Agent]
-  TO[Herramientas]
-  WS[WebSocket-Realtime]
-  PG[(Postgres DB)]
-  RD[(Redis)]
-  OAI[(OpenAI API)]
+  subgraph Clientes
+    U_TG["Usuario (Telegram)"]
+    U_WEB["Usuario (Web / Browser)"]
+  end
 
-  %% Flujo
+  subgraph Backend
+    API["FastAPI (src/main.py)"]
+    TB["Bot Telegram / Handlers (src/telegram/)"]
+    AG["OpenAI Agent (src/coach.py)"]
+    TO["Herramientas (src/tools.py)"]
+    WS["WebSocket Realtime (src/realtime/)"]
+  end
+
+  subgraph Servicios
+    PG[(Postgres DB)]
+    RD[(Redis)]
+    OAI[(OpenAI API / Realtime)]
+  end
+
   U_TG -->|mensajes| TB
   U_WEB -->|HTTP / WebSocket| API
 
@@ -38,7 +44,6 @@ graph LR
   PG -.->|almacena| API
   RD -.->|cache / pubsub| TB
 
-  %% estilos
   classDef infra fill:#f9f,stroke:#333,stroke-width:1px;
   class PG,RD,OAI infra;
 ```
