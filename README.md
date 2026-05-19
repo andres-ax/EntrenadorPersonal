@@ -100,6 +100,8 @@ Este modo arranca el servicio completo con:
 - `GET /health` — estado de la app y readiness.
 - `POST /webhook` — recibe actualizaciones de Telegram.
 - `GET /webhook-info` — devuelve `webhook_url` y `secret_token`; requiere `X-Admin-Token`.
+- `GET /sitemap.xml` — sitemap dinámico para SEO.
+- `GET /robots.txt` — reglas de crawling para bots.
 
 ### Páginas HTML
 

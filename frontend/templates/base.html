@@ -11,6 +11,10 @@
 
 {# SEO / Open Graph #}
 <meta name="description" content="{% block description %}Coach AI 24/7 dentro de Telegram. Entreno, comida, sueno, peso.{% endblock %}" />
+<meta name="keywords" content="{% block keywords %}entrenador personal online, coach IA, Telegram fitness bot, plan de entrenamiento, nutricion deportiva, sueno, frase motivacional, coach deportivo{% endblock %}" />
+<meta name="robots" content="index, follow" />
+<meta name="author" content="EntrenadorAX" />
+<meta name="theme-color" content="#3679f5" />
 {% if canonical %}<link rel="canonical" href="{{ canonical }}" />{% endif %}
 
 {# Open Graph (Facebook, WhatsApp, Telegram, LinkedIn) #}
@@ -21,6 +25,7 @@
 <meta property="og:description" content="{% block og_description %}{{ self.description() }}{% endblock %}" />
 <meta property="og:url" content="{{ canonical|default(base_url) }}" />
 <meta property="og:image" content="{% block og_image %}{{ base_url }}/static/img/og-image.jpg{% endblock %}" />
+<meta property="og:image:type" content="image/jpeg" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="EntrenadorAX - Tu coach IA 24/7 dentro de Telegram" />
@@ -30,6 +35,27 @@
 <meta name="twitter:title" content="{% block twitter_title %}{{ self.og_title() }}{% endblock %}" />
 <meta name="twitter:description" content="{% block twitter_description %}{{ self.og_description() }}{% endblock %}" />
 <meta name="twitter:image" content="{% block twitter_image %}{{ base_url }}/static/img/og-image.jpg{% endblock %}" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "name": "EntrenadorAX",
+      "url": "{{ base_url }}",
+      "logo": "{{ base_url }}/static/img/favicon.svg",
+      "sameAs": []
+    },
+    {
+      "@type": "WebSite",
+      "url": "{{ base_url }}",
+      "name": "EntrenadorAX",
+      "description": "{{ self.description() }}"
+    }
+  ]
+}
+</script>
 
 {# Google Fonts: Inter (la fuente declarada en tailwind.config) #}
 <link rel="preconnect" href="https://fonts.googleapis.com" />
