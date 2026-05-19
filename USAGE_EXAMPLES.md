@@ -2,17 +2,27 @@
 
 Este archivo documenta ejemplos completos del uso de la aplicación, tanto en instalación como en interacción con el bot y despliegue.
 
+## Documentación relacionada
+
+- [README.md](README.md)
+- [ADMIN_GUIDE.md](ADMIN_GUIDE.md)
+- [ENDPOINTS.md](ENDPOINTS.md)
+- [DEPLOY.md](DEPLOY.md)
+- [PRICING_STRATEGY.md](PRICING_STRATEGY.md)
+- [INTERNAL_ARCHITECTURE.md](INTERNAL_ARCHITECTURE.md)
+- [docs/diagrama_flujo.md](docs/diagrama_flujo.md)
+
 ## Flujo de uso principal
 
 ```mermaid
 graph TD
-    A["Crear .env y entorno virtual"] --> B["Instalar dependencias"]
-    B --> C["Ejecutar run_bot.py o uvicorn"]
-    C --> D["Telegram recibe mensaje / comandos"]
-    D --> E["Handler transforma mensaje"]
-    E --> F["Agente procesa prompt con perfil"]
-    F --> G["Herramientas registran datos / consultan DB"]
-    G --> H["Respuesta enviada al usuario"]
+    A[Crear .env y entorno virtual] --> B[Instalar dependencias]
+    B --> C[Ejecutar run_bot.py o uvicorn]
+    C --> D[Telegram recibe mensaje / comandos]
+    D --> E[Handler transforma mensaje]
+    E --> F[Agente procesa prompt con perfil]
+    F --> G[Herramientas registran datos y consultan DB]
+    G --> H[Respuesta enviada al usuario]
 ```
 
 ---
@@ -44,6 +54,10 @@ DATABASE_URL=postgresql+asyncpg://usuario:password@localhost:5432/entrenadorax
 REDIS_URL=redis://localhost:6379/0
 OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 WEBHOOK_BASE_URL=https://mi-dominio.com
+WEBHOOK_SECRET=mi_secret_webhook
+ADMIN_TOKEN=mi_secret_admin
+JWT_SECRET=mi_secret_jwt
+FERNET_KEY=mi_clave_fernet
 ```
 
 Explicación:
@@ -52,6 +66,10 @@ Explicación:
 - `REDIS_URL`: URL de Redis para memoria de conversaciones y rate limit.
 - `OPENAI_API_KEY`: clave de OpenAI para el agente.
 - `WEBHOOK_BASE_URL`: dirección pública donde se expondrá el webhook si usas FastAPI.
+- `WEBHOOK_SECRET`: secret usado por Telegram para validar el webhook.
+- `ADMIN_TOKEN`: token protegido para admin y webhook-info.
+- `JWT_SECRET`: clave para JWT de usuarios y admins.
+- `FERNET_KEY`: clave para cifrado de datos sensibles.
 
 ---
 
@@ -67,7 +85,7 @@ python3 run_bot.py
 
 Qué hace:
 - carga `.env`
-- inicializa la base de datos
+- inicializa la base de datos y Redis si están disponibles
 - crea el bot de Telegram
 - comienza a recibir mensajes en modo polling
 - registra jobs de recordatorios automáticos
@@ -93,6 +111,8 @@ curl -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook?url=https
 ```
 
 El secret se obtiene desde `GET /webhook-info`.
+
+> Si ejecutas `uvicorn` localmente y quieres probar webhook reales, utiliza una URL pública con `ngrok` o un túnel similar.
 
 ---
 
@@ -394,7 +414,7 @@ Cada mensaje del bot puede terminar en una llamada a las funciones del repositor
 
 ## 10. Consejos para profundizar
 
-- Revisa `src/coax.py` y `src/tools.py` para entender cómo el agente usa el perfil y llama a las herramientas.
+- Revisa `src/coach.py` y `src/tools.py` para entender cómo el agente usa el perfil y llama a las herramientas.
 - Revisa `src/telegram/handlers.py` para ver cómo se transforma cada mensaje de Telegram en una pregunta para el agente.
 - Revisa `src/telegram/scheduler.py` para ver qué recordatorios se envían y cuándo.
 - Revisa `src/db/repository.py` para ver el modelo de datos y cómo se guardan los registros.
