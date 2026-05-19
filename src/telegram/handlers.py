@@ -77,6 +77,7 @@ from src.db.repository import (
     ultimos_eventos,
     usar_freeze_streak,
 )
+from src.services.hidratacion import consumo_hoy_ml, objetivo_ml
 from src.telegram.decoradores import requiere_tier
 from src.telegram.middlewares import check_daily_quota, check_rate_limit
 from src.telegram.reacciones import reaccionar
@@ -206,12 +207,20 @@ async def _build_prompt(texto: str, uid: int) -> str:
         tz_name = "America/Bogota"
         ahora_user = datetime.now(ZoneInfo(tz_name))
     hoy_user = ahora_user.date()
+
+    # Hidratacion hoy
+    agua_hoy = await consumo_hoy_ml(uid)
+    agua_obj = await objetivo_ml(uid)
+
     dinamicos = [
         f"uid={uid}",
         f"fecha={hoy_user.isoformat()}",
         f"hora_actual={ahora_user.strftime('%H:%M')}",
         f"tz={tz_name}",
         f"tono={user.tono.value if user.tono else 'firme'}",
+        f"pais={user.pais or 'CO'}",
+        f"agua_hoy={agua_hoy}ml",
+        f"agua_objetivo={agua_obj}ml",
     ]
     if cached_static is not None:
         return f"[{' | '.join(dinamicos)} | {cached_static}] {texto}"
@@ -1661,7 +1670,11 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         sha256_imagen,
     )
     from src.services.deteccion_duplicados import es_duplicado
-    from src.services.vision import analizar_comida, resize_si_pesa
+    from src.services.vision import (
+        analizar_comida,
+        describir_imagen_no_comida,
+        resize_si_pesa,
+    )
 
     uid = update.effective_user.id
     if not await check_rate_limit(uid):
@@ -1734,25 +1747,31 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if "error" in result:
         # Antes respondiamos con texto fijo y dejabamos al usuario colgado.
         # Ahora delegamos al agente con contexto explicito para que decida
-        # apropiadamente (ej: si es foto del entrenamiento, comente; si es
-        # paquete sin etiqueta, le ayude a estimar).
+        # apropiadamente. Usamos un segundo analisis para describir que hay.
         err = result["error"]
+        descripcion = ""
+        if err == "no_food":
+            descripcion = await describir_imagen_no_comida(raw)
+
         logger.info(
-            "photo error delegado al coach uid=%s error=%s tiene_caption=%s",
-            uid, err, bool(caption),
+            "photo error delegado al coach uid=%s error=%s tiene_caption=%s desc=%r",
+            uid, err, bool(caption), descripcion,
         )
         contexto_partes = [
             "[CONTEXTO_FOTO]",
             f"El usuario te envio una foto pero el analizador no detecto comida (error={err}).",
         ]
+        if descripcion:
+            contexto_partes.append(f"Lo que se ve en la foto: {descripcion}")
         if caption:
             contexto_partes.append(f"Caption del usuario: {caption!r}.")
+
         contexto_partes.append(
-            "Responde al usuario: si el caption sugiere que es un producto/etiqueta, "
-            "pidele info textual del paquete (gramos, porciones, calorias). "
-            "Si parece foto de entreno, pidele descripcion textual del entreno. "
-            "Si no hay caption, di que solo procesas fotos de comida/etiquetas "
-            "y pidele que mande de nuevo con la foto correcta o que describa por texto."
+            "Responde al usuario de forma natural segun lo que se ve en la foto. "
+            "Si es un producto/etiqueta, pidele info textual si falta. "
+            "Si es de entreno, comenta algo motivador o tecnico sobre lo que ves. "
+            "Si no tiene nada que ver con fitness/nutricion, aclara que solo procesas "
+            "fotos de comida, etiquetas o entrenos."
         )
         contexto = " ".join(contexto_partes)
         await _procesar(update.message, contexto, uid, ctx=ctx)

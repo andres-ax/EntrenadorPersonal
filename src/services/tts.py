@@ -1,11 +1,13 @@
 """TTS via OpenAI con cache en disco por hash. Voz por tono."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from io import BytesIO
 from pathlib import Path
 
+import openai
 import telegram.error
 from openai import AsyncOpenAI
 from telegram.constants import ChatAction, ParseMode
@@ -42,6 +44,9 @@ async def transcribir_audio(
 ) -> str:
     """Transcribe audio con Whisper de OpenAI.
 
+    Implementa reintentos con backoff y fallback a whisper-1 si el modelo
+    por defecto (gpt-4o-mini-transcribe) falla.
+
     Args:
         file_bytes: bytes del audio (ogg/opus/m4a/mp3/wav).
         filename: nombre logico (el suffix orienta al modelo a detectar el formato).
@@ -53,21 +58,45 @@ async def transcribir_audio(
     """
     if not file_bytes:
         return ""
-    try:
-        response = await _get_client().audio.transcriptions.create(
-            model=settings.transcription_model,
-            file=(filename, file_bytes),
-            language=language,
-        )
-        text = (response.text or "").strip()
-        try:
-            await log_llm_usage(None, "whisper", settings.transcription_model, 0, 0)
-        except Exception:
-            pass
-        return text
-    except Exception:
-        logger.exception("Error transcribiendo audio (%d bytes)", len(file_bytes))
-        return ""
+
+    modelos = [settings.transcription_model, "whisper-1"]
+    # Si el configurado ya es whisper-1, no duplicamos
+    if settings.transcription_model == "whisper-1":
+        modelos = ["whisper-1"]
+
+    for model in modelos:
+        intentos = 3
+        for i in range(intentos):
+            try:
+                response = await _get_client().audio.transcriptions.create(
+                    model=model,
+                    file=(filename, file_bytes),
+                    language=language,
+                )
+                text = (response.text or "").strip()
+                try:
+                    await log_llm_usage(None, "whisper", model, 0, 0)
+                except Exception:
+                    pass
+                return text
+            except (openai.RateLimitError, openai.APITimeoutError) as e:
+                if i == intentos - 1:
+                    logger.warning(
+                        "Limite o timeout en transcripcion (modelo=%s, bytes=%d): %s",
+                        model, len(file_bytes), str(e)
+                    )
+                    break
+                wait = (i + 1) * 2
+                await asyncio.sleep(wait)
+            except Exception as e:
+                logger.warning(
+                    "Error transcribiendo con %s (%d bytes): %s",
+                    model, len(file_bytes), str(e)
+                )
+                break  # Otros errores no reintentamos con el mismo modelo
+
+    logger.error("Fallo total de transcripcion tras agotar modelos y reintentos")
+    return ""
 
 
 async def generar_voz(texto: str, voice: str = "alloy") -> BytesIO | None:

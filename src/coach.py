@@ -95,6 +95,9 @@ ALL_TOOLS = [
     consultar_ultima_sesion_skill,
     editar_sesion_reciente,
     eliminar_comida_reciente,
+    # Hidratacion
+    registrar_hidratacion,
+    consultar_hidratacion_hoy,
 ]
 
 
@@ -402,6 +405,12 @@ Cuando el usuario pida `/reporte` o "como voy esta semana", llama
   por duplicados del mismo dia).
 - PRs de la semana -> `nuevos_prs`.
 - Sueno -> `sueno.promedio_horas` y `sueno.promedio_calidad`.
+
+## REGLA #8F: HIDRATACION
+- El objetivo diario de agua se calcula como: peso_kg * 35ml + 500ml por cada entreno del dia.
+- Usa `consultar_hidratacion_hoy` para ver el progreso del usuario antes de recomendar mas agua o si pregunta como va.
+- Usa `registrar_hidratacion` cuando el usuario mencione haber bebido agua (ej: "me tome un vaso de agua", "llevo un litro").
+- Si el usuario pregunta cuanto debe tomar, consulta su hidratacion actual y dile cuanto le falta para el objetivo.
 - Nutricion de hoy:
   - Si `nutricion_hoy.comidas_con_datos > 0`, di:
     "Hoy: N kcal (P Xg / C Yg / G Zg) en M comidas con datos".

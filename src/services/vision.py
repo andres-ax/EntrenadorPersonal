@@ -46,13 +46,15 @@ def _prompt_sistema(tono: str) -> str:
         "2) Una etiqueta nutricional o paquete de producto: extrae los "
         "   valores de la etiqueta tal cual aparecen (por porcion).\n"
         "3) Un alimento crudo, ingrediente o pieza de fruta/verdura: "
-        "   estima como porcion estandar.\n\n"
+        "   estima como porcion estandar.\n"
+        "4) Bebidas, infusiones, suplementos (proteina, creatina) o liquidos: "
+        "   identificalos y estima su aporte nutricional.\n\n"
         "Devuelve SOLO JSON valido con esta forma:\n"
         '{"alimentos": ["alimento1","alimento2",...], "calorias": int, '
         '"proteinas_g": float, "carbohidratos_g": float, "grasas_g": float, '
         '"fuente": "estimacion" | "etiqueta" | "ingrediente_crudo", '
         '"feedback": "1-2 frases sobre el impacto en su objetivo"}\n\n'
-        "Si la foto NO contiene comida, ingredientes, ni etiqueta "
+        "Si la foto NO contiene comida, bebidas, suplementos, ingredientes, ni etiqueta "
         "nutricional (ej: foto de skate, perro, paisaje, captura de "
         "pantalla sin info nutricional), devuelve "
         '{"error": "no_food"}.\n'
@@ -153,6 +155,45 @@ async def analizar_comida(
             "Error en analizar_comida vision_elapsed_ms=%.1f", elapsed_ms
         )
         return {"error": "api_error"}
+
+
+async def describir_imagen_no_comida(foto_bytes: bytes) -> str:
+    """Usa Vision para describir una imagen que NO fue detectada como comida.
+
+    Esto ayuda al coach a 'ver' que hay en la foto (ej: un gym, un skate,
+    una persona entrenando, un suplemento).
+    """
+    try:
+        b64 = base64.b64encode(foto_bytes).decode("ascii")
+        response = await _get_client().chat.completions.create(
+            model=settings.vision_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un asistente que describe imagenes para un coach deportivo. "
+                        "Describe brevemente (1-2 frases) que ves en la imagen, "
+                        "enfocandote en elementos deportivos, equipamiento, "
+                        "entorno de entrenamiento o productos nutricionales."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                        },
+                    ],
+                },
+            ],
+            max_tokens=150,
+            temperature=0.5,
+        )
+        return (response.choices[0].message.content or "").strip()
+    except Exception:
+        logger.exception("Error describiendo imagen no comida")
+        return "No pude ver claramente que hay en la imagen."
 
 
 def resize_si_pesa(foto_bytes: bytes, max_kb: int = 1024) -> bytes:

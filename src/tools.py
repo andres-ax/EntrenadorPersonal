@@ -59,6 +59,11 @@ from src.db.repository import (
     usar_freeze_streak,
 )
 from src.db.repository import log_evento
+from src.services.hidratacion import (
+    consumo_hoy_ml,
+    objetivo_ml,
+    registrar_agua,
+)
 from src.telegram.bot_setup import obtener_application
 from src.telegram.scheduler import (
     cancelar_recordatorio_jobs,
@@ -629,6 +634,47 @@ async def registrar_comida(
     except Exception:
         logger.exception("Error en registrar_comida")
         return _error("no pude registrar la comida")
+
+
+@function_tool
+@_log_tool
+async def registrar_hidratacion(telegram_id: int, ml: int) -> str:
+    """Registra el consumo de agua en mililitros.
+
+    Args:
+        telegram_id: ID de Telegram del usuario.
+        ml: cantidad de agua en mililitros (ej: 250, 500).
+    """
+    try:
+        await registrar_agua(telegram_id, ml)
+        await log_evento(telegram_id, "registrar_hidratacion", {"ml": ml})
+        return json.dumps({"ok": True, "mensaje": f"Registrados {ml}ml de agua."})
+    except Exception:
+        logger.exception("Error en registrar_hidratacion")
+        return json.dumps({"ok": False, "error": "No pude registrar el agua."})
+
+
+@function_tool
+@_log_tool
+async def consultar_hidratacion_hoy(telegram_id: int) -> str:
+    """Consulta el consumo de agua de hoy y el objetivo diario.
+
+    Args:
+        telegram_id: ID de Telegram del usuario.
+    """
+    try:
+        consumo = await consumo_hoy_ml(telegram_id)
+        objetivo = await objetivo_ml(telegram_id)
+        return json.dumps({
+            "ok": True,
+            "consumo_hoy_ml": consumo,
+            "objetivo_diario_ml": objetivo,
+            "faltante_ml": max(0, objetivo - consumo),
+            "porcentaje": round((consumo / objetivo * 100), 1) if objetivo > 0 else 0
+        })
+    except Exception:
+        logger.exception("Error en consultar_hidratacion_hoy")
+        return json.dumps({"ok": False, "error": "No pude consultar la hidratacion."})
 
 
 @function_tool
