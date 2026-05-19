@@ -1,50 +1,28 @@
 # EntrenadorAX
 
-EntrenadorAX es una aplicación de coaching deportivo personal basada en Telegram y OpenAI Agents.
+EntrenadorAX es una plataforma de coaching deportivo integral basada en Telegram y OpenAI Agents.
 
-## Flujo de trabajo general
-
-```mermaid
-graph TD
-    A["Configurar .env"] --> B["Elegir modo de ejecución"]
-    B --> C["run_bot.py (polling)"]
-    B --> D["FastAPI webhook"]
-    C --> E["Telegram recibe mensaje"]
-    D --> E
-    E --> F["Handlers / Prompt builder"]
-    F --> G["Ejecutar agente EntrenadorAX"]
-    G --> H["Tool call: registro / consulta"]
-    H --> I["Base de datos PostgreSQL"]
-    H --> J["Redis sesión + rate limit"]
-    G --> K["Respuesta al usuario"]
-```
-
-## Qué hace esta aplicación
-
-- Es un bot de Telegram que conversa con el usuario en español.
-- Gestiona onboarding de perfil, entrenamientos, comidas, sueño y peso.
-- Guarda datos en una base de datos PostgreSQL asíncrona.
-- Usa Redis para memoria de conversación y límite de tasa.
-- Envía recordatorios automáticos diarios y semanales.
+La aplicación actual corre como un único servicio FastAPI que incluye:
+- webhook de Telegram y bot polling local
+- panel de administración HTML server-side
+- panel de usuario / mini app HTML server-side
+- landing pública y páginas de precios
+- WebSocket de voz realtime para llamadas con el coach
+- API JSON bajo `/api/*`
+- almacenamiento en PostgreSQL y memoria en Redis
 
 ## Estructura principal
 
-- `run_bot.py` - arranca el bot en modo polling (desarrollo local).
-- `src/main.py` - arranca la app FastAPI: webhook + admin panel + mini app + landing + WS realtime.
-- `src/config.py` - carga variables desde `.env`.
-- `src/coach.py` - define al agente `EntrenadorAX` y sus reglas.
-- `src/tools.py` - define las herramientas (`tools`) que el agente puede usar.
-- `src/db/` - conexion, modelos y repositorio de datos (PostgreSQL).
-- `src/telegram/` - handlers, middleware de rate limit y scheduler de recordatorios.
-- `src/api/` - routers JSON (`/api/me/*`, `/api/admin/*`, `/api/public/*`).
-- `src/web/` - rutas HTML server-side (admin panel `/admin/*`, mini app `/app/*`, landing `/`).
-- `src/realtime/` - WebSocket relay para llamadas de voz (`/ws/realtime`).
-- `src/data/deportes.py` - catalogo de 71 deportes soportados.
-- `frontend/templates/` - templates Jinja2 (admin, app, landing).
-- `frontend/static/` - assets (imagenes, JS para llamada de voz).
-
-Todo corre en UN SOLO proceso FastAPI (consolidacion total). No hay frontends
-Next.js / Vite / Astro separados; todo es Python + Jinja2 + HTMX + Tailwind via CDN.
+- `run_bot.py` — arranca el bot en modo polling para desarrollo local.
+- `src/main.py` — arranca la app FastAPI con webhook, páginas HTML, APIs y realtime.
+- `src/config.py` — carga todas las variables de entorno y valida la configuración.
+- `src/coach.py` — define al agente `EntrenadorAX` y sus instrucciones.
+- `src/tools.py` — expone las herramientas que el agente usa para leer/escribir datos.
+- `src/db/` — conexión, modelos SQLAlchemy y repositorio de datos.
+- `src/telegram/` — setup del bot, handlers, scheduler y pubsub.
+- `src/api/` — rutas JSON para auth, usuarios, admin y integraciones.
+- `src/web/` — rutas HTML server-side para landing, admin y app de usuario.
+- `src/realtime/` — WebSocket de voz realtime.
 
 ## Dependencias principales
 
@@ -56,99 +34,185 @@ El proyecto usa:
 - `uvicorn[standard]`
 - `asyncpg`
 - `sqlalchemy[asyncio]`
+- `alembic`
 - `pydantic-settings`
 - `python-dotenv`
+- `redis`
+- `matplotlib`
+- `Pillow`
 
-## Instalar y ejecutar
+## Variables de entorno necesarias
 
-Para ejecutar la aplicación localmente, usa `INSTALL.md` que ya está en el proyecto.
+Crea un archivo `.env` en la raíz con al menos estas variables:
 
-### Resumen rápido de ejecución
+```env
+TELEGRAM_TOKEN=tu_token_de_telegram
+OPENAI_API_KEY=tu_api_key_openai
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/entrenadorax
+REDIS_URL=redis://localhost:6379/0
+```
 
-1. Crea un entorno virtual:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-2. Instala dependencias:
-   ```bash
-   python3 -m pip install --upgrade pip
-   python3 -m pip install -e .
-   ```
-3. Crea `.env` en la raíz con estas variables:
-   ```env
-   TELEGRAM_TOKEN=tu_token_de_telegram
-   DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname
-   REDIS_URL=redis://localhost:6379/0
-   OPENAI_API_KEY=tu_api_key_openai
-   WEBHOOK_BASE_URL=https://tu-dominio.com
-   ```
-4. Ejecuta el bot en polling:
-   ```bash
-   python3 run_bot.py
-   ```
+Opcionales importantes para producción o web:
 
-### Alternativa webhook
+```env
+WEBHOOK_BASE_URL=https://tu-dominio.com
+WEBHOOK_SECRET=secreto-webhook
+ADMIN_TOKEN=secreto-admin
+JWT_SECRET=secreto-jwt
+MINIAPP_URL=https://mi-miniapp.com
+LANDING_URL=https://mi-dominio.com
+ADMIN_URL=https://mi-dominio.com
+REALTIME_WS_URL=wss://mi-dominio.com/ws/realtime
+```
 
-Para ejecutar la app en modo webhook:
+## Cómo ejecutar en local
+
+### 1. Modo polling (desarrollo Telegram directo)
+
+```bash
+python3 run_bot.py
+```
+
+Esto inicia el bot de Telegram en polling y no expone la app FastAPI.
+
+### 2. Modo FastAPI / webhook
 
 ```bash
 uvicorn src.main:app --host 0.0.0.0 --port 8000
 ```
 
-Luego configura el webhook de Telegram usando el `secret_token` que devuelve `/webhook-info`.
+Este modo arranca el servicio completo con:
+- webhook de Telegram en `/webhook`
+- healthcheck en `/health`
+- webhook-info protegido en `/webhook-info`
+- HTML landing en `/`, `/precios`, `/deportes`, `/politicas/*`
+- admin UI en `/admin/*`
+- panel de usuario en `/app/*`
+- WebSocket de voz en `/ws/realtime`
+- assets estáticos en `/static`
 
-## Uso del bot en Telegram
+> Para probar webhook con Telegram desde local necesitas una URL pública como ngrok.
 
-### Comandos disponibles
+## Endpoints clave
 
-- `/start` - iniciar conversación y onboarding.
-- `/menu` - muestra botones rápidos para registrar entreno, comida, sueño, peso y ver reportes.
-- `/reset` - reinicia la sesión conversacional en Redis.
-- `/borrar_datos` - elimina permanentemente todos los datos del usuario.
+### Telegram / webhook
 
-### Botones del menú
+- `GET /health` — estado de la app y readiness.
+- `POST /webhook` — recibe actualizaciones de Telegram.
+- `GET /webhook-info` — devuelve `webhook_url` y `secret_token`; requiere `X-Admin-Token`.
 
-- Registrar entreno
-- Registrar comida
-- Como dormí
-- Mi peso actual
-- Reporte semanal
-- Historial de peso
+### Páginas HTML
 
-### Flujo principal
+- `/` — landing principal.
+- `/precios` — página de precios.
+- `/deportes` — listado de deportes.
+- `/deportes/{slug}` — detalle de deporte.
+- `/login` — login unificado para deportistas y admins.
+- `/admin/*` — panel admin.
+- `/app/*` — panel de usuario.
 
-- Si el usuario no tiene perfil completo, el bot hace onboarding conversacional.
-- Si ya está onboarded, el bot propone entrenamientos, pide registros y envía recordatorios.
-- Los datos se guardan automáticamente en la base de datos.
+### WebSocket realtime
 
-## Qué datos guarda
+- `/ws/realtime` — WebSocket para llamadas de voz con el coach; requiere JWT.
 
-- Perfil: nombre, edad, peso, altura, objetivo, nivel, días de entrenamiento, deporte principal.
-- Entrenamientos: tipo, duración, ejercicios, RPE, notas.
-- Comidas: tipo, alimentos, calorías y macros.
-- Sueño: horas, calidad, notas.
+### API JSON
+
+- `/api/auth/*` — autenticación y códigos de login.
+- `/api/me/*` — datos de usuario autenticado.
+- `/api/admin/*` — endpoints admin JSON.
+- `/api/public/*` — endpoints públicos.
+- `/api/integraciones/*` — integraciones externas.
+
+## Qué se puede probar en local
+
+- Sí, puedes probar todo localmente.
+- `run_bot.py` es ideal para pruebas rápidas de Telegram en polling.
+- `uvicorn src.main:app` sirve la app completa en local.
+- Para pruebas webhook reales desde Telegram, usa `ngrok` o un host público.
+
+## Uso de Telegram
+
+### Comandos core
+
+- `/start`
+- `/menu`
+- `/hoy`
+- `/entreno`
+- `/comida`
+- `/sueno`
+- `/peso`
+- `/reporte`
+- `/pr`
+- `/grafico`
+- `/compromiso`
+- `/tono`
+- `/quiet_hours`
+- `/pausa`
+- `/dia_libre`
+- `/ayuda`
+- `/pagar`
+- `/llamar`
+- `/codigo_web`
+
+### Comandos extra (español)
+
+- `/mi_mes`
+- `/historial_peso`
+- `/firmar_compromiso`
+- `/agua`
+- `/calma`
+- `/desafios`
+- `/ranking`
+- `/kudos`
+- `/invitar`
+- `/presumir`
+- `/exportar_csv`
+- `/apagar_firme`
+- `/porque_me_escribiste`
+- `/feedback`
+- `/upgrade`
+- `/planes`
+- `/salir`
+- `/reset`
+- `/borrar_datos`
+
+### Mini App / menú web
+
+Si `MINIAPP_URL` está configurado, el bot publica un botón de menú que abre la mini app.
+
+## Qué guarda la aplicación
+
+- Perfil de usuario y onboarding.
+- Entrenamientos y ejercicios.
+- Comidas y macros.
+- Sueño, horas y calidad.
 - Peso y métricas corporales.
 - Personal records (PRs).
-
-## Endpoints web
-
-Si usas webhook, la app expone:
-
-- `GET /health` - estado de la app.
-- `POST /webhook` - recibe actualizaciones de Telegram.
-- `GET /webhook-info` - muestra la URL y secreto para configurar el webhook.
-
-## Deployment
-
-El `Dockerfile` ya está preparado para ejecutar la app con `uvicorn src.main:app`.
+- Sesiones y cuotas de voz realtime.
 
 ## Notas importantes
 
-- La configuración principal se carga desde `.env`.
-- Redis es necesario para la memoria del agente y el rate limit.
-- PostgreSQL es necesario para almacenar perfiles y registros.
+- `DATABASE_URL` y `REDIS_URL` son obligatorios.
+- `TELEGRAM_TOKEN` y `OPENAI_API_KEY` son obligatorios.
+- `WEBHOOK_BASE_URL` es necesario si usas webhook.
+- `ADMIN_TOKEN` protege `/webhook-info` y endpoints admin.
+- Todo corre en un solo proceso FastAPI: bot, web, APIs y realtime.
 
----
+## Desarrollo local recomendado
 
-Para más detalles técnicos, revisa `src/coach.py`, `src/tools.py`, `src/telegram/handlers.py` y `src/telegram/scheduler.py`.
+1. `python3 -m venv .venv`
+2. `source .venv/bin/activate`
+3. `python3 -m pip install --upgrade pip`
+4. `python3 -m pip install -e .`
+5. `python3 -m uvicorn src.main:app --reload`
+
+## Archivos clave para revisar
+
+- `src/main.py`
+- `src/telegram/bot_setup.py`
+- `src/telegram/handlers.py`
+- `src/web/landing.py`
+- `src/web/admin_ui.py`
+- `src/web/app_ui.py`
+- `src/realtime/server.py`
+- `src/config.py`
