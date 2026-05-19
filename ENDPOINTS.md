@@ -1,14 +1,23 @@
-# Endpoints de EntrenadorAX
+# ENDPOINTS.md - Endpoints de EntrenadorAX
 
-Este archivo describe los endpoints HTTP expuestos por la aplicación en modo webhook, con ejemplos para Postman y cURL.
+Este archivo describe los endpoints HTTP expuestos por la app en modo webhook. Incluye ejemplos de Postman, cURL y notas de uso.
 
-> Nota: estos endpoints solo están disponibles cuando se ejecuta la app con FastAPI:
+> Estos endpoints están disponibles solo cuando se ejecuta con FastAPI:
 >
 > ```bash
 > uvicorn src.main:app --host 0.0.0.0 --port 8000
 > ```
 >
-> Si ejecutas `python3 run_bot.py`, el bot funciona en polling y no expone estos endpoints.
+> Si usas `python3 run_bot.py`, el bot corre en polling y no expone estos endpoints.
+
+## Tabla de contenidos
+
+1. [GET /health](#1-get-health)
+2. [GET /webhook-info](#2-get-webhook-info)
+3. [POST /webhook](#3-post-webhook)
+4. [Configurar Telegram para el webhook](#4-configurar-telegram-para-el-webhook)
+5. [Probar en local con ngrok](#5-probar-en-local-con-ngrok)
+6. [Nota sobre polling vs webhook](#6-nota-sobre-polling-vs-webhook)
 
 ## 1. GET /health
 
@@ -17,10 +26,11 @@ Comprueba si la app está activa y si el bot está inicializado.
 - URL: `http://localhost:8000/health`
 - Método: `GET`
 
-### Ejemplo Postman
+### Ejemplo cURL
 
-- Método: GET
-- URL: `http://localhost:8000/health`
+```bash
+curl http://localhost:8000/health
+```
 
 ### Respuesta esperada
 
@@ -31,18 +41,18 @@ Comprueba si la app está activa y si el bot está inicializado.
 }
 ```
 
-
 ## 2. GET /webhook-info
 
-Devuelve la URL del webhook y el secret token que debes usar al configurar Telegram.
+Devuelve la URL del webhook y el secret token para Telegram.
 
 - URL: `http://localhost:8000/webhook-info`
 - Método: `GET`
 
-### Ejemplo Postman
+### Ejemplo cURL
 
-- Método: GET
-- URL: `http://localhost:8000/webhook-info`
+```bash
+curl http://localhost:8000/webhook-info
+```
 
 ### Respuesta esperada
 
@@ -54,7 +64,7 @@ Devuelve la URL del webhook y el secret token que debes usar al configurar Teleg
 }
 ```
 
-> El valor de `webhook_url` depende de `WEBHOOK_BASE_URL` en tu `.env`.
+> `webhook_url` depende de `WEBHOOK_BASE_URL` en `.env`.
 
 ## 3. POST /webhook
 
@@ -62,43 +72,17 @@ Recibe actualizaciones de Telegram y las envía al bot.
 
 - URL: `http://localhost:8000/webhook`
 - Método: `POST`
-- Encabezados:
+- Headers:
   - `Content-Type: application/json`
   - `x-telegram-bot-api-secret-token: <secret_token>`
 
-### Ejemplo Postman
+### Ejemplo cURL
 
-1. Método: POST
-2. URL: `http://localhost:8000/webhook`
-3. Headers:
-   - `Content-Type`: `application/json`
-   - `x-telegram-bot-api-secret-token`: copia el valor de `secret_token` de `/webhook-info`
-4. Body: raw JSON
-
-### Ejemplo de body de Telegram update
-
-```json
-{
-  "update_id": 123456789,
-  "message": {
-    "message_id": 1,
-    "from": {
-      "id": 123456789,
-      "is_bot": false,
-      "first_name": "Diego",
-      "username": "diego123",
-      "language_code": "es"
-    },
-    "chat": {
-      "id": 123456789,
-      "first_name": "Diego",
-      "username": "diego123",
-      "type": "private"
-    },
-    "date": 1710470400,
-    "text": "Hola"
-  }
-}
+```bash
+curl -X POST http://localhost:8000/webhook \
+  -H "Content-Type: application/json" \
+  -H "x-telegram-bot-api-secret-token: <secret_token>" \
+  -d '{"update_id":123456789,"message":{"message_id":1,"from":{"id":123456789,"is_bot":false,"first_name":"Diego","username":"diego123","language_code":"es"},"chat":{"id":123456789,"first_name":"Diego","username":"diego123","type":"private"},"date":1710470400,"text":"Hola"}}'
 ```
 
 ### Respuesta esperada
@@ -109,36 +93,35 @@ Recibe actualizaciones de Telegram y las envía al bot.
 }
 ```
 
-> Si el header `x-telegram-bot-api-secret-token` es incorrecto, recibes un `403`.
+> Si el header `x-telegram-bot-api-secret-token` es incorrecto, la respuesta es `403`.
 
-## 4. Cómo configurar Telegram para usar el webhook
+## 4. Configurar Telegram para el webhook
 
-Después de arrancar la app con FastAPI y obtener el secret token en `/webhook-info`, configura Telegram con:
+Después de arrancar la app con FastAPI y obtener `secret_token` de `/webhook-info`, ejecuta:
 
 ```bash
 curl -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook?url=https://tu-dominio.com/webhook&secret_token=<secret_token>"
 ```
 
-- `TELEGRAM_TOKEN` es tu token del bot.
-- `https://tu-dominio.com/webhook` debe ser accesible desde internet.
-- `secret_token` debe coincidir con el valor devuelto en `/webhook-info`.
+- `TELEGRAM_TOKEN`: token del bot.
+- `https://tu-dominio.com/webhook`: URL pública accesible desde Internet.
+- `secret_token`: valor de `/webhook-info`.
 
-## 5. Prueba en local usando herramientas como ngrok
-
-Si estás desarrollando localmente y quieres probar con Telegram real:
+## 5. Probar en local con ngrok
 
 1. Arranca la app FastAPI:
    ```bash
    uvicorn src.main:app --host 0.0.0.0 --port 8000
    ```
-2. Exponerla con ngrok:
+2. Expón el puerto con ngrok:
    ```bash
    ngrok http 8000
    ```
 3. Usa la URL pública de ngrok en `WEBHOOK_BASE_URL` o configura el webhook con esa URL.
 
-## 6. Nota sobre Postman y el bot en polling
+## 6. Nota sobre polling vs webhook
 
-- `POST /webhook` es útil para probar el endpoint HTTP del bot.
-- Para probar la lógica real de Telegram en modo polling debes usar el bot en Telegram y `python3 run_bot.py`.
-- En modo polling no puedes enviar mensajes desde Postman al bot, porque no existe endpoint HTTP para recibirlos.
+- `POST /webhook` es útil para probar el endpoint HTTP.
+- En modo polling (`python3 run_bot.py`) no hay endpoint HTTP de recepción de mensajes.
+- Para probar la experiencia completa, usa el bot en Telegram y webhook con FastAPI.
+EOF

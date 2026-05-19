@@ -1,125 +1,141 @@
-# ADMIN_GUIDE.md - Guia del administrador
+# ADMIN_GUIDE.md - Guía del administrador
 
-Como operar el panel admin de EntrenadorAX. URL: `https://entrenadorax.axsoftware.codes/admin/login`.
+Guía rápida para operar el panel admin de EntrenadorAX.
 
-El panel es server-rendered con Jinja2 + HTMX (sin SPA). Se sirve desde el
-mismo proceso FastAPI que el bot. Auth via cookie HttpOnly `admin_jwt`.
+- URL de acceso: `https://entrenadorax.axsoftware.codes/admin/login`
+- Arquitectura: server-rendered con Jinja2 + HTMX, servido desde el mismo proceso FastAPI que el bot.
+- Autenticación: cookie HttpOnly `admin_jwt`.
+
+## Tabla de contenidos
+
+1. [Login](#login)
+2. [Flujo diario recomendado](#flujo-diario-recomendado)
+3. [Validar pagos por comprobante](#validar-pagos-por-comprobante)
+4. [Fraude y banderas rojas](#fraude-y-banderas-rojas)
+5. [Asignar planes manualmente](#asignar-planes-manualmente)
+6. [Bloquear / desbloquear usuarios](#bloquear--desbloquear-usuarios)
+7. [Crisis log](#crisis-log)
+8. [Broadcasts](#broadcasts)
+9. [Crear nuevos admins](#crear-nuevos-admins)
+10. [Finanzas](#finanzas)
+11. [Investigar un usuario](#investigar-un-usuario)
+12. [Soporte técnico al usuario](#soporte-técnico-al-usuario)
+13. [Casos éticos delicados](#casos-éticos-delicados)
+
+---
 
 ## Login
 
-Email + password de un admin creado via `scripts/crear_admin.py` o creado
-desde el panel (rol super requerido).
+- Accede con email y contraseña de un admin.
+- El admin puede crearse con `scripts/crear_admin.py` o crear desde el panel si tienes rol `super`.
 
 ## Flujo diario recomendado
 
-1. **Dashboard** (`/`) - revisa KPIs del dia (DAU, MAU, pagos pendientes, crisis).
-2. **Pagos** (`/pagos?estado=pendiente_humano`) - cola de validaciones.
-3. **Crisis** (`/crisis`) - revisa cualquier crisis nivel 1-2 de las ultimas 24h.
+1. **Dashboard** (`/`) — revisa KPIs del día: DAU, MAU, pagos pendientes, crisis.
+2. **Pagos** (`/pagos?estado=pendiente_humano`) — valida comprobantes.
+3. **Crisis** (`/crisis`) — revisa alertas de riesgo y toma decisiones.
 
 ## Validar pagos por comprobante
 
-1. Ir a `/pagos` filtrado por `pendiente_humano`.
-2. Tap "Revisar" en cada uno.
-3. Compara:
-   - Foto del comprobante (renderizada via API proxy).
+1. Filtra `/pagos` por `pendiente_humano`.
+2. Pulsa **Revisar** en cada pago.
+3. Comprueba:
+   - Foto del comprobante (renderizada vía proxy API).
    - Monto detectado vs monto esperado.
-   - Referencia, cuenta origen, fecha.
-   - Datos extraidos por Vision (full payload disponible).
-4. Decision:
-   - **Aprobar**: si monto coincide y comprobante valido. Plan activado.
-   - **Rechazar**: si fraude, duplicado evidente, monto incorrecto.
-     Opcionalmente bloquear al usuario.
-5. El bot notifica al usuario automaticamente via Redis pubsub.
+   - Referencia, cuenta origen y fecha.
+   - Datos extraídos por Vision (payload completo disponible).
+4. Decisión:
+   - **Aprobar**: monto coincide y comprobante válido.
+   - **Rechazar**: fraude, duplicado o monto incorrecto.
+     - Opcional: bloquear al usuario.
+5. El bot notifica automáticamente al usuario vía Redis pubsub.
 
-## Banderas rojas que indican fraude
+## Fraude y banderas rojas
 
-- Mismo comprobante (sha256) repetido en distintos usuarios.
-- Monto muy diferente al esperado (mas de 500 COP de gap).
-- Imagen claramente editada o de baja calidad.
-- Multiples comprobantes seguidos en pocos minutos del mismo usuario.
-- Cuenta origen muy diferente a los nombres ya vistos.
+- Mismo comprobante (sha256) repetido en usuarios distintos.
+- Monto muy diferente al esperado (>500 COP de gap).
+- Imagen editada o de mala calidad.
+- Múltiples comprobantes en pocos minutos del mismo usuario.
+- Cuenta origen diferente a nombres habituales.
 
-## Asignar plan manual
+## Asignar planes manualmente
 
-`/usuarios/<uid>` -> seleccionar plan + dias -> "Asignar plan".
+- Ruta: `/usuarios/<uid>`.
+- Selecciona plan, asigna días y confirma.
 
-Casos validos:
-- Cliente VIP / beta tester.
-- Reembolso aprobado pero plan ya expiro.
-- Soporte: usuario reporta problema y compensas con N dias gratis.
+Casos válidos:
+- Cliente VIP o beta tester.
+- Reembolso aprobado pero plan expirado.
+- Compensar con días gratis por soporte.
 
-## Bloquear/desbloquear usuario
+## Bloquear / desbloquear usuarios
 
-`/usuarios/<uid>` -> motivo -> "Bloquear".
-
-Bloqueo:
-- Forza `plan_actual = FREE` (downgrade inmediato).
-- Bloquea futuros pagos.
-- NO borra datos (usa GDPR delete para eso).
+- Ruta: `/usuarios/<uid>`.
+- El bloqueo fuerza `plan_actual = FREE` y detiene futuros pagos.
+- No borra datos.
+- Para borrado total usa GDPR delete o `DELETE /admin/usuarios/<uid>`.
 
 ## Crisis log
 
-`/crisis` muestra eventos de deteccion de red flags. Acciones recomendadas:
+- Ruta: `/crisis`.
+- Muestra eventos de detección de riesgo.
 
-- **Nivel 1**: contacta al usuario fuera del bot. Confirma que tiene linea
-  de crisis activa. Ofrece pausa permanente si lo necesita.
-- **Nivel 2**: monitoreo pasivo. Si se repite, escalar a contacto humano.
-- **Nivel 3**: vigilar. Generalmente se resuelve solo (sobreentrenamiento).
+### Recomendaciones por nivel
+
+- **Nivel 1**: contacta al usuario fuera del bot y ofrece pausa si es necesario.
+- **Nivel 2**: monitoreo pasivo; escalar a humano si se repite.
+- **Nivel 3**: vigila; normalmente se resuelve solo.
 
 ## Broadcasts
 
-Desde `/operaciones`:
-- Filtra por plan minimo y/o pais.
-- Mensaje HTML simple (sin imagenes).
-- Siempre va con `silent=True`.
-- Casos: anuncio de nueva feature, mensaje motivacional masivo, encuesta.
+Desde `/operaciones` puedes enviar mensajes masivos.
 
-Limites Telegram: 30 msg/seg. Para 500+ usuarios usa la API estandar (~17s).
+- Filtra por plan mínimo, país o segmento.
+- Mensajes HTML simples (sin imágenes).
+- Usa `silent=True`.
+- Límites Telegram: 30 msg/segundo.
+- Para 500+ usuarios, usa la API estándar (~17 s).
 
 ## Crear nuevos admins
 
-Solo super-admin. Desde `/admins` -> email + password + rol.
+- Solo `super` puede crear admins.
+- Ruta: `/admins`.
 
 Roles:
-- **super**: full acceso, puede crear admins y borrar usuarios.
-- **soporte**: validar pagos, pausar, asignar planes, ver crisis. No puede
-  crear admins ni eliminar usuarios.
+- **super**: acceso total, puede crear admins y eliminar usuarios.
+- **soporte**: validar pagos, pausar usuarios, asignar planes y ver crisis. No puede crear admins ni borrar usuarios.
 
 ## Finanzas
 
-`/finanzas` muestra:
-- MRR estimado (30 dias) por metodo de pago.
+En `/finanzas` revisa:
+- MRR estimado (30 días) por método de pago.
 - Conversiones recientes.
 - Pagos pendientes acumulados.
-- Usuarios por plan (free/starter/pro/elite/lifetime).
+- Usuarios por plan: free, starter, pro, elite, lifetime.
 
 ## Investigar un usuario
 
-`/usuarios/<uid>` muestra:
-- Perfil completo (tono, plan, expiracion, pais).
+En `/usuarios/<uid>` consulta:
+- Perfil completo: plan, expiración, país, tono.
 - Historial de suscripciones.
 - Historial de pagos.
-- Eventos del bot (timeline ultimo mes).
-- Crisis si las hubo.
+- Eventos del bot (timeline último mes).
+- Crisis asociadas.
 - Estado de bloqueo.
 
-## Soporte tecnico al usuario
+## Soporte técnico al usuario
 
-Si un usuario reporta problema:
-1. Pidele su Telegram ID (puede obtenerlo con @userinfobot).
+1. Pide el Telegram ID (puede obtenerlo con @userinfobot).
 2. Busca en `/usuarios?q=<id>`.
-3. Revisa eventos para entender que paso.
-4. Acciones tipicas:
+3. Revisa eventos y pagos.
+4. Acciones típicas:
    - Plan no activado: revisar pago en `/pagos`.
    - Bot no responde: pausar y reactivar.
-   - Comprobante rechazado erroneamente: reaprobar manualmente con asignar_plan.
+   - Comprobante rechazado por error: reabrir y asignar plan.
 
-## Casos eticos delicados
+## Casos éticos delicados
 
-- **Usuario en crisis**: NO usar el panel para conversar con el. Contactalo
-  fuera (email, telefono si lo dio). Recomienda terapia profesional.
-- **Datos sensibles en eventos**: no copiar/pegar mensajes del usuario fuera
-  del panel. Esta info es estrictamente confidencial.
-- **GDPR delete**: si un usuario pide borrar todo, ejecutar `/borrar_datos`
-  desde su lado o desde admin con `DELETE /admin/usuarios/<uid>`. Es
-  irreversible.
+- **Usuario en crisis**: no uses el panel para conversar con él. Contacta fuera del bot y sugiere ayuda profesional.
+- **Datos sensibles**: no copies/pegues mensajes del usuario fuera del panel.
+- **GDPR delete**: si pide borrar todo, usa `/borrar_datos` desde su sesión o `DELETE /admin/usuarios/<uid>`. Es irreversible.
+EOF

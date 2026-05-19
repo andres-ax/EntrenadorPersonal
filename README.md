@@ -216,3 +216,12 @@ Si `MINIAPP_URL` está configurado, el bot publica un botón de menú que abre l
 - `src/web/app_ui.py`
 - `src/realtime/server.py`
 - `src/config.py`
+
+## Documentación adicional
+
+- [ADMIN_GUIDE.md](ADMIN_GUIDE.md) — guía de administración y operación.
+- [ENDPOINTS.md](ENDPOINTS.md) — referencia de webhook y API HTTP.
+- [DEPLOY.md](DEPLOY.md) — guía de deploy en Railway.
+- [PRICING_STRATEGY.md](PRICING_STRATEGY.md) — estrategia de precios y promociones.
+- [INTERNAL_ARCHITECTURE.md](INTERNAL_ARCHITECTURE.md) — arquitectura interna y flujo del bot.
+- [docs/diagrama_flujo.md](docs/diagrama_flujo.md) — diagrama de flujo del proceso.
