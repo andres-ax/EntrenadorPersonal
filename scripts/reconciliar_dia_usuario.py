@@ -34,6 +34,7 @@ Hace para cada (uid, fecha):
 Idempotente: si se ejecuta dos veces, la segunda no hace nada (no quedan
 duplicados ni placeholders).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,16 +51,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import delete, select, text, update  # noqa: E402
 
 from src.db.connection import async_session_factory  # noqa: E402
-from src.db.models import (  # noqa: E402
-    Comida,
-    SesionEntrenamiento,
-    Usuario,
-)
-from src.db.repository import (  # noqa: E402
-    _alimentos_set,
-    incrementar_streak,
-)
-
+from src.db.models import Comida, SesionEntrenamiento, Usuario  # noqa: E402
+from src.db.repository import _alimentos_set, incrementar_streak  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -175,15 +168,72 @@ def _alimentos_vacios(c: Comida) -> bool:
 # modificadores para que "2 huevos cocidos" y "huevo" se consideren mismo
 # alimento.
 _STOPWORDS_ALIMENTO = {
-    "de", "del", "la", "las", "el", "los", "un", "una", "unos", "unas",
-    "con", "sin", "y", "o", "al", "a", "en", "para", "por", "vaso", "vasos",
-    "plato", "platos", "porcion", "porciones", "porción", "porciones",
-    "taza", "tazas", "cucharada", "cucharadas", "cucharadita", "cucharaditas",
-    "medio", "media", "medios", "medias", "pequeño", "pequena", "pequeño",
-    "pequeña", "grande", "grandes", "cocido", "cocida", "cocidos", "cocidas",
-    "frito", "frita", "fritos", "fritas", "hervido", "hervida", "hervidos",
-    "hervidas", "crudo", "cruda", "crudos", "crudas", "a", "al", "la",
-    "horno", "plancha", "casero", "casera",
+    "de",
+    "del",
+    "la",
+    "las",
+    "el",
+    "los",
+    "un",
+    "una",
+    "unos",
+    "unas",
+    "con",
+    "sin",
+    "y",
+    "o",
+    "al",
+    "a",
+    "en",
+    "para",
+    "por",
+    "vaso",
+    "vasos",
+    "plato",
+    "platos",
+    "porcion",
+    "porciones",
+    "porción",
+    "porciones",
+    "taza",
+    "tazas",
+    "cucharada",
+    "cucharadas",
+    "cucharadita",
+    "cucharaditas",
+    "medio",
+    "media",
+    "medios",
+    "medias",
+    "pequeño",
+    "pequena",
+    "pequeño",
+    "pequeña",
+    "grande",
+    "grandes",
+    "cocido",
+    "cocida",
+    "cocidos",
+    "cocidas",
+    "frito",
+    "frita",
+    "fritos",
+    "fritas",
+    "hervido",
+    "hervida",
+    "hervidos",
+    "hervidas",
+    "crudo",
+    "cruda",
+    "crudos",
+    "crudas",
+    "a",
+    "al",
+    "la",
+    "horno",
+    "plancha",
+    "casero",
+    "casera",
 }
 
 
@@ -192,8 +242,12 @@ def _stem_alimento(token: str) -> str:
     t = token.lower().strip()
     # Quita acentos manualmente sobre vocales comunes.
     t = (
-        t.replace("á", "a").replace("é", "e").replace("í", "i")
-        .replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+        t.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
     )
     if len(t) < 4:
         return t
@@ -276,9 +330,7 @@ async def reconciliar_comidas(
         log.info("comidas: ninguna en %s para uid=%s", fecha, telegram_id)
         return 0, 0
 
-    log.info(
-        "comidas: %d filas en %s (uid=%s)", len(comidas), fecha, telegram_id
-    )
+    log.info("comidas: %d filas en %s (uid=%s)", len(comidas), fecha, telegram_id)
 
     a_borrar_placeholder: list[Comida] = []
     a_borrar_duplicado: list[Comida] = []
@@ -333,35 +385,47 @@ async def reconciliar_comidas(
     for c in a_borrar_placeholder:
         log.info(
             "    DEL id=%d tipo=%s kcal=%s alim=%r",
-            c.id, c.tipo.value if c.tipo else "?", c.calorias, c.alimentos,
+            c.id,
+            c.tipo.value if c.tipo else "?",
+            c.calorias,
+            c.alimentos,
         )
     log.info("  duplicados: %d", len(a_borrar_duplicado))
     for c in a_borrar_duplicado:
         log.info(
             "    DEL id=%d tipo=%s kcal=%s alim=%s",
-            c.id, c.tipo.value if c.tipo else "?", c.calorias,
+            c.id,
+            c.tipo.value if c.tipo else "?",
+            c.calorias,
             (c.alimentos or "")[:60],
         )
     log.info("  conservadas finales: %d", len(final_conservadas))
     for c in final_conservadas:
         log.info(
             "    KEEP id=%d tipo=%s kcal=%s P=%s C=%s G=%s alim=%s",
-            c.id, c.tipo.value if c.tipo else "?", c.calorias,
-            c.proteinas_g, c.carbohidratos_g, c.grasas_g,
+            c.id,
+            c.tipo.value if c.tipo else "?",
+            c.calorias,
+            c.proteinas_g,
+            c.carbohidratos_g,
+            c.grasas_g,
             (c.alimentos or "")[:80],
         )
 
     if apply:
         for c in a_borrar_placeholder + a_borrar_duplicado:
             await _backup_row(
-                session, telegram_id, fecha, "comidas", c.id,
-                "delete_reconciliacion", _comida_a_dict(c),
+                session,
+                telegram_id,
+                fecha,
+                "comidas",
+                c.id,
+                "delete_reconciliacion",
+                _comida_a_dict(c),
             )
         ids = [c.id for c in (a_borrar_placeholder + a_borrar_duplicado)]
         if ids:
-            await session.execute(
-                delete(Comida).where(Comida.id.in_(ids))
-            )
+            await session.execute(delete(Comida).where(Comida.id.in_(ids)))
             await session.commit()
             log.info("  comidas: %d filas borradas en DB", len(ids))
 
@@ -397,9 +461,7 @@ async def reconciliar_sesiones(
         log.info("sesiones: ninguna en %s para uid=%s", fecha, telegram_id)
         return 0
 
-    log.info(
-        "sesiones: %d filas en %s (uid=%s)", len(sesiones), fecha, telegram_id
-    )
+    log.info("sesiones: %d filas en %s (uid=%s)", len(sesiones), fecha, telegram_id)
 
     # Agrupa por (tipo, deporte_slug or '<sin>')
     grupos: dict[tuple, list[SesionEntrenamiento]] = defaultdict(list)
@@ -432,9 +494,7 @@ async def reconciliar_sesiones(
             ganadora.foco_sesion,
         )
         spot = next((s.spot for s in lst if s.spot), ganadora.spot)
-        co_riders = next(
-            (s.co_riders for s in lst if s.co_riders), ganadora.co_riders
-        )
+        co_riders = next((s.co_riders for s in lst if s.co_riders), ganadora.co_riders)
         # Notas concatenadas en orden cronologico, deduplicadas.
         notas_chunks: list[str] = []
         vistos: set[str] = set()
@@ -446,29 +506,47 @@ async def reconciliar_sesiones(
 
         log.info(
             "  grupo %s: %d sesiones -> consolidar en id=%d",
-            clave, len(lst), ganadora.id,
+            clave,
+            len(lst),
+            ganadora.id,
         )
         log.info(
             "    KEEP id=%d duracion=%s trucos_int=%s ater=%s caidas=%s sens=%s",
-            ganadora.id, max_duracion, suma_intentados, suma_aterrizados,
-            suma_caidas, ultima_sens,
+            ganadora.id,
+            max_duracion,
+            suma_intentados,
+            suma_aterrizados,
+            suma_caidas,
+            ultima_sens,
         )
         for s in descartar:
             log.info(
                 "    DEL id=%d duracion=%s notas=%r",
-                s.id, s.duracion_min, (s.notas or "")[:80],
+                s.id,
+                s.duracion_min,
+                (s.notas or "")[:80],
             )
 
         n_borradas += len(descartar)
         if apply:
             await _backup_row(
-                session, telegram_id, fecha, "sesiones_entrenamiento",
-                ganadora.id, "update_consolidacion", _sesion_a_dict(ganadora),
+                session,
+                telegram_id,
+                fecha,
+                "sesiones_entrenamiento",
+                ganadora.id,
+                "update_consolidacion",
+                _sesion_a_dict(ganadora),
             )
             for s in descartar:
                 await _backup_row(
-                    session, telegram_id, fecha, "sesiones_entrenamiento",
-                    s.id, "delete_consolidacion", _sesion_a_dict(s),
+                    session,
+                    telegram_id,
+                    fecha,
+                    "sesiones_entrenamiento",
+                    s.id,
+                    "delete_consolidacion",
+                    _sesion_a_dict(s),
                 )
             # Actualiza la ganadora
             await session.execute(
@@ -504,16 +582,14 @@ async def reconciliar_sesiones(
 # ============================================================================
 
 
-async def reconciliar_streaks(
-    telegram_id: int, fecha: date, apply: bool
-) -> None:
+async def reconciliar_streaks(telegram_id: int, fecha: date, apply: bool) -> None:
     """Asegura streaks=1 para tipos donde haya registros validos del dia.
 
     Por ejemplo: si Andy registro sueno hoy pero el streak quedo en 0 porque
     el auto-streak no estaba activo cuando se inserto.
     """
+    from src.db.models import Comida, MetricaSueno, SesionEntrenamiento
     from src.db.repository import async_session_factory as _asf
-    from src.db.models import MetricaSueno, Comida, SesionEntrenamiento
 
     async with _asf() as session:
         u = await session.execute(
@@ -571,13 +647,9 @@ async def reconciliar(uid: int, fecha: date, apply: bool) -> None:
         log.info("Usuario encontrado: id_db=%s nombre=%r", usuario.id, usuario.nombre)
 
         log.info("--- Comidas ---")
-        n_ph, n_dup = await reconciliar_comidas(
-            session, usuario.id, uid, fecha, apply
-        )
+        n_ph, n_dup = await reconciliar_comidas(session, usuario.id, uid, fecha, apply)
         log.info("--- Sesiones de entrenamiento ---")
-        n_ses = await reconciliar_sesiones(
-            session, usuario.id, uid, fecha, apply
-        )
+        n_ses = await reconciliar_sesiones(session, usuario.id, uid, fecha, apply)
 
     log.info("--- Streaks ---")
     await reconciliar_streaks(uid, fecha, apply)
@@ -595,15 +667,20 @@ def main() -> None:
         description="Reconcilia comidas/sesiones duplicadas o vacias de un usuario."
     )
     parser.add_argument(
-        "--uid", type=int, required=True,
+        "--uid",
+        type=int,
+        required=True,
         help="telegram_id del usuario (ej: 8324604749)",
     )
     parser.add_argument(
-        "--fecha", type=str, required=True,
+        "--fecha",
+        type=str,
+        required=True,
         help="fecha YYYY-MM-DD a reconciliar",
     )
     parser.add_argument(
-        "--apply", action="store_true",
+        "--apply",
+        action="store_true",
         help="aplicar cambios. Sin esta flag, solo muestra plan (dry run).",
     )
     args = parser.parse_args()

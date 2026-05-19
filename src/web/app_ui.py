@@ -7,6 +7,7 @@ Auth: cookie HttpOnly `user_jwt`. Se setea desde TRES origenes posibles:
 
 Sin sesion -> redirect a /login.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,22 +19,11 @@ from sqlalchemy import select
 
 from src.api.auth import verify_jwt
 from src.db.connection import async_session_factory
-from src.db.models import (
-    Comida,
-    Compromiso,
-    MetricaCorporal,
-    MetricaSueno,
-    SesionEntrenamiento,
-    Usuario,
-)
-from src.db.repository import (
-    historial_peso,
-    listar_prs,
-    obtener_o_crear_streak,
-    obtener_usuario,
-    reporte_semanal,
-    resumen_nutricional_dia,
-)
+from src.db.models import (Comida, Compromiso, MetricaCorporal, MetricaSueno,
+                           SesionEntrenamiento, Usuario)
+from src.db.repository import (historial_peso, listar_prs,
+                               obtener_o_crear_streak, obtener_usuario,
+                               reporte_semanal, resumen_nutricional_dia)
 from src.web.templates import render
 
 logger = logging.getLogger(__name__)
@@ -45,7 +35,8 @@ USER_COOKIE_NAME = "user_jwt"
 
 
 async def get_user_from_cookie(
-    request: Request, user_jwt: str | None = Cookie(default=None, alias=USER_COOKIE_NAME)
+    request: Request,
+    user_jwt: str | None = Cookie(default=None, alias=USER_COOKIE_NAME),
 ) -> dict | None:
     """Devuelve dict {uid: int, perfil: Usuario|None} si la cookie es valida, sino None."""
     if not user_jwt:
@@ -62,9 +53,7 @@ def _redirect_login() -> RedirectResponse:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def app_root(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def app_root(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     if user is None:
         return _redirect_login()
     return RedirectResponse(url="/app/dashboard", status_code=303)
@@ -115,7 +104,9 @@ async def calendario(
     hoy = date.today()
     inicio = hoy - timedelta(days=hoy.weekday())
     async with async_session_factory() as session:
-        u_q = await session.execute(select(Usuario.id).where(Usuario.telegram_id == uid))
+        u_q = await session.execute(
+            select(Usuario.id).where(Usuario.telegram_id == uid)
+        )
         usuario_id = u_q.scalar_one_or_none()
         sesiones = []
         if usuario_id:
@@ -135,15 +126,17 @@ async def calendario(
     for i in range(7):
         f = inicio + timedelta(days=i)
         s = by_fecha.get(f)
-        dias.append({
-            "nombre": nombres[i],
-            "fecha": f,
-            "es_hoy": f == hoy,
-            "realizado": s is not None,
-            "tipo": s.tipo.value if s and s.tipo else None,
-            "notas": s.notas if s and s.notas else "",
-            "duracion_min": s.duracion_min if s else None,
-        })
+        dias.append(
+            {
+                "nombre": nombres[i],
+                "fecha": f,
+                "es_hoy": f == hoy,
+                "realizado": s is not None,
+                "tipo": s.tipo.value if s and s.tipo else None,
+                "notas": s.notas if s and s.notas else "",
+                "duracion_min": s.duracion_min if s else None,
+            }
+        )
     return render(
         request,
         "app/calendario.html",
@@ -208,7 +201,9 @@ async def historial(
     items: list = []
     headers: list[str] = []
     async with async_session_factory() as session:
-        u_q = await session.execute(select(Usuario.id).where(Usuario.telegram_id == uid))
+        u_q = await session.execute(
+            select(Usuario.id).where(Usuario.telegram_id == uid)
+        )
         usuario_id = u_q.scalar_one_or_none()
         if usuario_id:
             if tipo == "entrenos":
@@ -315,9 +310,7 @@ async def historial(
 
 
 @router.get("/graficos", response_class=HTMLResponse)
-async def graficos(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def graficos(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     """Vista de los 4 graficos PNG generados por matplotlib."""
     if user is None:
         return _redirect_login()
@@ -364,9 +357,7 @@ async def settings_view(
 
 
 @router.get("/pagar", response_class=HTMLResponse)
-async def pagar(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def pagar(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     from src.config import settings
 
     if user is None:
@@ -380,7 +371,9 @@ async def pagar(
             "active": "pagar",
             "page_title": "Plan y pagos",
             "page_subtitle": "Mejora tu cuenta o consulta tu plan actual",
-            "plan_actual": perfil.plan_actual.value if perfil and perfil.plan_actual else "free",
+            "plan_actual": (
+                perfil.plan_actual.value if perfil and perfil.plan_actual else "free"
+            ),
             "plan_expira_en": perfil.plan_expira_en if perfil else None,
             "precios": {
                 "starter": settings.precio_starter_cop,
@@ -393,9 +386,7 @@ async def pagar(
 
 
 @router.get("/llamar", response_class=HTMLResponse)
-async def llamar(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def llamar(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     if user is None:
         return _redirect_login()
     return render(

@@ -2,6 +2,7 @@
 
 Devuelve estimacion de alimentos, calorias, macros y un feedback corto.
 """
+
 from __future__ import annotations
 
 import base64
@@ -115,7 +116,13 @@ async def analizar_comida(
         )
         if response.usage:
             try:
-                await log_llm_usage(None, "vision", settings.vision_model, response.usage.prompt_tokens, response.usage.completion_tokens)
+                await log_llm_usage(
+                    None,
+                    "vision",
+                    settings.vision_model,
+                    response.usage.prompt_tokens,
+                    response.usage.completion_tokens,
+                )
             except Exception:
                 pass
         raw = response.choices[0].message.content or "{}"
@@ -124,7 +131,8 @@ async def analizar_comida(
         if "error" in data:
             logger.info(
                 "analizar_comida no_food/error vision_elapsed_ms=%.1f error=%s",
-                elapsed_ms, data["error"],
+                elapsed_ms,
+                data["error"],
             )
             return {"error": data["error"]}
         logger.info(
@@ -151,9 +159,7 @@ async def analizar_comida(
         return {"error": "json_invalido"}
     except Exception:
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        logger.exception(
-            "Error en analizar_comida vision_elapsed_ms=%.1f", elapsed_ms
-        )
+        logger.exception("Error en analizar_comida vision_elapsed_ms=%.1f", elapsed_ms)
         return {"error": "api_error"}
 
 
@@ -175,7 +181,7 @@ async def describir_imagen_no_comida(foto_bytes: bytes) -> str:
                         "Describe brevemente (1-2 frases) que ves en la imagen, "
                         "enfocandote en elementos deportivos, equipamiento, "
                         "entorno de entrenamiento o productos nutricionales."
-                    )
+                    ),
                 },
                 {
                     "role": "user",

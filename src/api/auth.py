@@ -8,6 +8,7 @@ Flow:
 3. Si OK, devolvemos un JWT corto (1 hora) firmado por nosotros.
 4. Endpoints de /api/me/* requieren ese JWT en Authorization: Bearer X.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -42,9 +43,7 @@ def _validar_init_data(init_data: str) -> dict | None:
     if not received_hash:
         return None
 
-    data_check_string = "\n".join(
-        f"{k}={v}" for k, v in sorted(parsed.items())
-    )
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
     secret_key = hmac.new(
         b"WebAppData",
         settings.telegram_token.get_secret_value().encode(),
@@ -128,7 +127,9 @@ class CodigoWebReq(BaseModel):
 
 
 @router.post("/codigo", response_model=TokenResp)
-async def validar_codigo_web(req: CodigoWebReq, request: Request, response: Response) -> TokenResp:
+async def validar_codigo_web(
+    req: CodigoWebReq, request: Request, response: Response
+) -> TokenResp:
     """Login web del deportista via codigo de 6 digitos generado por el bot.
 
     Flujo:
@@ -225,7 +226,8 @@ async def get_uid_from_token(
 
 
 import secrets as _secrets  # noqa: E402
-from datetime import datetime as _dt, timedelta as _td  # noqa: E402
+from datetime import datetime as _dt  # noqa: E402
+from datetime import timedelta as _td
 
 import httpx  # noqa: E402
 from sqlalchemy import select as _select  # noqa: E402
@@ -253,9 +255,7 @@ async def crear_magic_link(req: MagicLinkReq, request: Request) -> MagicLinkResp
     expires_at = _dt.utcnow() + _td(minutes=15)
     email = req.email.lower().strip()
     async with _afs() as session:
-        ml = MagicLink(
-            token=token, email=email, expires_at=expires_at
-        )
+        ml = MagicLink(token=token, email=email, expires_at=expires_at)
         session.add(ml)
         await session.commit()
 
@@ -307,9 +307,7 @@ async def verificar_magic_link(token: str, response: Response) -> TokenResp:
     if not token:
         raise HTTPException(400, "token requerido")
     async with _afs() as session:
-        ml_q = await session.execute(
-            _select(MagicLink).where(MagicLink.token == token)
-        )
+        ml_q = await session.execute(_select(MagicLink).where(MagicLink.token == token))
         ml = ml_q.scalar_one_or_none()
         if ml is None:
             raise HTTPException(401, "magic link invalido")

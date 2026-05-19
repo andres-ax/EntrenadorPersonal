@@ -1,4 +1,5 @@
 """Handlers de Telegram: comandos, mensajes, callbacks, foto."""
+
 from __future__ import annotations
 
 import asyncio
@@ -9,78 +10,43 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import openai
+from agents import (InputGuardrailTripwireTriggered,
+                    OutputGuardrailTripwireTriggered, RunConfig, Runner,
+                    SessionSettings)
+
 import telegram.error
-from telegram import (
-    ForceReply,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    KeyboardButton,
-    KeyboardButtonRequestChat,
-    LabeledPrice,
-    ReplyKeyboardMarkup,
-    Update,
-)
-from telegram.constants import ChatAction
-from telegram.ext import (
-    Application,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    InlineQueryHandler,
-    MessageHandler,
-    PreCheckoutQueryHandler,
-    filters,
-)
-
-from agents import (
-    InputGuardrailTripwireTriggered,
-    OutputGuardrailTripwireTriggered,
-    RunConfig,
-    Runner,
-    SessionSettings,
-)
-
-from src.cache import (
-    get_perfil_block as cache_get_perfil_block,
-    limpiar_keys_usuario,
-    set_perfil_block as cache_set_perfil_block,
-)
-from src.telegram.safe_session import SafeRedisSession
+from src.cache import get_perfil_block as cache_get_perfil_block
+from src.cache import limpiar_keys_usuario
+from src.cache import set_perfil_block as cache_set_perfil_block
 from src.coach import coach
 from src.config import settings
-from src.db.models import PlanSuscripcion
+from src.db.models import DuracionPago, PlanSuscripcion
+from src.db.repository import aceptar_modo_militar, activar_plan
+from src.db.repository import cambiar_tono as repo_cambiar_tono
+from src.db.repository import (contar_fotos_hoy, eliminar_usuario,
+                               guardar_comida, guardar_comprobante,
+                               guardar_feedback_comida, log_crisis, log_evento,
+                               log_llm_usage, marcar_bot_bloqueado,
+                               marcar_comprobante_duplicado,
+                               obtener_compromiso_activo,
+                               obtener_o_crear_streak, obtener_o_crear_usuario,
+                               obtener_usuario, pausar_recordatorios,
+                               set_quiet_hours, ultimos_eventos,
+                               usar_freeze_streak)
 from src.services.crisis import detectar as detectar_crisis
 from src.services.crisis import detectar_diagnostico_output
-from src.db.models import DuracionPago
-from src.db.repository import (
-    actualizar_usuario,
-    aceptar_modo_militar,
-    activar_plan,
-    cambiar_tono as repo_cambiar_tono,
-    contar_fotos_hoy,
-    eliminar_usuario,
-    guardar_comida,
-    guardar_comprobante,
-    guardar_feedback_comida,
-    log_crisis,
-    log_evento,
-    log_llm_usage,
-    marcar_bot_bloqueado,
-    marcar_comprobante_duplicado,
-    obtener_compromiso_activo,
-    obtener_o_crear_usuario,
-    obtener_o_crear_streak,
-    obtener_usuario,
-    obtener_plan_actual,
-    pausar_recordatorios,
-    set_quiet_hours,
-    ultimos_eventos,
-    usar_freeze_streak,
-)
 from src.services.hidratacion import consumo_hoy_ml, objetivo_ml
 from src.telegram.decoradores import requiere_tier
 from src.telegram.middlewares import check_daily_quota, check_rate_limit
 from src.telegram.reacciones import reaccionar
+from src.telegram.safe_session import SafeRedisSession
+from telegram import (ForceReply, InlineKeyboardButton, InlineKeyboardMarkup,
+                      KeyboardButton, KeyboardButtonRequestChat, LabeledPrice,
+                      ReplyKeyboardMarkup, Update)
+from telegram.constants import ChatAction
+from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
+                          ContextTypes, InlineQueryHandler, MessageHandler,
+                          PreCheckoutQueryHandler, filters)
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +60,16 @@ QUICK_ACTIONS_KEYBOARD = ReplyKeyboardMarkup(
     [
         [KeyboardButton("Entrene"), KeyboardButton("Comi"), KeyboardButton("Dormi")],
         [KeyboardButton("Peso"), KeyboardButton("Agua"), KeyboardButton("Calma")],
-        [KeyboardButton("Plan de hoy"), KeyboardButton("Mi semana"), KeyboardButton("Mis PRs")],
-        [KeyboardButton("Recordatorios"), KeyboardButton("Compromiso"), KeyboardButton("Tono")],
+        [
+            KeyboardButton("Plan de hoy"),
+            KeyboardButton("Mi semana"),
+            KeyboardButton("Mis PRs"),
+        ],
+        [
+            KeyboardButton("Recordatorios"),
+            KeyboardButton("Compromiso"),
+            KeyboardButton("Tono"),
+        ],
     ],
     is_persistent=True,
     resize_keyboard=True,
@@ -171,7 +145,7 @@ async def _enviar_con_retry(message, texto: str, intentos: int = 3, **kwargs) ->
             return
 
 
-_SAFE_TAGS_RE = re.compile(r'</?(?:b|i|code|pre|blockquote)(?:\s[^>]*)?>')
+_SAFE_TAGS_RE = re.compile(r"</?(?:b|i|code|pre|blockquote)(?:\s[^>]*)?>")
 
 
 def _sanitize_telegram_html(text: str) -> str:
@@ -179,7 +153,7 @@ def _sanitize_telegram_html(text: str) -> str:
     parts: list[str] = []
     last = 0
     for m in _SAFE_TAGS_RE.finditer(text):
-        parts.append(_html.escape(text[last:m.start()]))
+        parts.append(_html.escape(text[last : m.start()]))
         parts.append(m.group())
         last = m.end()
     parts.append(_html.escape(text[last:]))
@@ -226,7 +200,7 @@ async def _build_prompt(texto: str, uid: int) -> str:
         return f"[{' | '.join(dinamicos)} | {cached_static}] {texto}"
 
     def _sanitize(v: str) -> str:
-        return re.sub(r'[\[\]|{}<>]', '', v)[:80]
+        return re.sub(r"[\[\]|{}<>]", "", v)[:80]
 
     estaticos = []
     if user.nombre:
@@ -251,9 +225,7 @@ async def _build_prompt(texto: str, uid: int) -> str:
         estaticos.append(f"modalidad={_sanitize(user.modalidad_deporte)}")
     if user.es_competitivo:
         estaticos.append("competitivo=si")
-    estaticos.append(
-        f"onboarding={'si' if user.onboarding_completo else 'no'}"
-    )
+    estaticos.append(f"onboarding={'si' if user.onboarding_completo else 'no'}")
     compromiso = await obtener_compromiso_activo(uid)
     if compromiso:
         estaticos.append(
@@ -321,7 +293,9 @@ async def _procesar(
             try:
                 await session.close()
             except Exception:
-                logger.debug("Error cerrando session corrupta uid=%s", uid, exc_info=True)
+                logger.debug(
+                    "Error cerrando session corrupta uid=%s", uid, exc_info=True
+                )
             await limpiar_keys_usuario(uid)
             await log_evento(
                 uid,
@@ -340,15 +314,28 @@ async def _procesar(
 
         if result.raw_responses:
             try:
-                total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
-                total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
-                await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
+                total_in = sum(
+                    r.usage.input_tokens for r in result.raw_responses if r.usage
+                )
+                total_out = sum(
+                    r.usage.output_tokens for r in result.raw_responses if r.usage
+                )
+                await log_llm_usage(
+                    uid,
+                    "coach",
+                    settings.coach_model,
+                    total_in,
+                    total_out,
+                    rounds=len(result.raw_responses),
+                )
             except Exception:
                 pass
 
         diag = detectar_diagnostico_output(output)
         if diag:
-            logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
+            logger.warning(
+                "Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag
+            )
             output = (
                 "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
                 "que un profesional medico/nutricionista/psicologo evalue tu caso. "
@@ -381,7 +368,8 @@ async def _autocancelar_escalation_si_cumplio(
 ) -> None:
     """Tras el run del agente, cancela escalation de los tipos cumplidos hoy."""
     try:
-        from src.telegram.escalation import _ya_cumplio_hoy, cancelar_escalado_hoy
+        from src.telegram.escalation import (_ya_cumplio_hoy,
+                                             cancelar_escalado_hoy)
 
         user = await obtener_usuario(uid)
         if user is None:
@@ -497,7 +485,9 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         prompt = REPLY_KEYBOARD_INTENTS[texto_strip]
         logger.info(
             "reply_keyboard intent uid=%s label=%r -> prompt=%r",
-            uid, texto_strip, prompt,
+            uid,
+            texto_strip,
+            prompt,
         )
         await update.message.chat.send_action(ChatAction.TYPING)
         await _procesar(update.message, prompt, uid, ctx=ctx)
@@ -633,14 +623,14 @@ async def cmd_pausa(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def cmd_porque_me_escribiste(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_porque_me_escribiste(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Transparencia algoritmica: muestra los ultimos 3 eventos del bot."""
     uid = update.effective_user.id
     eventos = await ultimos_eventos(uid, limit=3)
     if not eventos:
-        await update.message.reply_text(
-            "No tengo registros recientes que mostrarte."
-        )
+        await update.message.reply_text("No tengo registros recientes que mostrarte.")
         return
     lineas = ["<b>Por que te escribi recientemente:</b>"]
     for e in eventos:
@@ -697,7 +687,7 @@ def _make_menu_slash_handler(prompt: str):
 
 
 async def cmd_quiet_hours(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00"""
+    """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00."""
     uid = update.effective_user.id
     args = ctx.args or []
     if len(args) != 2:
@@ -737,11 +727,7 @@ async def cmd_salir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await pausar_recordatorios(uid, 30)
     await log_evento(uid, "salir", {})
     keyboard = [
-        [
-            InlineKeyboardButton(
-                "Si, borrar todo", callback_data="confirmar_borrado"
-            )
-        ]
+        [InlineKeyboardButton("Si, borrar todo", callback_data="confirmar_borrado")]
     ]
     await update.message.reply_text(
         "Listo. Pause los recordatorios <b>30 dias</b> y baje el tono a amigable.\n\n"
@@ -793,13 +779,14 @@ async def cmd_codigo_web(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
     minutos = CODIGO_TTL_SECONDS // 60
     landing_url = (
-        str(settings.landing_url).rstrip("/") if settings.landing_url
+        str(settings.landing_url).rstrip("/")
+        if settings.landing_url
         else "https://entrenadorax.axsoftware.codes"
     )
     await update.message.reply_text(
         f"<b>Tu codigo de acceso web</b>\n\n"
         f"<code>{codigo}</code>\n\n"
-        f"1) Abre <a href=\"{landing_url}/login\">{landing_url}/login</a>\n"
+        f'1) Abre <a href="{landing_url}/login">{landing_url}/login</a>\n'
         f"2) Tab 'Deportista' -> pega el codigo\n"
         f"3) Listo, entras a tu panel.\n\n"
         f"El codigo vence en {minutos} minutos y solo sirve una vez. "
@@ -881,9 +868,7 @@ async def cmd_firmar_compromiso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
     """Atajo al flow de firma."""
     uid = update.effective_user.id
     await update.message.chat.send_action(ChatAction.TYPING)
-    await _procesar(
-        update.message, "Quiero firmar un compromiso conmigo mismo", uid
-    )
+    await _procesar(update.message, "Quiero firmar un compromiso conmigo mismo", uid)
 
 
 async def cmd_peso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -918,7 +903,9 @@ async def cmd_upgrade(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await log_evento(uid, "upgrade_invoice_enviado", {})
     except Exception:
         logger.exception("Error enviando invoice uid=%s", uid)
-        await update.message.reply_text("No pude crear el pago ahora. Reintenta en un momento.")
+        await update.message.reply_text(
+            "No pude crear el pago ahora. Reintenta en un momento."
+        )
 
 
 async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -948,7 +935,9 @@ async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             pass
 
 
-async def successful_payment_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def successful_payment_handler(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Activa Pro al recibir successful_payment. Idempotente vs duplicados."""
     from sqlalchemy.exc import IntegrityError
 
@@ -1006,10 +995,7 @@ async def cmd_invitar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def inline_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """@bot mi reporte -> articulo compartible."""
-    from telegram import (
-        InlineQueryResultArticle,
-        InputTextMessageContent,
-    )
+    from telegram import InlineQueryResultArticle, InputTextMessageContent
 
     q = update.inline_query
     if not q:
@@ -1071,14 +1057,11 @@ async def inline_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @requiere_tier(PlanSuscripcion.STARTER)
 async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]"""
-    from src.services.charts import (
-        chart_macros_dia,
-        chart_peso,
-        chart_reporte_semanal,
-        chart_streak_calendario,
-        chart_volumen_semanal,
-    )
+    """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]."""
+    from src.services.charts import (chart_macros_dia, chart_peso,
+                                     chart_reporte_semanal,
+                                     chart_streak_calendario,
+                                     chart_volumen_semanal)
 
     uid = update.effective_user.id
     args = ctx.args or []
@@ -1108,7 +1091,7 @@ async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_exportar_csv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Exporta entrenos de los ultimos 30 dias (Pro: ilimitado)."""
-    from datetime import date, timedelta
+    from datetime import timedelta
     from io import BytesIO
 
     from src.db.repository import es_usuario_pro, obtener_ultimas_sesiones
@@ -1221,19 +1204,22 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return
         from src.db.repository import aprobar_comprobante, rechazar_comprobante
         from src.services.pricing import formatear_precio
+
         try:
             if accion == "admin_aprobar":
                 comp = await aprobar_comprobante(comp_id, "admin@telegram", "")
                 if comp is None:
                     await q.edit_message_caption(
-                        caption=q.message.caption + "\n\nYa fue procesado anteriormente.",
+                        caption=q.message.caption
+                        + "\n\nYa fue procesado anteriormente.",
                     )
                     return
                 # Activar plan del usuario
-                from src.db.models import MetodoPago
                 from sqlalchemy import select
+
                 from src.db.connection import async_session_factory
-                from src.db.models import Usuario
+                from src.db.models import MetodoPago, Usuario
+
                 async with async_session_factory() as session:
                     result = await session.execute(
                         select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
@@ -1264,16 +1250,21 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 logger.info("admin_aprobar comp_id=%s por uid=%s", comp_id, uid)
             else:
-                comp = await rechazar_comprobante(comp_id, "admin@telegram", "Rechazado via Telegram")
+                comp = await rechazar_comprobante(
+                    comp_id, "admin@telegram", "Rechazado via Telegram"
+                )
                 if comp is None:
                     await q.edit_message_caption(
-                        caption=q.message.caption + "\n\nYa fue procesado anteriormente.",
+                        caption=q.message.caption
+                        + "\n\nYa fue procesado anteriormente.",
                     )
                     return
                 # Notificar al usuario
                 from sqlalchemy import select
+
                 from src.db.connection import async_session_factory
                 from src.db.models import Usuario
+
                 async with async_session_factory() as session:
                     result = await session.execute(
                         select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
@@ -1297,7 +1288,8 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception:
             logger.exception("Error en admin_%s comp_id=%s", accion, comp_id_str)
             await q.edit_message_caption(
-                caption=q.message.caption + "\n\nError procesando. Revisa en el panel web.",
+                caption=q.message.caption
+                + "\n\nError procesando. Revisa en el panel web.",
             )
         return
 
@@ -1345,11 +1337,8 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if q.data.startswith("agua:"):
-        from src.services.hidratacion import (
-            consumo_hoy_ml,
-            objetivo_ml,
-            registrar_agua,
-        )
+        from src.services.hidratacion import (consumo_hoy_ml, objetivo_ml,
+                                              registrar_agua)
 
         try:
             ml = int(q.data.split(":", 1)[1])
@@ -1376,7 +1365,7 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if q.data.startswith("calma:"):
         from io import BytesIO
 
-        from src.services.mindfulness import obtener_audio, SESIONES
+        from src.services.mindfulness import SESIONES, obtener_audio
 
         slug = q.data.split(":", 1)[1]
         sesion = SESIONES.get(slug)
@@ -1408,19 +1397,13 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 f"Inscripto en <b>{slug}</b>. Usa /ranking para ver tu posicion."
             )
         else:
-            await q.edit_message_text(
-                "Ya estabas inscrito o el desafio no existe."
-            )
+            await q.edit_message_text("Ya estabas inscrito o el desafio no existe.")
         return
 
     if q.data.startswith("pagar:"):
         from src.db.models import DuracionPago, PlanSuscripcion
-        from src.services.pricing import (
-            descripcion_plan,
-            dias_duracion,
-            formatear_precio,
-            precio_cop,
-        )
+        from src.services.pricing import (descripcion_plan, dias_duracion,
+                                          formatear_precio, precio_cop)
 
         partes = q.data.split(":")
         if len(partes) >= 3:
@@ -1469,14 +1452,10 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         fallo_critico = False
         try:
             borrado = await eliminar_usuario(uid)
-            logger.info(
-                "borrar_datos DB delete uid=%s borrado=%s", uid, borrado
-            )
+            logger.info("borrar_datos DB delete uid=%s borrado=%s", uid, borrado)
         except Exception:
             fallo_critico = True
-            logger.exception(
-                "borrar_datos fallo en eliminar_usuario uid=%s", uid
-            )
+            logger.exception("borrar_datos fallo en eliminar_usuario uid=%s", uid)
         if not fallo_critico:
             try:
                 keys_redis = await limpiar_keys_usuario(uid)
@@ -1496,8 +1475,7 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 evento_ok = True
             except Exception:
                 logger.exception(
-                    "borrar_datos fallo en log_evento uid=%s "
-                    "(no critico)",
+                    "borrar_datos fallo en log_evento uid=%s " "(no critico)",
                     uid,
                 )
         logger.info(
@@ -1511,8 +1489,7 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         if fallo_critico:
             await q.edit_message_text(
-                "Hubo un error eliminando tus datos. "
-                "Intenta de nuevo en un momento."
+                "Hubo un error eliminando tus datos. " "Intenta de nuevo en un momento."
             )
             return
         if borrado:
@@ -1522,8 +1499,7 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         else:
             await q.edit_message_text(
-                "No encontre datos asociados a tu cuenta. "
-                "Usa /start para empezar."
+                "No encontre datos asociados a tu cuenta. " "Usa /start para empezar."
             )
         return
 
@@ -1570,7 +1546,9 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 InlineKeyboardButton("Dia libre", callback_data="menu_dia_libre"),
             ],
             [
-                InlineKeyboardButton("Bajar a amigable", callback_data="menu_apagar_firme"),
+                InlineKeyboardButton(
+                    "Bajar a amigable", callback_data="menu_apagar_firme"
+                ),
                 InlineKeyboardButton("Exportar CSV", callback_data="menu_exportar"),
             ],
             [
@@ -1608,9 +1586,7 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await borrar_datos(_FakeUpdate(q.message, q.from_user), ctx)
         return
     if q.data == "menu_recordatorios":
-        await _procesar(
-            q.message, "Lista mis recordatorios activos", uid, ctx=ctx
-        )
+        await _procesar(q.message, "Lista mis recordatorios activos", uid, ctx=ctx)
         return
 
     mapping = {
@@ -1661,20 +1637,11 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     -> procesa con Vision-comprobante. Si no, va a Vision-comida.
     Cap 3 fotos/dia free.
     """
-    from datetime import date
-
-    from src.db.repository import es_plan_minimo
     from src.db.models import PlanSuscripcion
-    from src.services.comprobantes import (
-        extraer_datos_comprobante,
-        sha256_imagen,
-    )
-    from src.services.deteccion_duplicados import es_duplicado
-    from src.services.vision import (
-        analizar_comida,
-        describir_imagen_no_comida,
-        resize_si_pesa,
-    )
+    from src.db.repository import es_plan_minimo
+    from src.services.vision import (analizar_comida,
+                                     describir_imagen_no_comida,
+                                     resize_si_pesa)
 
     uid = update.effective_user.id
     if not await check_rate_limit(uid):
@@ -1739,7 +1706,9 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if caption:
         logger.info(
             "recibir_foto con caption uid=%s len=%d preview=%r",
-            uid, len(caption), caption[:60],
+            uid,
+            len(caption),
+            caption[:60],
         )
     result = await analizar_comida(
         raw, objetivo_usuario=objetivo, tono=tono, caption=caption
@@ -1755,7 +1724,10 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
         logger.info(
             "photo error delegado al coach uid=%s error=%s tiene_caption=%s desc=%r",
-            uid, err, bool(caption), descripcion,
+            uid,
+            err,
+            bool(caption),
+            descripcion,
         )
         contexto_partes = [
             "[CONTEXTO_FOTO]",
@@ -1808,8 +1780,14 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(
         "photo_meal flow uid=%s tipo=%s fecha=%s n_alim=%d kcal=%d "
         "P=%.1f C=%.1f G=%.1f",
-        uid, tipo_comida, fecha_user, len(alimentos_clean),
-        calorias, proteinas, carbs, grasas,
+        uid,
+        tipo_comida,
+        fecha_user,
+        len(alimentos_clean),
+        calorias,
+        proteinas,
+        carbs,
+        grasas,
     )
 
     # Guardamos en 3 pasos separados para que la falla de uno NO mate los
@@ -1831,7 +1809,9 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         logger.exception(
             "photo_meal: guardar_feedback_comida fallo uid=%s n_alim=%d kcal=%d",
-            uid, len(alimentos_clean), calorias,
+            uid,
+            len(alimentos_clean),
+            calorias,
         )
 
     comida_ok = False
@@ -1849,9 +1829,11 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         comida_ok = True
     except Exception:
         logger.exception(
-            "photo_meal: guardar_comida fallo uid=%s tipo=%s fecha=%s "
-            "alimentos=%r",
-            uid, tipo_comida, fecha_user, alimentos_clean[:5],
+            "photo_meal: guardar_comida fallo uid=%s tipo=%s fecha=%s " "alimentos=%r",
+            uid,
+            tipo_comida,
+            fecha_user,
+            alimentos_clean[:5],
         )
 
     try:
@@ -1966,7 +1948,9 @@ async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 mensaje_enviado_id=sent.message_id,
                 derivado_a=crisis.lineas_crisis[:120],
             )
-            await log_evento(uid, "crisis_detected", {"nivel": crisis.nivel, "via": "voz"})
+            await log_evento(
+                uid, "crisis_detected", {"nivel": crisis.nivel, "via": "voz"}
+            )
         except Exception:
             logger.exception("Error manejando crisis (voz) uid=%s", uid)
         return
@@ -1996,13 +1980,12 @@ async def _procesar_comprobante(
     manualmente desde /admin/pagos. Antes del fix, si Vision decia
     "no es comprobante", no se guardaba nada y el pago se perdia.
     """
-    from src.db.models import DuracionPago, PlanSuscripcion
-    from src.services.comprobantes import (
-        extraer_datos_comprobante,
-        sha256_imagen,
-    )
+    from src.db.models import PlanSuscripcion
+    from src.services.comprobantes import (extraer_datos_comprobante,
+                                           sha256_imagen)
     from src.services.deteccion_duplicados import es_duplicado
-    from src.services.pricing import dias_duracion, formatear_precio, precio_cop
+    from src.services.pricing import (dias_duracion, formatear_precio,
+                                      precio_cop)
 
     pendiente = ctx.user_data.get("plan_pendiente_pago") or {}
     plan_str = pendiente.get("plan", "starter")
@@ -2018,9 +2001,7 @@ async def _procesar_comprobante(
     dias_otorgados = dias_duracion(plan_solicitado, duracion)
 
     await update.message.chat.send_action(ChatAction.TYPING)
-    await update.message.reply_text(
-        "Recibi tu comprobante. Lo estoy analizando..."
-    )
+    await update.message.reply_text("Recibi tu comprobante. Lo estoy analizando...")
 
     try:
         photo = update.message.photo[-1]
@@ -2028,7 +2009,9 @@ async def _procesar_comprobante(
         raw = bytes(await file.download_as_bytearray())
     except Exception:
         logger.exception("Error descargando comprobante uid=%s", uid)
-        await update.message.reply_text("No pude descargar el comprobante. Intenta de nuevo.")
+        await update.message.reply_text(
+            "No pude descargar el comprobante. Intenta de nuevo."
+        )
         return
 
     sha = sha256_imagen(raw)
@@ -2079,34 +2062,44 @@ async def _procesar_comprobante(
         return
     logger.info(
         "comprobante guardado uid=%s comp_id=%s vision_ok=%s",
-        uid, comprobante.id, vision_reconocio,
+        uid,
+        comprobante.id,
+        vision_reconocio,
     )
 
     # NOTIFICAR AL ADMIN con botones inline para aprobar/rechazar desde Telegram
-    admin_base = str(settings.landing_url or "https://entrenadorax.axsoftware.codes").rstrip("/")
+    admin_base = str(
+        settings.landing_url or "https://entrenadorax.axsoftware.codes"
+    ).rstrip("/")
     admin_link = f"{admin_base}/admin/pagos/{comprobante.id}"
     if settings.developer_chat_id:
         try:
             status_label = "Vision OK" if vision_reconocio else "Vision NO reconocio"
-            monto_label = formatear_precio(comprobante.monto_cop) if comprobante.monto_cop else "no detectado"
-            admin_keyboard = InlineKeyboardMarkup([
+            monto_label = (
+                formatear_precio(comprobante.monto_cop)
+                if comprobante.monto_cop
+                else "no detectado"
+            )
+            admin_keyboard = InlineKeyboardMarkup(
                 [
-                    InlineKeyboardButton(
-                        "Aprobar pago",
-                        callback_data=f"admin_aprobar:{comprobante.id}",
-                    ),
-                    InlineKeyboardButton(
-                        "Rechazar",
-                        callback_data=f"admin_rechazar:{comprobante.id}",
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "Ver en panel web",
-                        url=admin_link,
-                    ),
-                ],
-            ])
+                    [
+                        InlineKeyboardButton(
+                            "Aprobar pago",
+                            callback_data=f"admin_aprobar:{comprobante.id}",
+                        ),
+                        InlineKeyboardButton(
+                            "Rechazar",
+                            callback_data=f"admin_rechazar:{comprobante.id}",
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "Ver en panel web",
+                            url=admin_link,
+                        ),
+                    ],
+                ]
+            )
             await ctx.bot.send_photo(
                 chat_id=settings.developer_chat_id,
                 photo=photo.file_id,
@@ -2133,9 +2126,14 @@ async def _procesar_comprobante(
             "Si quieres acelerar, asegurate que la foto muestre "
             "claramente monto, fecha y referencia. Te aviso cuando se valide."
         )
-        await log_evento(uid, "comprobante_vision_rechazado", {
-            "razon": razon, "comp_id": comprobante.id,
-        })
+        await log_evento(
+            uid,
+            "comprobante_vision_rechazado",
+            {
+                "razon": razon,
+                "comp_id": comprobante.id,
+            },
+        )
         return
 
     # Vision reconocio: flujo normal (duplicados + activacion)
@@ -2262,9 +2260,11 @@ async def cmd_llamar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     url = f"{str(settings.miniapp_url).rstrip('/')}/llamar"
-    keyboard = [[
-        InlineKeyboardButton("Iniciar llamada", web_app=WebAppInfo(url=url)),
-    ]]
+    keyboard = [
+        [
+            InlineKeyboardButton("Iniciar llamada", web_app=WebAppInfo(url=url)),
+        ]
+    ]
     await update.message.reply_text(
         "<b>Llamar al coach</b>\n\nToca el boton y permite acceso al microfono.",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -2273,7 +2273,8 @@ async def cmd_llamar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_agua(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Registra agua o consulta consumo del dia. /agua [ml]."""
-    from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
+    from src.services.hidratacion import (consumo_hoy_ml, objetivo_ml,
+                                          registrar_agua)
 
     uid = update.effective_user.id
     args = ctx.args or []
@@ -2334,12 +2335,14 @@ async def cmd_desafios(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     botones = []
     for d in desafios[:10]:
         lineas.append(f"- <b>{d.titulo}</b> ({d.tipo}) hasta {d.fecha_fin.isoformat()}")
-        botones.append([
-            InlineKeyboardButton(
-                f"Inscribirme: {d.titulo[:30]}",
-                callback_data=f"desafio_inscribir:{d.slug}",
-            )
-        ])
+        botones.append(
+            [
+                InlineKeyboardButton(
+                    f"Inscribirme: {d.titulo[:30]}",
+                    callback_data=f"desafio_inscribir:{d.slug}",
+                )
+            ]
+        )
     await update.message.reply_text(
         "\n".join(lineas), reply_markup=InlineKeyboardMarkup(botones)
     )
@@ -2395,21 +2398,41 @@ async def cmd_kudos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_pagar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Muestra los 4 tiers con inline keyboard para iniciar pago."""
-    from src.db.models import DuracionPago, PlanSuscripcion
+    from src.db.models import PlanSuscripcion
     from src.services.pricing import formatear_precio, precio_cop
 
-    starter_m = formatear_precio(precio_cop(PlanSuscripcion.STARTER, DuracionPago.MENSUAL))
+    starter_m = formatear_precio(
+        precio_cop(PlanSuscripcion.STARTER, DuracionPago.MENSUAL)
+    )
     pro_m = formatear_precio(precio_cop(PlanSuscripcion.PRO, DuracionPago.MENSUAL))
     elite_m = formatear_precio(precio_cop(PlanSuscripcion.ELITE, DuracionPago.MENSUAL))
     pro_a = formatear_precio(precio_cop(PlanSuscripcion.PRO, DuracionPago.ANUAL))
-    lifetime = formatear_precio(precio_cop(PlanSuscripcion.LIFETIME, DuracionPago.LIFETIME))
+    lifetime = formatear_precio(
+        precio_cop(PlanSuscripcion.LIFETIME, DuracionPago.LIFETIME)
+    )
 
     keyboard = [
-        [InlineKeyboardButton(f"Starter {starter_m}/mes", callback_data="pagar:starter:mensual")],
+        [
+            InlineKeyboardButton(
+                f"Starter {starter_m}/mes", callback_data="pagar:starter:mensual"
+            )
+        ],
         [InlineKeyboardButton(f"Pro {pro_m}/mes", callback_data="pagar:pro:mensual")],
-        [InlineKeyboardButton(f"Elite {elite_m}/mes", callback_data="pagar:elite:mensual")],
-        [InlineKeyboardButton(f"Pro anual {pro_a} (20% off)", callback_data="pagar:pro:anual")],
-        [InlineKeyboardButton(f"Lifetime {lifetime}", callback_data="pagar:lifetime:lifetime")],
+        [
+            InlineKeyboardButton(
+                f"Elite {elite_m}/mes", callback_data="pagar:elite:mensual"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"Pro anual {pro_a} (20% off)", callback_data="pagar:pro:anual"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"Lifetime {lifetime}", callback_data="pagar:lifetime:lifetime"
+            )
+        ],
     ]
     await update.message.reply_text(
         "<b>Elige tu plan EntrenadorAX</b>\n\n"

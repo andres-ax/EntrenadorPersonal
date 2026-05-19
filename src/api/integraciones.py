@@ -2,6 +2,7 @@
 
 Despues del OAuth dance, guarda tokens cifrados y dispara primer sync.
 """
+
 from __future__ import annotations
 
 import html as _html
@@ -15,10 +16,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from src.config import settings
-from src.services.wearables import (
-    PROVEEDORES_DISPONIBLES,
-    upsert_integracion,
-)
+from src.services.wearables import PROVEEDORES_DISPONIBLES, upsert_integracion
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +47,13 @@ def _client_credentials(proveedor: str) -> tuple[str, str, str]:
     # src/main.py bajo /api/integraciones/*), no el admin web. Por eso
     # webhook_base_url y NO admin_url. Fallback al dominio Railway real.
     api_base = str(
-        settings.webhook_base_url
-        or "https://entrenadorax.axsoftware.codes"
+        settings.webhook_base_url or "https://entrenadorax.axsoftware.codes"
     ).rstrip("/")
     redirect = f"{api_base}/api/integraciones/{proveedor}/callback"
     return cid, csec, redirect
 
 
-async def _intercambiar_codigo_por_token(
-    proveedor: str, code: str
-) -> Optional[dict]:
+async def _intercambiar_codigo_por_token(proveedor: str, code: str) -> Optional[dict]:
     token_url = TOKEN_URLS.get(proveedor)
     if not token_url:
         return None
@@ -127,9 +122,7 @@ async def oauth_callback(
         external_user_id=external_user_id,
     )
     if integ is None:
-        return HTMLResponse(
-            "<h2>Usuario no encontrado.</h2>", status_code=404
-        )
+        return HTMLResponse("<h2>Usuario no encontrado.</h2>", status_code=404)
 
     return HTMLResponse(
         f"<!doctype html><html><head><title>Conectado</title>"

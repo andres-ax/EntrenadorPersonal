@@ -1,4 +1,5 @@
 """Tests de tools de deportes combate (PR3): sparring, pelea, cut, screening concusion."""
+
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -26,8 +27,11 @@ async def test_calcular_cut_dentro_categoria():
     with patch("src.tools.log_evento", new=AsyncMock()):
         raw = await call_tool(
             calcular_peso_objetivo_responsable,
-            telegram_id=1, peso_actual_kg=68.0, peso_categoria_kg=70.0,
-            dias_hasta_pesaje=30, estilo_combate="mma",
+            telegram_id=1,
+            peso_actual_kg=68.0,
+            peso_categoria_kg=70.0,
+            dias_hasta_pesaje=30,
+            estilo_combate="mma",
         )
     data = _ok(raw)
     assert "ya estas en categoria" in data["plan"]
@@ -40,8 +44,11 @@ async def test_calcular_cut_responsable_normal():
     with patch("src.tools.log_evento", new=AsyncMock()):
         raw = await call_tool(
             calcular_peso_objetivo_responsable,
-            telegram_id=1, peso_actual_kg=73.0, peso_categoria_kg=70.0,
-            dias_hasta_pesaje=60, estilo_combate="boxeo",
+            telegram_id=1,
+            peso_actual_kg=73.0,
+            peso_categoria_kg=70.0,
+            dias_hasta_pesaje=60,
+            estilo_combate="boxeo",
         )
     data = _ok(raw)
     assert data["delta_pct"] < 5
@@ -56,8 +63,11 @@ async def test_calcular_cut_critico_8pct_2sem():
     with patch("src.tools.log_evento", new=AsyncMock()):
         raw = await call_tool(
             calcular_peso_objetivo_responsable,
-            telegram_id=1, peso_actual_kg=80.0, peso_categoria_kg=70.0,
-            dias_hasta_pesaje=10, estilo_combate="mma",
+            telegram_id=1,
+            peso_actual_kg=80.0,
+            peso_categoria_kg=70.0,
+            dias_hasta_pesaje=10,
+            estilo_combate="mma",
         )
     data = _ok(raw)
     assert data.get("alerta_critica") is True
@@ -70,8 +80,11 @@ async def test_calcular_cut_agudo_excesivo():
     with patch("src.tools.log_evento", new=AsyncMock()):
         raw = await call_tool(
             calcular_peso_objetivo_responsable,
-            telegram_id=1, peso_actual_kg=78.0, peso_categoria_kg=70.0,
-            dias_hasta_pesaje=3, estilo_combate="boxeo",
+            telegram_id=1,
+            peso_actual_kg=78.0,
+            peso_categoria_kg=70.0,
+            dias_hasta_pesaje=3,
+            estilo_combate="boxeo",
         )
     data = _ok(raw)
     assert data.get("alerta_critica") is True
@@ -83,7 +96,9 @@ async def test_registrar_sparring_estilo_invalido():
 
     raw = await call_tool(
         registrar_sparring,
-        telegram_id=1, estilo="tenis", rounds=3,
+        telegram_id=1,
+        estilo="tenis",
+        rounds=3,
     )
     _err(raw)
 
@@ -102,8 +117,11 @@ async def test_registrar_sparring_carga_alta_alerta():
             with patch("src.tools.log_evento", new=AsyncMock()):
                 raw = await call_tool(
                     registrar_sparring,
-                    telegram_id=1, estilo="mma", rounds=8,
-                    duracion_round_min=15, intensidad_1_10=7,
+                    telegram_id=1,
+                    estilo="mma",
+                    rounds=8,
+                    duracion_round_min=15,
+                    intensidad_1_10=7,
                 )
     data = _ok(raw)
     assert data["alerta_carga_alta"] is True
@@ -122,8 +140,11 @@ async def test_registrar_sparring_golpe_cabeza_flag():
             with patch("src.tools.log_evento", new=AsyncMock()):
                 raw = await call_tool(
                     registrar_sparring,
-                    telegram_id=1, estilo="boxeo", rounds=4,
-                    duracion_round_min=3, intensidad_1_10=8,
+                    telegram_id=1,
+                    estilo="boxeo",
+                    rounds=4,
+                    duracion_round_min=3,
+                    intensidad_1_10=8,
                     golpe_cabeza_fuerte=True,
                 )
     data = _ok(raw)
@@ -138,9 +159,12 @@ async def test_registrar_pelea_rebound_alto():
     with patch("src.tools.log_evento", new=AsyncMock()):
         raw = await call_tool(
             registrar_pelea,
-            telegram_id=1, estilo="mma",
-            resultado="ganada", metodo="decision_unanime",
-            peso_pesaje_kg=70.0, peso_dia_pelea_kg=80.0,
+            telegram_id=1,
+            estilo="mma",
+            resultado="ganada",
+            metodo="decision_unanime",
+            peso_pesaje_kg=70.0,
+            peso_dia_pelea_kg=80.0,
             round_final=0,
         )
     data = _ok(raw)
@@ -173,7 +197,10 @@ async def test_evaluar_concusion_alta_perdida_consciencia():
     data = _ok(raw)
     assert data["severidad"] == "alta"
     assert data["off_sport_dias"] == 21
-    assert "URGENCIAS" in data["recomendacion"] or "urgencias" in data["recomendacion"].lower()
+    assert (
+        "URGENCIAS" in data["recomendacion"]
+        or "urgencias" in data["recomendacion"].lower()
+    )
 
 
 @pytest.mark.asyncio

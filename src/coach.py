@@ -1,54 +1,30 @@
 """Agent OpenAI - EntrenadorAX con tono configurable y compromiso firmable."""
+
 import logging
 import re
 
-from agents import Agent, GuardrailFunctionOutput, input_guardrail, output_guardrail
+from agents import (Agent, GuardrailFunctionOutput, input_guardrail,
+                    output_guardrail)
 
 from src.config import settings
-
-from src.tools import (
-    calcular_peso_objetivo_responsable,
-    cambiar_tono,
-    cancelar_recordatorio,
-    confirmar_modo_militar,
-    configurar_quiet_hours,
-    consultar_compromiso,
-    consultar_historial_peso,
-    consultar_progreso_skill,
-    consultar_resumen_visual,
-    consultar_streak,
-    dar_premio_motivacional,
-    evaluar_concusion_simplificado,
-    firmar_compromiso,
-    guardar_perfil,
-    guardar_pr,
-    cerrar_sesion_entrenamiento,
-    consultar_ultima_sesion_skill,
-    editar_sesion_reciente,
-    eliminar_comida_reciente,
-    listar_recordatorios,
-    listar_todos_prs,
-    obtener_perfil,
-    obtener_pr,
-    pausar,
-    programar_recordatorio,
-    proponer_ejercicio_aleatorio,
-    registrar_comida,
-    registrar_entreno,
-    registrar_hidratacion,
-    consultar_hidratacion_hoy,
-    registrar_pelea,
-    registrar_peso,
-    registrar_sesion_skill,
-    registrar_sparring,
-    registrar_sueno,
-    registrar_truco_aterrizado,
-    registrar_via_escalada,
-    reporte_progreso,
-    resumen_nutricional,
-    usar_dia_libre,
-    verificar_logros,
-)
+from src.tools import (calcular_peso_objetivo_responsable, cambiar_tono,
+                       cancelar_recordatorio, cerrar_sesion_entrenamiento,
+                       configurar_quiet_hours, confirmar_modo_militar,
+                       consultar_compromiso, consultar_hidratacion_hoy,
+                       consultar_historial_peso, consultar_progreso_skill,
+                       consultar_resumen_visual, consultar_streak,
+                       consultar_ultima_sesion_skill, dar_premio_motivacional,
+                       editar_sesion_reciente, eliminar_comida_reciente,
+                       evaluar_concusion_simplificado, firmar_compromiso,
+                       guardar_perfil, guardar_pr, listar_recordatorios,
+                       listar_todos_prs, obtener_perfil, obtener_pr, pausar,
+                       programar_recordatorio, proponer_ejercicio_aleatorio,
+                       registrar_comida, registrar_entreno,
+                       registrar_hidratacion, registrar_pelea, registrar_peso,
+                       registrar_sesion_skill, registrar_sparring,
+                       registrar_sueno, registrar_truco_aterrizado,
+                       registrar_via_escalada, reporte_progreso,
+                       resumen_nutricional, usar_dia_libre, verificar_logros)
 
 logger = logging.getLogger(__name__)
 
@@ -765,7 +741,7 @@ async def guardrail_anti_spam(ctx, agent, input_data):
     # El input incluye el bloque [uid=... | perfil...] antes del mensaje real.
     # Extraemos solo la parte del usuario (despues del ] de cierre).
     bracket_end = texto.rfind("] ")
-    msg = texto[bracket_end + 2:].strip() if bracket_end != -1 else texto.strip()
+    msg = texto[bracket_end + 2 :].strip() if bracket_end != -1 else texto.strip()
     if len(msg) > 3500:
         return GuardrailFunctionOutput(
             output_info={"reason": "mensaje_muy_largo"},

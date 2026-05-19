@@ -4,16 +4,17 @@ Lee la URL desde src.config.settings (no desde alembic.ini), aprovecha
 la normalizacion postgresql:// -> postgresql+asyncpg:// y los tipos
 validados por pydantic-settings v2.
 """
+
 from __future__ import annotations
 
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from src.config import settings
 from src.db.models import Base
 

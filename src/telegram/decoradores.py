@@ -1,15 +1,15 @@
 """Decoradores para handlers de Telegram (gating por tier, etc)."""
+
 from __future__ import annotations
 
 import functools
 import logging
 from typing import Awaitable, Callable
 
-from telegram import Update
-from telegram.ext import ContextTypes
-
 from src.db.models import PlanSuscripcion
 from src.db.repository import es_plan_minimo, obtener_plan_actual
+from telegram import Update
+from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,7 @@ def requiere_tier(minimo: PlanSuscripcion) -> Callable[[HandlerFn], HandlerFn]:
 
     def decorator(handler: HandlerFn) -> HandlerFn:
         @functools.wraps(handler)
-        async def wrapper(
-            update: Update, ctx: ContextTypes.DEFAULT_TYPE
-        ) -> None:
+        async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             user = update.effective_user
             if user is None:
                 return

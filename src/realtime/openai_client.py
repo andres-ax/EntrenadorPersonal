@@ -2,13 +2,13 @@
 
 Doc: https://platform.openai.com/docs/guides/realtime
 """
+
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import logging
-from typing import AsyncIterator, Callable, Optional
+from typing import AsyncIterator, Optional
 
 import websockets
 
@@ -52,8 +52,13 @@ class RealtimeBridge:
         # websockets >= 14 renombro extra_headers -> additional_headers.
         # Detectamos cual usar para ser compatibles con ambas versiones.
         import inspect
+
         connect_params = inspect.signature(websockets.connect).parameters
-        header_kwarg = "additional_headers" if "additional_headers" in connect_params else "extra_headers"
+        header_kwarg = (
+            "additional_headers"
+            if "additional_headers" in connect_params
+            else "extra_headers"
+        )
         self.ws = await websockets.connect(
             REALTIME_URL,
             **{header_kwarg: headers},
@@ -86,9 +91,7 @@ class RealtimeBridge:
     async def enviar_audio_pcm16(self, audio_bytes: bytes) -> None:
         """Envia chunk de audio PCM16 al modelo (input usuario)."""
         b64 = base64.b64encode(audio_bytes).decode("ascii")
-        await self._enviar_evento(
-            {"type": "input_audio_buffer.append", "audio": b64}
-        )
+        await self._enviar_evento({"type": "input_audio_buffer.append", "audio": b64})
 
     async def cerrar(self) -> None:
         if self.ws is not None:

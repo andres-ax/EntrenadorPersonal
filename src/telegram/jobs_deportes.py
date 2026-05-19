@@ -12,33 +12,24 @@ la categoria correspondiente:
 Todos respetan: bot_bloqueado, pausado_hasta, quiet_hours_inicio/fin del user
 (via el helper _enviar_safe del scheduler base).
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time, timedelta
-from typing import Awaitable, Callable
+from datetime import date, time, timedelta
 
 from sqlalchemy import select
-from telegram.ext import Application, ContextTypes
 
 from src.db.connection import async_session_factory
-from src.db.models import (
-    CategoriaDeporte,
-    Compromiso,
-    PersonalRecord,
-    SesionEntrenamiento,
-    SubtipoSesion,
-    TipoPR,
-    Usuario,
-)
+from src.db.models import (CategoriaDeporte, Compromiso, SesionEntrenamiento,
+                           SubtipoSesion, Usuario)
 from src.db.repository import listar_usuarios_activos
+from telegram.ext import Application, ContextTypes
 
 logger = logging.getLogger(__name__)
 
 
-async def _enviar(
-    bot, chat_id: int, texto: str, silent: bool = False
-) -> None:
+async def _enviar(bot, chat_id: int, texto: str, silent: bool = False) -> None:
     """Helper minimal: importa la implementacion del scheduler base si existe."""
     try:
         from src.telegram.scheduler import _enviar_safe
@@ -84,11 +75,13 @@ async def recordar_sesion_skill(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         for u in usuarios:
             try:
                 hay_sesion = await session.execute(
-                    select(SesionEntrenamiento.id).where(
+                    select(SesionEntrenamiento.id)
+                    .where(
                         SesionEntrenamiento.usuario_id == u.id,
                         SesionEntrenamiento.fecha == hoy,
                         SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
                 if hay_sesion.scalar_one_or_none() is not None:
                     continue
@@ -107,10 +100,13 @@ async def _compromiso_con_fight_date(uid: int) -> tuple[Compromiso, date] | None
     """Si user tiene compromiso activo con fight_date en el futuro (<= 90d), lo devuelve."""
     async with async_session_factory() as session:
         result = await session.execute(
-            select(Compromiso).where(
+            select(Compromiso)
+            .where(
                 Compromiso.usuario_id == uid,
                 Compromiso.activo == True,  # noqa: E712
-            ).order_by(Compromiso.fecha_firma.desc()).limit(1)
+            )
+            .order_by(Compromiso.fecha_firma.desc())
+            .limit(1)
         )
         c = result.scalar_one_or_none()
         if c is None or c.deadline is None:
@@ -162,12 +158,14 @@ async def recovery_post_sparring(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         for u in usuarios:
             try:
                 result = await session.execute(
-                    select(SesionEntrenamiento).where(
+                    select(SesionEntrenamiento)
+                    .where(
                         SesionEntrenamiento.usuario_id == u.id,
                         SesionEntrenamiento.subtipo == SubtipoSesion.SPARRING,
                         SesionEntrenamiento.fecha == hace_48h,
                         SesionEntrenamiento.intensidad_1_10 >= 7,
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
                 if result.scalar_one_or_none() is None:
                     continue
@@ -258,9 +256,7 @@ async def weekly_load_endurance(ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     )
                 else:
                     lineas.append("\nSemana razonable. Sigue asi.")
-                await _enviar(
-                    ctx.bot, u.telegram_id, "\n".join(lineas), silent=True
-                )
+                await _enviar(ctx.bot, u.telegram_id, "\n".join(lineas), silent=True)
             except Exception:
                 logger.exception("Error weekly_load_endurance uid=%s", u.telegram_id)
 
@@ -273,7 +269,9 @@ def registrar_jobs_deportes(app: Application) -> None:
 
     jq.run_daily(recordar_sesion_skill, time=time(10, 0), name="recordar_sesion_skill")
     jq.run_daily(peso_diario_camp, time=time(7, 0), name="peso_diario_camp")
-    jq.run_daily(recovery_post_sparring, time=time(20, 0), name="recovery_post_sparring")
+    jq.run_daily(
+        recovery_post_sparring, time=time(20, 0), name="recovery_post_sparring"
+    )
     jq.run_daily(taper_alert, time=time(9, 0), name="taper_alert")
     jq.run_daily(
         weekly_load_endurance, time=time(7, 0), days=(0,), name="weekly_load_endurance"

@@ -3,6 +3,7 @@
 Lee fotos de transferencias Bre-B, Nequi, Daviplata, Bancolombia, etc.
 y devuelve dict estructurado con monto, fecha, hora, referencia, cuentas.
 """
+
 from __future__ import annotations
 
 import base64
@@ -109,11 +110,13 @@ def _parse_monto(raw_str: str, raw_int) -> int:
 async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
     """Llama Vision API y devuelve dict estructurado del comprobante.
 
-    Returns:
+    Returns
+    -------
         dict con keys: ok (bool), es_comprobante (bool), monto_cop (int),
         fecha_pago (datetime|None), hora_pago (time|None), referencia (str),
         cuenta_origen (str), cuenta_destino (str), metodo (str), confianza (float),
         razon (str opcional), raw (dict Vision payload).
+
     """
     try:
         b64 = base64.b64encode(foto_bytes).decode("ascii")
@@ -141,14 +144,25 @@ async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
         )
         if response.usage:
             try:
-                await log_llm_usage(None, "comprobante", settings.comprobante_model, response.usage.prompt_tokens, response.usage.completion_tokens)
+                await log_llm_usage(
+                    None,
+                    "comprobante",
+                    settings.comprobante_model,
+                    response.usage.prompt_tokens,
+                    response.usage.completion_tokens,
+                )
             except Exception:
                 pass
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
     except json.JSONDecodeError:
         logger.exception("Vision devolvio JSON invalido en comprobante")
-        return {"ok": False, "es_comprobante": False, "razon": "json_invalido", "raw": {}}
+        return {
+            "ok": False,
+            "es_comprobante": False,
+            "razon": "json_invalido",
+            "raw": {},
+        }
     except Exception:
         logger.exception("Error en extraer_datos_comprobante")
         return {"ok": False, "es_comprobante": False, "razon": "api_error", "raw": {}}

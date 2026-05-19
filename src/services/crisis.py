@@ -24,6 +24,7 @@ Citas principales:
 - DAN (Divers Alert Network) 2023 - shallow water blackout causa #1 muertes
   freediving.
 """
+
 from __future__ import annotations
 
 import logging
@@ -147,11 +148,7 @@ LINEAS_POR_PAIS: dict[str, str] = {
         "- 106 Bogota / WhatsApp 300 754 8933\n"
         "- 123 emergencias"
     ),
-    "MX": (
-        "<b>Lineas en Mexico:</b>\n"
-        "- 800 911 2000 SAPTEL\n"
-        "- 911 emergencias"
-    ),
+    "MX": ("<b>Lineas en Mexico:</b>\n" "- 800 911 2000 SAPTEL\n" "- 911 emergencias"),
     "AR": (
         "<b>Lineas en Argentina:</b>\n"
         "- 135 (CABA) / 0800-345-1435 (nacional)\n"
@@ -163,19 +160,14 @@ LINEAS_POR_PAIS: dict[str, str] = {
         "- 717 003 717 (Telefono Esperanza)\n"
         "- 112 emergencias"
     ),
-    "PE": (
-        "<b>Lineas en Peru:</b>\n"
-        "- 113 opcion 5 MinSal\n"
-        "- ANAR 0800-2-2210"
-    ),
+    "PE": ("<b>Lineas en Peru:</b>\n" "- 113 opcion 5 MinSal\n" "- ANAR 0800-2-2210"),
     "CL": (
         "<b>Lineas en Chile:</b>\n"
         "- *4141 Salud Responde\n"
         "- 600 360 7777 Linea Libre"
     ),
     "US": (
-        "<b>Lineas en US (espanol disponible):</b>\n"
-        "- 988 Suicide & Crisis Lifeline"
+        "<b>Lineas en US (espanol disponible):</b>\n" "- 988 Suicide & Crisis Lifeline"
     ),
 }
 
@@ -364,9 +356,11 @@ def detectar(
     """Analiza texto. Devuelve CrisisDetected si encuentra red flag.
 
     Args:
+    ----
         texto: mensaje del usuario.
         pais: codigo ISO-2 para lineas locales.
         peso_actual_kg: peso del usuario para evaluar cut numerico (opcional).
+
     """
     resultado = _detectar_inner(texto, pais, peso_actual_kg)
     if resultado is not None:

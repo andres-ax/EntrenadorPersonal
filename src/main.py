@@ -1,4 +1,5 @@
 """FastAPI + webhook de Telegram. Modo produccion (Railway)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -14,26 +15,22 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from telegram import Update
-from telegram.constants import ParseMode
-from telegram.ext import Application, Defaults
 
 from src.api.admin_auth import seed_admin_si_falta
-from src.cache import close_redis, ping as ping_redis
+from src.cache import close_redis
+from src.cache import ping as ping_redis
 from src.config import settings
-from src.db.connection import close_db, engine, init_db, ping as ping_db
-from src.log_setup import (
-    bind_request_id,
-    bind_telegram_id,
-    get_or_make_request_id,
-    request_id_ctx,
-    setup_logging,
-    telegram_id_ctx,
-)
+from src.db.connection import close_db, init_db
+from src.db.connection import ping as ping_db
+from src.log_setup import (bind_telegram_id, get_or_make_request_id,
+                           request_id_ctx, setup_logging, telegram_id_ctx)
 from src.telegram.bot_setup import set_application, setup_bot
 from src.telegram.handlers import registrar
 from src.telegram.pubsub_listener import start_pubsub_listener
 from src.telegram.scheduler import registrar_jobs
+from telegram import Update
+from telegram.constants import ParseMode
+from telegram.ext import Application, Defaults
 
 setup_logging()
 
@@ -88,9 +85,7 @@ async def error_handler(update, context) -> None:
     if settings.developer_chat_id is None:
         return
     tb = "".join(
-        traceback.format_exception(
-            None, context.error, context.error.__traceback__
-        )
+        traceback.format_exception(None, context.error, context.error.__traceback__)
     )
     msg = (
         f"<b>Excepcion en el bot</b>\n"
@@ -149,9 +144,7 @@ async def lifespan(app: FastAPI):
     # que los updates lleguen a /webhook. Idempotente y resiste el bug clasico
     # de "el webhook se perdio". Solo corre si WEBHOOK_BASE_URL esta seteada.
     if settings.webhook_base_url:
-        webhook_url = (
-            f"{str(settings.webhook_base_url).rstrip('/')}/webhook"
-        )
+        webhook_url = f"{str(settings.webhook_base_url).rstrip('/')}/webhook"
         try:
             await telegram_app.bot.set_webhook(
                 url=webhook_url,
@@ -315,7 +308,6 @@ from src.api.auth import router as auth_router  # noqa: E402
 from src.api.integraciones import router as integraciones_router  # noqa: E402
 from src.api.me import router as me_router  # noqa: E402
 from src.api.public import router as public_router  # noqa: E402
-
 # Routers HTML server-side (Jinja2). Reemplazan los antiguos frontends
 # Next.js / Vite / Astro. Se montan con prioridad mayor que el StaticFiles
 # de la landing para que las rutas dinamicas (/, /admin/*, /app/*) ganen.
@@ -364,9 +356,7 @@ async def webhook(
         logger.warning("Webhook recibido pero bot no esta listo")
         raise HTTPException(503, "Bot no listo")
 
-    if not hmac.compare_digest(
-        x_telegram_bot_api_secret_token or "", WEBHOOK_SECRET
-    ):
+    if not hmac.compare_digest(x_telegram_bot_api_secret_token or "", WEBHOOK_SECRET):
         logger.warning(
             "Webhook con secret invalido ip=%s",
             request.client.host if request.client else "?",
@@ -478,7 +468,9 @@ async def webhook_info(x_admin_token: str = Header(None)) -> dict:
     """Devuelve la URL de webhook y secret. Protegido por X-Admin-Token."""
     if not hmac.compare_digest(x_admin_token or "", ADMIN_TOKEN):
         raise HTTPException(403, "Acceso denegado")
-    base = str(settings.webhook_base_url).rstrip("/") if settings.webhook_base_url else ""
+    base = (
+        str(settings.webhook_base_url).rstrip("/") if settings.webhook_base_url else ""
+    )
     return {
         "webhook_url": f"{base}/webhook" if base else None,
         "secret_token": WEBHOOK_SECRET,
@@ -511,12 +503,7 @@ async def admin_stats(
 
     from src.api.admin_auth import ADMIN_COOKIE_NAME, verify_admin_jwt
     from src.db.connection import async_session_factory
-    from src.db.models import (
-        CrisisLog,
-        EventoBot,
-        Suscripcion,
-        Usuario,
-    )
+    from src.db.models import CrisisLog, EventoBot, Suscripcion, Usuario
 
     autorizado = False
     if x_admin_token and hmac.compare_digest(x_admin_token, ADMIN_TOKEN):
@@ -599,6 +586,4 @@ if _static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
     logger.info("Static assets montados desde %s", _static_dir)
 else:
-    logger.info(
-        "frontend/static/ no existe; las paginas funcionan pero sin imgs/js."
-    )
+    logger.info("frontend/static/ no existe; las paginas funcionan pero sin imgs/js.")

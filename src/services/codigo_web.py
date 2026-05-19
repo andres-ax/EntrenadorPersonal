@@ -15,6 +15,7 @@ Por que no email/magic-links: Telegram es la unica fuente de verdad de
 identidad. No todos los usuarios tienen email registrado. El codigo
 corto es facil de pegar desde el celular.
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,12 +58,12 @@ async def generar_codigo(telegram_id: int) -> str:
     await client.setex(
         CODIGO_KEY.format(codigo=codigo), CODIGO_TTL_SECONDS, str(telegram_id)
     )
-    await client.setex(
-        UID_KEY.format(uid=telegram_id), CODIGO_TTL_SECONDS, codigo
-    )
+    await client.setex(UID_KEY.format(uid=telegram_id), CODIGO_TTL_SECONDS, codigo)
     logger.info(
         "codigo_web generado uid=%s codigo=******%s ttl=%ds",
-        telegram_id, codigo[-2:], CODIGO_TTL_SECONDS,
+        telegram_id,
+        codigo[-2:],
+        CODIGO_TTL_SECONDS,
     )
     return codigo
 
@@ -70,9 +71,11 @@ async def generar_codigo(telegram_id: int) -> str:
 async def validar_y_consumir(codigo: str) -> int | None:
     """Valida un codigo y lo elimina si es correcto (single-use).
 
-    Returns:
+    Returns
+    -------
         telegram_id si el codigo es valido y no estaba expirado.
         None si no existe, expiro, o ya fue usado.
+
     """
     if not codigo or not codigo.isdigit() or len(codigo) != 6:
         return None

@@ -23,6 +23,7 @@ Para propagar contexto desde middleware o handlers:
     finally:
         request_id_ctx.reset(token)
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,7 +33,6 @@ from contextvars import ContextVar
 from typing import Any
 
 from src.config import settings
-
 
 # ContextVars que se inyectan en cada log line via _ContextFilter.
 # Default "-" para que el campo siempre exista en logs JSON.
@@ -109,8 +109,10 @@ def setup_logging(level: int | None = None) -> None:
     realtime startup). No falla si se llama mas veces; solo recalcula handlers.
 
     Args:
+    ----
         level: nivel base (DEBUG/INFO/WARNING). Si es None, se decide segun
             settings.env: DEBUG en dev, INFO en prod/test.
+
     """
     global _already_configured
 

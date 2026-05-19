@@ -4,6 +4,7 @@ Auth via X-Admin-Token (root) o Authorization: Bearer JWT (login email+password)
 Las notificaciones bidireccionales con el bot van por Redis pubsub canal
 `pagos_actualizados` para que el bot envie mensaje al usuario.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,44 +14,23 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select, or_
+from sqlalchemy import func, or_, select
 
-from src.config import settings
-from src.api.admin_auth import (
-    LoginRequest,
-    LoginResponse,
-    autenticar_admin,
-    get_admin_from_token,
-    hash_password,
-    require_super,
-)
+from src.api.admin_auth import (LoginRequest, LoginResponse, autenticar_admin,
+                                get_admin_from_token, hash_password,
+                                require_super)
 from src.cache import get_redis
+from src.config import settings
 from src.db.connection import async_session_factory
-from src.db.models import (
-    Admin,
-    CrisisLog,
-    EscalacionState,
-    EstadoPago,
-    EventoBot,
-    MetodoPago,
-    PagoComprobante,
-    PlanSuscripcion,
-    RolAdmin,
-    Suscripcion,
-    Usuario,
-    UsuarioBloqueado,
-)
-from src.db.repository import (
-    activar_plan,
-    aprobar_comprobante,
-    bloquear_usuario,
-    desbloquear_usuario,
-    eliminar_usuario,
-    listar_comprobantes_admin,
-    obtener_comprobante,
-    pausar_recordatorios,
-    rechazar_comprobante,
-)
+from src.db.models import (Admin, CrisisLog, EscalacionState, EstadoPago,
+                           EventoBot, MetodoPago, PagoComprobante,
+                           PlanSuscripcion, RolAdmin, Suscripcion, Usuario,
+                           UsuarioBloqueado)
+from src.db.repository import (activar_plan, aprobar_comprobante,
+                               bloquear_usuario, desbloquear_usuario,
+                               eliminar_usuario, listar_comprobantes_admin,
+                               obtener_comprobante, pausar_recordatorios,
+                               rechazar_comprobante)
 
 logger = logging.getLogger(__name__)
 
@@ -267,8 +247,12 @@ async def detalle_usuario(
                 "monto_cop": p.monto_cop,
                 "monto_esperado_cop": p.monto_esperado_cop,
                 "monto_match": p.monto_match,
-                "plan_solicitado": p.plan_solicitado.value if p.plan_solicitado else "starter",
-                "duracion": p.duracion_solicitada.value if p.duracion_solicitada else "mensual",
+                "plan_solicitado": (
+                    p.plan_solicitado.value if p.plan_solicitado else "starter"
+                ),
+                "duracion": (
+                    p.duracion_solicitada.value if p.duracion_solicitada else "mensual"
+                ),
                 "estado": p.estado.value if p.estado else "pendiente_humano",
                 "metodo": p.metodo.value if p.metodo else "otro",
                 "referencia": p.referencia,
@@ -318,7 +302,9 @@ async def asignar_plan_manual(
         metodo=MetodoPago.MANUAL_ADMIN,
     )
     await _publicar_evento_pago(
-        uid, "plan_asignado_admin", {"plan": plan_enum.value, "dias": req.dias, "por": admin["email"]}
+        uid,
+        "plan_asignado_admin",
+        {"plan": plan_enum.value, "dias": req.dias, "por": admin["email"]},
     )
     return {"ok": True, "suscripcion_id": sus.id}
 
@@ -408,7 +394,9 @@ async def listar_pagos(
             estado_enum = EstadoPago(estado)
         except ValueError:
             raise HTTPException(400, "estado invalido")
-    pagos = await listar_comprobantes_admin(estado=estado_enum, limit=limit, offset=offset)
+    pagos = await listar_comprobantes_admin(
+        estado=estado_enum, limit=limit, offset=offset
+    )
     async with async_session_factory() as session:
         q_total = select(func.count(PagoComprobante.id))
         if estado_enum:
@@ -428,8 +416,8 @@ async def descargar_foto_comprobante(
     admin: dict = Depends(get_admin_from_token),
 ):
     """Proxy a Telegram para descargar la foto del comprobante."""
-    from fastapi.responses import Response
     import httpx
+    from fastapi.responses import Response
 
     from src.config import settings as _settings
 
@@ -729,6 +717,7 @@ async def broadcast(
 async def health_all(admin: dict = Depends(get_admin_from_token)) -> dict:
     """Health agregado: bot-api, realtime-ws, worker, postgres, redis."""
     import httpx as _h
+
     from src.cache import ping as _ping_r
     from src.db.connection import ping as _ping_d
 
@@ -758,17 +747,13 @@ async def health_all(admin: dict = Depends(get_admin_from_token)) -> dict:
     return out
 
 
-async def _publicar_evento_pago(
-    telegram_id: int, tipo: str, payload: dict
-) -> None:
+async def _publicar_evento_pago(telegram_id: int, tipo: str, payload: dict) -> None:
     """Notifica al bot via Redis pubsub que un pago cambio de estado."""
     try:
         client = await get_redis()
         await client.publish(
             CANAL_PAGOS,
-            json.dumps(
-                {"telegram_id": telegram_id, "tipo": tipo, "payload": payload}
-            ),
+            json.dumps({"telegram_id": telegram_id, "tipo": tipo, "payload": payload}),
         )
     except Exception:
         logger.exception("Error publicando evento pago a Redis pubsub")

@@ -4,6 +4,7 @@
 - Devolver str JSON-serializable.
 - No lanzar excepciones (try/except interno, devolver {"ok": False, "error": ...}).
 """
+
 from __future__ import annotations
 
 import functools
@@ -11,64 +12,58 @@ import json
 import logging
 import random
 import time
-from datetime import date, datetime, time as dtime, timedelta
+from datetime import date, datetime
+from datetime import time as dtime
+from datetime import timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from agents import function_tool
 
-from src.db.repository import (
-    actualizar_usuario,
-    aceptar_modo_militar,
-    cambiar_tono as repo_cambiar_tono,
-    crear_compromiso,
-    actualizar_sesion_skill_set as repo_actualizar_sesion_skill_set,
-    crear_recordatorio as repo_crear_recordatorio,
-    buscar_comida_similar as repo_buscar_comida_similar,
-    cerrar_sesion_abierta as repo_cerrar_sesion_abierta,
-    desactivar_recordatorio as repo_desactivar_recordatorio,
-    eliminar_comida as repo_eliminar_comida,
-    guardar_comida as repo_guardar_comida,
-    guardar_metrica_corporal,
-    guardar_pr as repo_guardar_pr,
-    guardar_pr_tiempo as repo_guardar_pr_tiempo,
-    guardar_pr_truco as repo_guardar_pr_truco,
-    guardar_pr_via_escalada as repo_guardar_pr_via,
-    guardar_sesion as repo_guardar_sesion,
-    guardar_sesion_skill as repo_guardar_sesion_skill,
-    guardar_sesion_sparring as repo_guardar_sesion_sparring,
-    guardar_sueno as repo_guardar_sueno,
-    historial_peso as repo_historial_peso,
-    incrementar_citado_compromiso,
-    incrementar_streak,
-    listar_prs,
-    listar_recordatorios as repo_listar_recordatorios,
-    listar_sesiones_skill as repo_listar_sesiones_skill,
-    listar_sparring_reciente as repo_listar_sparring_reciente,
-    listar_trucos_aterrizados as repo_listar_trucos,
-    obtener_comidas_dia as repo_obtener_comidas_dia,
-    obtener_compromiso_activo,
-    obtener_o_crear_usuario,
-    obtener_o_crear_streak,
-    obtener_pr_ejercicio,
-    obtener_ultima_sesion_skill as repo_obtener_ultima_sesion_skill,
-    pausar_recordatorios,
-    reporte_semanal,
-    resumen_nutricional_dia,
-    set_quiet_hours,
-    usar_freeze_streak,
-)
-from src.db.repository import log_evento
-from src.services.hidratacion import (
-    consumo_hoy_ml,
-    objetivo_ml,
-    registrar_agua,
-)
+from src.db.repository import aceptar_modo_militar
+from src.db.repository import \
+    actualizar_sesion_skill_set as repo_actualizar_sesion_skill_set
+from src.db.repository import actualizar_usuario
+from src.db.repository import \
+    buscar_comida_similar as repo_buscar_comida_similar
+from src.db.repository import cambiar_tono as repo_cambiar_tono
+from src.db.repository import \
+    cerrar_sesion_abierta as repo_cerrar_sesion_abierta
+from src.db.repository import crear_compromiso
+from src.db.repository import crear_recordatorio as repo_crear_recordatorio
+from src.db.repository import \
+    desactivar_recordatorio as repo_desactivar_recordatorio
+from src.db.repository import eliminar_comida as repo_eliminar_comida
+from src.db.repository import guardar_comida as repo_guardar_comida
+from src.db.repository import guardar_metrica_corporal
+from src.db.repository import guardar_pr as repo_guardar_pr
+from src.db.repository import guardar_pr_truco as repo_guardar_pr_truco
+from src.db.repository import guardar_pr_via_escalada as repo_guardar_pr_via
+from src.db.repository import guardar_sesion as repo_guardar_sesion
+from src.db.repository import guardar_sesion_skill as repo_guardar_sesion_skill
+from src.db.repository import \
+    guardar_sesion_sparring as repo_guardar_sesion_sparring
+from src.db.repository import guardar_sueno as repo_guardar_sueno
+from src.db.repository import historial_peso as repo_historial_peso
+from src.db.repository import (incrementar_citado_compromiso,
+                               incrementar_streak, listar_prs)
+from src.db.repository import listar_recordatorios as repo_listar_recordatorios
+from src.db.repository import \
+    listar_sesiones_skill as repo_listar_sesiones_skill
+from src.db.repository import listar_trucos_aterrizados as repo_listar_trucos
+from src.db.repository import (log_evento, obtener_compromiso_activo,
+                               obtener_o_crear_streak, obtener_o_crear_usuario,
+                               obtener_pr_ejercicio)
+from src.db.repository import \
+    obtener_ultima_sesion_skill as repo_obtener_ultima_sesion_skill
+from src.db.repository import (pausar_recordatorios, reporte_semanal,
+                               resumen_nutricional_dia, set_quiet_hours,
+                               usar_freeze_streak)
+from src.services.hidratacion import (consumo_hoy_ml, objetivo_ml,
+                                      registrar_agua)
 from src.telegram.bot_setup import obtener_application
-from src.telegram.scheduler import (
-    cancelar_recordatorio_jobs,
-    programar_recordatorio_en_jobqueue,
-)
+from src.telegram.scheduler import (cancelar_recordatorio_jobs,
+                                    programar_recordatorio_en_jobqueue)
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +109,7 @@ def _log_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(fn)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        safe_args = [
-            _summary_arg(a) for a in args
-        ]
+        safe_args = [_summary_arg(a) for a in args]
         safe_kwargs = {
             k: ("***" if k in _SENSITIVE_ARG_NAMES else _summary_arg(v))
             for k, v in kwargs.items()
@@ -132,9 +125,7 @@ def _log_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
             result = await fn(*args, **kwargs)
         except Exception:
             elapsed_ms = (time.perf_counter() - t0) * 1000
-            logger.exception(
-                "tool.%s raised elapsed=%.1fms", tool_name, elapsed_ms
-            )
+            logger.exception("tool.%s raised elapsed=%.1fms", tool_name, elapsed_ms)
             raise
         elapsed_ms = (time.perf_counter() - t0) * 1000
         ok = _looks_ok(result)
@@ -156,32 +147,87 @@ TONOS_VALIDOS = {"amigable", "firme", "militar"}
 TIPOS_COMPROMISO_VALIDOS = {"entreno", "comida", "peso", "general"}
 DEPORTES_VALIDOS = {
     # urbano
-    "bmx", "skate", "rollers", "patinaje_velocidad", "patinaje_artistico",
-    "scooter", "parkour", "surf", "kitesurf", "sup", "slacklining",
+    "bmx",
+    "skate",
+    "rollers",
+    "patinaje_velocidad",
+    "patinaje_artistico",
+    "scooter",
+    "parkour",
+    "surf",
+    "kitesurf",
+    "sup",
+    "slacklining",
     # escalada
     "climbing",
     # combate
-    "boxeo", "muay_thai", "bjj", "mma", "karate", "taekwondo", "judo",
-    "kickboxing", "wrestling", "capoeira", "krav_maga", "esgrima",
+    "boxeo",
+    "muay_thai",
+    "bjj",
+    "mma",
+    "karate",
+    "taekwondo",
+    "judo",
+    "kickboxing",
+    "wrestling",
+    "capoeira",
+    "krav_maga",
+    "esgrima",
     # equipo
-    "futbol", "baloncesto", "voley", "voley_playa", "beisbol", "softbol",
-    "rugby", "hockey", "ultimate", "padel", "tenis",
+    "futbol",
+    "baloncesto",
+    "voley",
+    "voley_playa",
+    "beisbol",
+    "softbol",
+    "rugby",
+    "hockey",
+    "ultimate",
+    "padel",
+    "tenis",
     # outdoor endurance
-    "running", "trail", "triatlon", "duatlon", "ocr", "mtb", "ciclismo",
+    "running",
+    "trail",
+    "triatlon",
+    "duatlon",
+    "ocr",
+    "mtb",
+    "ciclismo",
     "atletismo",
     # indoor fuerza
-    "gimnasio", "crossfit", "calistenia", "powerlifting", "halterofilia",
-    "funcional", "pilates", "yoga", "pole", "aerial",
+    "gimnasio",
+    "crossfit",
+    "calistenia",
+    "powerlifting",
+    "halterofilia",
+    "funcional",
+    "pilates",
+    "yoga",
+    "pole",
+    "aerial",
     # acuatico
-    "natacion", "waterpolo", "apnea", "buceo",
+    "natacion",
+    "waterpolo",
+    "apnea",
+    "buceo",
     # ecuestre
-    "equitacion", "polo", "caballo_paso",
+    "equitacion",
+    "polo",
+    "caballo_paso",
     # motor
-    "karting", "motocross", "enduro_moto",
+    "karting",
+    "motocross",
+    "enduro_moto",
     # tradicional CO
-    "tejo", "coleo",
+    "tejo",
+    "coleo",
     # alias comunes (preservar back-compat)
-    "rolling", "patinaje", "escalada", "soccer", "basket", "volley",
+    "rolling",
+    "patinaje",
+    "escalada",
+    "soccer",
+    "basket",
+    "volley",
 }
 
 
@@ -260,7 +306,9 @@ async def obtener_perfil(telegram_id: int) -> str:
     """Obtiene perfil completo del usuario.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         u = await obtener_o_crear_usuario(telegram_id)
@@ -305,6 +353,7 @@ async def guardar_perfil(
     """Actualiza perfil. Solo envia campos con datos concretos.
 
     Args:
+    ----
         telegram_id: Telegram ID
         nombre: nombre
         edad: anos
@@ -317,6 +366,7 @@ async def guardar_perfil(
         timezone: IANA tz (America/Bogota)
         pais: ISO 2 letras (CO, MX, AR, ES)
         onboarding_completo: True si peso+altura+objetivo+nivel+dias listos
+
     """
     try:
         kwargs: dict = {}
@@ -386,6 +436,7 @@ async def registrar_entreno(
     """Registra entrenamiento e incrementa streak.
 
     Args:
+    ----
         telegram_id: Telegram ID
         fecha: YYYY-MM-DD
         tipo: fuerza|cardio|movilidad|deporte
@@ -393,12 +444,15 @@ async def registrar_entreno(
         ejercicios_json: JSON array [{nombre,series,reps,peso_kg}]
         rpe: esfuerzo 1-10 (0=desconocido)
         notas: notas
+
     """
     try:
         fecha = _validar_fecha(fecha)
         tipo = tipo.lower().strip()
         if tipo not in TIPOS_ENTRENO_VALIDOS:
-            return _error(f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_ENTRENO_VALIDOS)}")
+            return _error(
+                f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_ENTRENO_VALIDOS)}"
+            )
 
         ejercicios = _safe_json_loads(ejercicios_json, [])
         sesion = await repo_guardar_sesion(
@@ -430,8 +484,10 @@ async def obtener_pr(telegram_id: int, ejercicio: str) -> str:
     """Consulta PR de un ejercicio.
 
     Args:
+    ----
         telegram_id: Telegram ID
         ejercicio: nombre del ejercicio
+
     """
     try:
         pr = await obtener_pr_ejercicio(telegram_id, ejercicio)
@@ -462,11 +518,13 @@ async def guardar_pr(
     """Registra nuevo PR.
 
     Args:
+    ----
         telegram_id: Telegram ID
         ejercicio: nombre del ejercicio
         peso_kg: peso en kg
         reps: repeticiones con ese peso
         fecha: YYYY-MM-DD (vacio=hoy)
+
     """
     try:
         fecha_norm = _validar_fecha(fecha) if fecha else ""
@@ -476,10 +534,13 @@ async def guardar_pr(
             else await _hoy_usuario(telegram_id)
         )
         pr = await repo_guardar_pr(telegram_id, ejercicio, peso_kg, reps, fecha_obj)
-        await log_evento(telegram_id, "nuevo_pr", {"ejercicio": ejercicio, "peso": peso_kg})
+        await log_evento(
+            telegram_id, "nuevo_pr", {"ejercicio": ejercicio, "peso": peso_kg}
+        )
         try:
-            from src.cache import get_redis
             import json as _json
+
+            from src.cache import get_redis
 
             client = await get_redis()
             await client.publish(
@@ -508,14 +569,19 @@ async def listar_todos_prs(telegram_id: int) -> str:
     """Lista todos los PRs del usuario.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         prs = await listar_prs(telegram_id)
         if not prs:
             return json.dumps({"mensaje": "Aun no tienes PRs registrados"})
         return json.dumps(
-            [{"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps} for p in prs]
+            [
+                {"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps}
+                for p in prs
+            ]
         )
     except Exception:
         logger.exception("Error en listar_todos_prs")
@@ -545,6 +611,7 @@ async def registrar_comida(
     foto+texto automaticamente.
 
     Args:
+    ----
         telegram_id: Telegram ID
         fecha: YYYY-MM-DD
         tipo: desayuno|almuerzo|cena|snack|post_entreno
@@ -553,6 +620,7 @@ async def registrar_comida(
         proteinas: g proteina
         carbs: g carbohidratos
         grasas: g grasa
+
     """
     try:
         tipo = tipo.lower().strip()
@@ -569,9 +637,7 @@ async def registrar_comida(
             if isinstance(a, str) and a.strip():
                 alimentos.append(a.strip()[:120])
             elif isinstance(a, dict):
-                nombre = (
-                    a.get("nombre") or a.get("name") or a.get("alimento") or ""
-                )
+                nombre = a.get("nombre") or a.get("name") or a.get("alimento") or ""
                 if isinstance(nombre, str) and nombre.strip():
                     alimentos.append(nombre.strip()[:120])
         if not alimentos:
@@ -598,16 +664,21 @@ async def registrar_comida(
             logger.info(
                 "registrar_comida duplicado detectado uid=%s tipo=%s "
                 "existente_id=%s alimentos=%s",
-                telegram_id, tipo, dup_id, alimentos[:5],
+                telegram_id,
+                tipo,
+                dup_id,
+                alimentos[:5],
             )
-            return _ok({
-                "duplicado": True,
-                "comida_existente_id": dup_id,
-                "mensaje": (
-                    f"ya hay una comida {tipo} con esos alimentos hoy "
-                    f"(id={dup_id}); no inserto duplicado"
-                ),
-            })
+            return _ok(
+                {
+                    "duplicado": True,
+                    "comida_existente_id": dup_id,
+                    "mensaje": (
+                        f"ya hay una comida {tipo} con esos alimentos hoy "
+                        f"(id={dup_id}); no inserto duplicado"
+                    ),
+                }
+            )
 
         await repo_guardar_comida(
             telegram_id, fecha_use, tipo, alimentos, calorias, proteinas, carbs, grasas
@@ -622,15 +693,17 @@ async def registrar_comida(
                 "n_alimentos": len(alimentos),
             },
         )
-        return _ok({
-            "tipo": tipo,
-            "fecha": fecha_use,
-            "alimentos": alimentos,
-            "calorias": calorias,
-            "proteinas_g": proteinas,
-            "carbs_g": carbs,
-            "grasas_g": grasas,
-        })
+        return _ok(
+            {
+                "tipo": tipo,
+                "fecha": fecha_use,
+                "alimentos": alimentos,
+                "calorias": calorias,
+                "proteinas_g": proteinas,
+                "carbs_g": carbs,
+                "grasas_g": grasas,
+            }
+        )
     except Exception:
         logger.exception("Error en registrar_comida")
         return _error("no pude registrar la comida")
@@ -642,8 +715,10 @@ async def registrar_hidratacion(telegram_id: int, ml: int) -> str:
     """Registra el consumo de agua en mililitros.
 
     Args:
+    ----
         telegram_id: ID de Telegram del usuario.
         ml: cantidad de agua en mililitros (ej: 250, 500).
+
     """
     try:
         await registrar_agua(telegram_id, ml)
@@ -660,18 +735,24 @@ async def consultar_hidratacion_hoy(telegram_id: int) -> str:
     """Consulta el consumo de agua de hoy y el objetivo diario.
 
     Args:
+    ----
         telegram_id: ID de Telegram del usuario.
+
     """
     try:
         consumo = await consumo_hoy_ml(telegram_id)
         objetivo = await objetivo_ml(telegram_id)
-        return json.dumps({
-            "ok": True,
-            "consumo_hoy_ml": consumo,
-            "objetivo_diario_ml": objetivo,
-            "faltante_ml": max(0, objetivo - consumo),
-            "porcentaje": round((consumo / objetivo * 100), 1) if objetivo > 0 else 0
-        })
+        return json.dumps(
+            {
+                "ok": True,
+                "consumo_hoy_ml": consumo,
+                "objetivo_diario_ml": objetivo,
+                "faltante_ml": max(0, objetivo - consumo),
+                "porcentaje": (
+                    round((consumo / objetivo * 100), 1) if objetivo > 0 else 0
+                ),
+            }
+        )
     except Exception:
         logger.exception("Error en consultar_hidratacion_hoy")
         return json.dumps({"ok": False, "error": "No pude consultar la hidratacion."})
@@ -683,8 +764,10 @@ async def resumen_nutricional(telegram_id: int, fecha: str = "") -> str:
     """Resumen calorias y macros de un dia.
 
     Args:
+    ----
         telegram_id: Telegram ID
         fecha: YYYY-MM-DD (vacio=hoy)
+
     """
     try:
         fecha_norm = _validar_fecha(fecha) if fecha else ""
@@ -716,11 +799,13 @@ async def registrar_sueno(
     """Registra sueno. Requiere horas>0; no inventar, preguntar al usuario.
 
     Args:
+    ----
         telegram_id: Telegram ID
         fecha: YYYY-MM-DD (fecha en que desperto)
         horas: horas dormidas (1-16). No llamar si desconocido.
         calidad: 1=pesimo 2=malo 3=normal 4=bueno 5=excelente
         notas: notas
+
     """
     try:
         if horas is None or horas <= 0:
@@ -753,7 +838,9 @@ async def reporte_progreso(telegram_id: int) -> str:
     """Reporte semanal: sesiones, volumen, PRs y sueno (7 dias).
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         return json.dumps(await reporte_semanal(telegram_id), default=str)
@@ -778,10 +865,12 @@ async def registrar_peso(
     """Registra peso corporal actual.
 
     Args:
+    ----
         telegram_id: Telegram ID
         peso_kg: peso en kg
         grasa_pct: % grasa corporal (0=desconocido)
         cintura_cm: cintura en cm (0=desconocido)
+
     """
     try:
         metrica = await guardar_metrica_corporal(
@@ -810,8 +899,10 @@ async def consultar_historial_peso(telegram_id: int, limit: int = 10) -> str:
     """Ultimos registros de peso.
 
     Args:
+    ----
         telegram_id: Telegram ID
         limit: max registros (default 10)
+
     """
     try:
         registros = await repo_historial_peso(telegram_id, limit)
@@ -851,12 +942,14 @@ async def firmar_compromiso(
     """Firma compromiso con objetivo. El bot lo citara si falla.
 
     Args:
+    ----
         telegram_id: Telegram ID
         objetivo_texto: objetivo en 1a persona
         deadline: YYYY-MM-DD limite
         frecuencia_semanal: dias/semana (1-7)
         tipo_compromiso: entreno|comida|peso|general
         stake_simbolico: que pierde si falla
+
     """
     try:
         tipo_compromiso = tipo_compromiso.lower().strip()
@@ -900,7 +993,9 @@ async def consultar_compromiso(telegram_id: int) -> str:
     """Devuelve compromiso activo e incrementa citado_veces.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         c = await obtener_compromiso_activo(telegram_id)
@@ -937,8 +1032,10 @@ async def cambiar_tono(telegram_id: int, tono: str) -> str:
     """Cambia tono del coach. Militar requiere disclaimer aceptado.
 
     Args:
+    ----
         telegram_id: Telegram ID
         tono: amigable|firme|militar
+
     """
     try:
         tono = tono.lower().strip()
@@ -965,7 +1062,9 @@ async def confirmar_modo_militar(telegram_id: int) -> str:
     """Marca aceptacion disclaimer militar. Solo tras confirmacion explicita.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         await aceptar_modo_militar(telegram_id)
@@ -984,9 +1083,11 @@ async def configurar_quiet_hours(
     """Configura horas de silencio (sin notificaciones).
 
     Args:
+    ----
         telegram_id: Telegram ID
         hora_inicio: HH:MM 24h
         hora_fin: HH:MM 24h
+
     """
     try:
         await set_quiet_hours(telegram_id, hora_inicio, hora_fin)
@@ -1005,8 +1106,10 @@ async def pausar(telegram_id: int, dias: int = 1) -> str:
     """Pausa recordatorios por N dias.
 
     Args:
+    ----
         telegram_id: Telegram ID
         dias: dias de pausa (1-30)
+
     """
     try:
         dias = max(1, min(30, dias))
@@ -1024,7 +1127,9 @@ async def usar_dia_libre(telegram_id: int) -> str:
     """Usa 1 freeze para no romper streak hoy.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         ok = await usar_freeze_streak(telegram_id, "entreno")
@@ -1043,8 +1148,10 @@ async def consultar_streak(telegram_id: int, tipo: str = "entreno") -> str:
     """Consulta streak actual.
 
     Args:
+    ----
         telegram_id: Telegram ID
         tipo: entreno|comida|sueno|peso|todos
+
     """
     try:
         s = await obtener_o_crear_streak(telegram_id, tipo)
@@ -1073,9 +1180,18 @@ async def proponer_ejercicio_aleatorio(telegram_id: int) -> str:
     """Sortea foco de ejercicio para hoy.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
-    opciones = ["push", "pull", "piernas", "core + cardio", "movilidad activa", "descanso activo"]
+    opciones = [
+        "push",
+        "pull",
+        "piernas",
+        "core + cardio",
+        "movilidad activa",
+        "descanso activo",
+    ]
     eleccion = random.choice(opciones)
     await log_evento(telegram_id, "rueda_ejercicio", {"eleccion": eleccion})
     return _ok({"foco_propuesto": eleccion, "mensaje": f"Hoy toca: {eleccion}"})
@@ -1087,7 +1203,9 @@ async def dar_premio_motivacional(telegram_id: int) -> str:
     """Otorga mensaje motivacional aleatorio.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     mensajes = [
         "Crack, recuerda por que arrancaste.",
@@ -1113,7 +1231,9 @@ async def verificar_logros(telegram_id: int) -> str:
     """Verifica hito streak (7/30/100/365). Llamar post registrar_entreno.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         s = await obtener_o_crear_streak(telegram_id, "entreno")
@@ -1135,7 +1255,9 @@ async def consultar_resumen_visual(telegram_id: int) -> str:
     """Info para generar chart visual de progreso.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         rep = await reporte_semanal(telegram_id)
@@ -1157,7 +1279,11 @@ async def consultar_resumen_visual(telegram_id: int) -> str:
 
 
 DEPORTES_URBANO_TRICKS = {
-    "skate", "bmx", "rollers", "parkour", "scooter",
+    "skate",
+    "bmx",
+    "rollers",
+    "parkour",
+    "scooter",
 }
 
 
@@ -1176,6 +1302,7 @@ async def registrar_truco_aterrizado(
     """Registra truco aterrizado (urbano). Primer aterrizaje crea PR.
 
     Args:
+    ----
         telegram_id: Telegram ID
         deporte: skate|bmx|rollers|parkour|scooter
         nombre_truco: nombre del truco (max 80 chars)
@@ -1184,6 +1311,7 @@ async def registrar_truco_aterrizado(
         intentos: intentos hasta lograrlo
         es_primer_aterrizaje: True=primer aterrizaje (crea PR)
         fecha: YYYY-MM-DD (vacio=hoy)
+
     """
     try:
         deporte = deporte.lower().strip()
@@ -1201,18 +1329,27 @@ async def registrar_truco_aterrizado(
         )
         if es_primer_aterrizaje:
             pr = await repo_guardar_pr_truco(
-                telegram_id, deporte, nombre_truco,
-                spot=spot, video_url=video_url, fecha=fecha_obj,
+                telegram_id,
+                deporte,
+                nombre_truco,
+                spot=spot,
+                video_url=video_url,
+                fecha=fecha_obj,
             )
             await log_evento(
                 telegram_id, "truco_PR", {"deporte": deporte, "truco": nombre_truco}
             )
-            return _ok({
-                "pr_id": pr.id, "es_pr_nuevo": True,
-                "deporte": deporte, "truco": nombre_truco,
-            })
+            return _ok(
+                {
+                    "pr_id": pr.id,
+                    "es_pr_nuevo": True,
+                    "deporte": deporte,
+                    "truco": nombre_truco,
+                }
+            )
         await log_evento(
-            telegram_id, "truco_repeticion",
+            telegram_id,
+            "truco_repeticion",
             {"deporte": deporte, "truco": nombre_truco, "intentos": intentos},
         )
         return _ok({"es_pr_nuevo": False, "registrado": True})
@@ -1240,6 +1377,7 @@ async def registrar_sesion_skill(
     """Registra sesion skill sport (no gym). Caidas>=3 o sensacion<=2 activan alerta.
 
     Args:
+    ----
         telegram_id: Telegram ID
         deporte: skate|bmx|rollers|parkour|scooter
         duracion_min: minutos (5-480)
@@ -1252,6 +1390,7 @@ async def registrar_sesion_skill(
         co_riders: companeros separados por coma
         notas: texto libre
         fecha: YYYY-MM-DD
+
     """
     try:
         deporte = deporte.lower().strip()
@@ -1268,24 +1407,35 @@ async def registrar_sesion_skill(
             else await _hoy_usuario(telegram_id)
         )
         sesion = await repo_guardar_sesion_skill(
-            telegram_id, deporte=deporte, duracion_min=duracion_min,
-            spot=spot, foco_sesion=foco_sesion,
+            telegram_id,
+            deporte=deporte,
+            duracion_min=duracion_min,
+            spot=spot,
+            foco_sesion=foco_sesion,
             trucos_intentados=trucos_intentados,
             trucos_aterrizados=trucos_aterrizados,
-            num_caidas=num_caidas, sensacion_1_5=sensacion_1_5,
-            co_riders=co_riders, notas=notas, fecha=fecha_obj,
+            num_caidas=num_caidas,
+            sensacion_1_5=sensacion_1_5,
+            co_riders=co_riders,
+            notas=notas,
+            fecha=fecha_obj,
         )
         await incrementar_streak(telegram_id, "entreno")
         await log_evento(
-            telegram_id, "sesion_skill",
+            telegram_id,
+            "sesion_skill",
             {"deporte": deporte, "duracion": duracion_min, "caidas": num_caidas},
         )
-        return _ok({
-            "sesion_id": sesion.id, "deporte": deporte,
-            "aterrizados": trucos_aterrizados, "intentados": trucos_intentados,
-            "alerta_caidas": num_caidas >= 3,
-            "alerta_sensacion": sensacion_1_5 <= 2,
-        })
+        return _ok(
+            {
+                "sesion_id": sesion.id,
+                "deporte": deporte,
+                "aterrizados": trucos_aterrizados,
+                "intentados": trucos_intentados,
+                "alerta_caidas": num_caidas >= 3,
+                "alerta_sensacion": sensacion_1_5 <= 2,
+            }
+        )
     except Exception:
         logger.exception("Error en registrar_sesion_skill")
         return _error("no pude registrar la sesion")
@@ -1306,6 +1456,7 @@ async def registrar_via_escalada(
     """Registra via/boulder escalada. Lesion dedo activa alerta crimping.
 
     Args:
+    ----
         telegram_id: Telegram ID
         nombre_via: nombre via o boulder
         grado: YDS (5.10a)|Fontainebleau (V4)|francesa (6c)
@@ -1314,6 +1465,7 @@ async def registrar_via_escalada(
         intentos: intentos hasta enviarla
         lesion_dedo_si_no: True si dolor en dedos
         fecha: YYYY-MM-DD
+
     """
     ESTILOS = {"on_sight", "flash", "redpoint", "repunto", "proyecto", "boulder"}
     try:
@@ -1323,6 +1475,7 @@ async def registrar_via_escalada(
         if estilo not in ESTILOS:
             return _error(f"estilo invalido: {estilo}. Validos: {sorted(ESTILOS)}")
         import re
+
         if not re.match(r"^(5\.\d{1,2}[a-d]?|V\d{1,2}|[3-9][a-c]\+?)$", grado):
             return _error(f"grado invalido: {grado}. Usa 5.10a, V4 o 6c+")
         fecha_norm = _validar_fecha(fecha) if fecha else ""
@@ -1332,17 +1485,33 @@ async def registrar_via_escalada(
             else await _hoy_usuario(telegram_id)
         )
         pr = await repo_guardar_pr_via(
-            telegram_id, nombre_via, grado, spot, estilo=estilo, fecha=fecha_obj,
+            telegram_id,
+            nombre_via,
+            grado,
+            spot,
+            estilo=estilo,
+            fecha=fecha_obj,
             notas=f"intentos={intentos}; lesion_dedo={lesion_dedo_si_no}",
         )
         await log_evento(
-            telegram_id, "via_escalada",
-            {"grado": grado, "estilo": estilo, "spot": spot, "lesion_dedo": lesion_dedo_si_no},
+            telegram_id,
+            "via_escalada",
+            {
+                "grado": grado,
+                "estilo": estilo,
+                "spot": spot,
+                "lesion_dedo": lesion_dedo_si_no,
+            },
         )
-        return _ok({
-            "pr_id": pr.id, "via": nombre_via, "grado": grado, "estilo": estilo,
-            "alerta_dedos": lesion_dedo_si_no,
-        })
+        return _ok(
+            {
+                "pr_id": pr.id,
+                "via": nombre_via,
+                "grado": grado,
+                "estilo": estilo,
+                "alerta_dedos": lesion_dedo_si_no,
+            }
+        )
     except Exception:
         logger.exception("Error en registrar_via_escalada")
         return _error("no pude registrar la via")
@@ -1358,9 +1527,11 @@ async def consultar_progreso_skill(
     """Resumen progreso skill: sesiones + trucos (no kg).
 
     Args:
+    ----
         telegram_id: Telegram ID
         deporte: skate|bmx|rollers|parkour|scooter
         ventana_dias: ventana analisis (7-365, default 30)
+
     """
     try:
         deporte = deporte.lower().strip()
@@ -1371,15 +1542,20 @@ async def consultar_progreso_skill(
         horas_totales = sum(s.duracion_min or 0 for s in sesiones) / 60
         spots = list({s.spot for s in sesiones if s.spot})
         caidas_total = sum(s.num_caidas or 0 for s in sesiones)
-        return _ok({
-            "deporte": deporte, "ventana_dias": ventana_dias,
-            "sesiones": len(sesiones), "horas_totales": round(horas_totales, 1),
-            "spots_frecuentados": spots[:5],
-            "trucos_PR_nuevos": [
-                {"truco": t.ejercicio, "fecha": str(t.fecha)} for t in trucos_recientes[:10]
-            ],
-            "total_caidas": caidas_total,
-        })
+        return _ok(
+            {
+                "deporte": deporte,
+                "ventana_dias": ventana_dias,
+                "sesiones": len(sesiones),
+                "horas_totales": round(horas_totales, 1),
+                "spots_frecuentados": spots[:5],
+                "trucos_PR_nuevos": [
+                    {"truco": t.ejercicio, "fecha": str(t.fecha)}
+                    for t in trucos_recientes[:10]
+                ],
+                "total_caidas": caidas_total,
+            }
+        )
     except Exception:
         logger.exception("Error en consultar_progreso_skill")
         return _error("no pude generar reporte")
@@ -1391,8 +1567,17 @@ async def consultar_progreso_skill(
 
 
 ESTILOS_COMBATE = {
-    "boxeo", "bjj", "mma", "muay_thai", "kickboxing", "wrestling",
-    "judo", "karate", "taekwondo", "capoeira", "krav_maga",
+    "boxeo",
+    "bjj",
+    "mma",
+    "muay_thai",
+    "kickboxing",
+    "wrestling",
+    "judo",
+    "karate",
+    "taekwondo",
+    "capoeira",
+    "krav_maga",
 }
 
 
@@ -1411,6 +1596,7 @@ async def registrar_sparring(
     """Registra sparring. Golpe cabeza activa screening concusion.
 
     Args:
+    ----
         telegram_id: Telegram ID
         estilo: boxeo|bjj|mma|muay_thai|kickboxing|wrestling|judo|karate|taekwondo|capoeira|krav_maga
         rounds: rounds o rolls
@@ -1419,11 +1605,14 @@ async def registrar_sparring(
         golpe_cabeza_fuerte: True=screening concusion
         notas: texto libre
         fecha: YYYY-MM-DD
+
     """
     try:
         estilo = estilo.lower().strip().replace(" ", "_")
         if estilo not in ESTILOS_COMBATE:
-            return _error(f"estilo invalido: {estilo}. Validos: {sorted(ESTILOS_COMBATE)}")
+            return _error(
+                f"estilo invalido: {estilo}. Validos: {sorted(ESTILOS_COMBATE)}"
+            )
         if not (1 <= intensidad_1_10 <= 10):
             return _error("intensidad debe ser 1-10")
         if rounds < 1 or rounds > 30:
@@ -1435,27 +1624,37 @@ async def registrar_sparring(
             else await _hoy_usuario(telegram_id)
         )
         sesion = await repo_guardar_sesion_sparring(
-            telegram_id, estilo=estilo, rounds=rounds,
+            telegram_id,
+            estilo=estilo,
+            rounds=rounds,
             duracion_round_min=duracion_round_min,
             intensidad_1_10=intensidad_1_10,
             golpe_cabeza_fuerte=golpe_cabeza_fuerte,
-            notas=notas, fecha=fecha_obj,
+            notas=notas,
+            fecha=fecha_obj,
         )
         await incrementar_streak(telegram_id, "entreno")
         await log_evento(
-            telegram_id, "sparring",
+            telegram_id,
+            "sparring",
             {
-                "estilo": estilo, "rounds": rounds, "intensidad": intensidad_1_10,
+                "estilo": estilo,
+                "rounds": rounds,
+                "intensidad": intensidad_1_10,
                 "golpe_cabeza": golpe_cabeza_fuerte,
             },
         )
         carga_alta = rounds * duracion_round_min > 90
-        return _ok({
-            "sesion_id": sesion.id, "estilo": estilo, "rounds": rounds,
-            "intensidad": intensidad_1_10,
-            "alerta_carga_alta": carga_alta,
-            "alerta_concusion": golpe_cabeza_fuerte,
-        })
+        return _ok(
+            {
+                "sesion_id": sesion.id,
+                "estilo": estilo,
+                "rounds": rounds,
+                "intensidad": intensidad_1_10,
+                "alerta_carga_alta": carga_alta,
+                "alerta_concusion": golpe_cabeza_fuerte,
+            }
+        )
     except Exception:
         logger.exception("Error en registrar_sparring")
         return _error("no pude registrar el sparring")
@@ -1478,6 +1677,7 @@ async def registrar_pelea(
     """Registra pelea oficial. Calcula rebound pesaje vs dia pelea.
 
     Args:
+    ----
         telegram_id: Telegram ID
         estilo: boxeo|mma|muay_thai|bjj|kickboxing|wrestling
         resultado: ganada|perdida|draw|no_contest|dq
@@ -1488,11 +1688,18 @@ async def registrar_pelea(
         round_final: round final (0=decision)
         spot: lugar/evento
         fecha: YYYY-MM-DD
+
     """
     RESULTADOS = {"ganada", "perdida", "draw", "no_contest", "dq"}
     METODOS = {
-        "ko", "tko", "decision_unanime", "decision_dividida",
-        "decision_mayoritaria", "sumision", "dq", "draw",
+        "ko",
+        "tko",
+        "decision_unanime",
+        "decision_dividida",
+        "decision_mayoritaria",
+        "sumision",
+        "dq",
+        "draw",
     }
     try:
         estilo = estilo.lower().strip().replace(" ", "_")
@@ -1515,17 +1722,26 @@ async def registrar_pelea(
             alerta_rebound = rebound_pct > 10
 
         await log_evento(
-            telegram_id, "pelea",
+            telegram_id,
+            "pelea",
             {
-                "estilo": estilo, "resultado": resultado, "metodo": metodo,
-                "peso_pesaje": peso_pesaje_kg, "rebound_pct": rebound_pct,
+                "estilo": estilo,
+                "resultado": resultado,
+                "metodo": metodo,
+                "peso_pesaje": peso_pesaje_kg,
+                "rebound_pct": rebound_pct,
             },
         )
-        return _ok({
-            "estilo": estilo, "resultado": resultado, "metodo": metodo,
-            "rebound_pct": rebound_pct, "alerta_rebound_alto": alerta_rebound,
-            "round_final": round_final,
-        })
+        return _ok(
+            {
+                "estilo": estilo,
+                "resultado": resultado,
+                "metodo": metodo,
+                "rebound_pct": rebound_pct,
+                "alerta_rebound_alto": alerta_rebound,
+                "round_final": round_final,
+            }
+        )
     except Exception:
         logger.exception("Error en registrar_pelea")
         return _error("no pude registrar la pelea")
@@ -1544,12 +1760,14 @@ async def calcular_peso_objetivo_responsable(
     """Plan cut peso responsable (Reale 2017, IOC 2019). Red flag si >8%/<14d.
 
     Args:
+    ----
         telegram_id: Telegram ID
         peso_actual_kg: peso actual (40-200)
         peso_categoria_kg: limite categoria
         dias_hasta_pesaje: dias restantes (1-180)
         estilo_combate: boxeo|mma|bjj|muay_thai|kickboxing|judo|karate|taekwondo
         nivel: amateur|profesional
+
     """
     try:
         if not (40 <= peso_actual_kg <= 200):
@@ -1559,21 +1777,25 @@ async def calcular_peso_objetivo_responsable(
         if not (1 <= dias_hasta_pesaje <= 180):
             return _error("dias_hasta_pesaje fuera de rango")
         if peso_actual_kg <= peso_categoria_kg:
-            return _ok({
-                "plan": "ya estas en categoria, no hay cut",
-                "recomendacion": "mantenimiento + tecnica + S&C",
-            })
+            return _ok(
+                {
+                    "plan": "ya estas en categoria, no hay cut",
+                    "recomendacion": "mantenimiento + tecnica + S&C",
+                }
+            )
 
         delta_kg = peso_actual_kg - peso_categoria_kg
         delta_pct = (delta_kg / peso_actual_kg) * 100
 
         if delta_pct > 8 and dias_hasta_pesaje < 14:
-            return _ok({
-                "alerta_critica": True,
-                "mensaje": f"cut {delta_pct:.1f}% en {dias_hasta_pesaje} dias NO es responsable",
-                "recomendacion": "subir de categoria o postergar pelea",
-                "cita": "Reale 2017, IOC consensus 2019",
-            })
+            return _ok(
+                {
+                    "alerta_critica": True,
+                    "mensaje": f"cut {delta_pct:.1f}% en {dias_hasta_pesaje} dias NO es responsable",
+                    "recomendacion": "subir de categoria o postergar pelea",
+                    "cita": "Reale 2017, IOC consensus 2019",
+                }
+            )
 
         semanas = max(dias_hasta_pesaje / 7, 0.5)
         cut_cronico_max_kg = peso_actual_kg * 0.007 * semanas
@@ -1582,48 +1804,53 @@ async def calcular_peso_objetivo_responsable(
         cut_agudo_pct = (cut_agudo_aplicable / peso_actual_kg) * 100
 
         if cut_agudo_pct > 5:
-            return _ok({
-                "alerta_critica": True,
-                "mensaje": f"cut agudo necesario es {cut_agudo_pct:.1f}% > 5% maximo seguro",
-                "recomendacion": "extender camp o subir de categoria",
-                "cita": "Reale 2017",
-            })
+            return _ok(
+                {
+                    "alerta_critica": True,
+                    "mensaje": f"cut agudo necesario es {cut_agudo_pct:.1f}% > 5% maximo seguro",
+                    "recomendacion": "extender camp o subir de categoria",
+                    "cita": "Reale 2017",
+                }
+            )
 
         await log_evento(
-            telegram_id, "plan_cut",
+            telegram_id,
+            "plan_cut",
             {"delta_pct": round(delta_pct, 2), "dias": dias_hasta_pesaje},
         )
-        return _ok({
-            "delta_total_kg": round(delta_kg, 2),
-            "delta_pct": round(delta_pct, 2),
-            "fase_cronica": {
-                "duracion_dias": max(0, dias_hasta_pesaje - 7),
-                "perdida_objetivo_kg": round(cut_cronico_aplicable, 2),
-                "ritmo_sem_pct": "0.5-0.7%",
-                "deficit_kcal_dia": 300 if cut_cronico_aplicable < 3 else 500,
-                "proteina_g_kg": 2.2,
-                "carbs_g_kg": 4.0,
-                "grasa_g_kg": 0.8,
-            },
-            "fase_aguda": {
-                "ventana_h": 24 if cut_agudo_pct <= 3 else 48,
-                "perdida_objetivo_kg": round(cut_agudo_aplicable, 2),
-                "perdida_pct": round(cut_agudo_pct, 2),
-                "estrategia": [
-                    "water loading -> water cut",
-                    "low fiber 48h",
-                    "glycogen depletion 36h",
-                    "sodio reducido 24h",
-                ],
-                "advertencias": [
-                    "NUNCA diureticos",
-                    "NO sauna >20 min consecutivos",
-                    "rehidratacion ORS post-pesaje OBLIGATORIA",
-                ],
-            },
-            "cita_principal": "Reale R, Slater G, Burke LM. IJSPP 2017.",
-            "recomendacion": "validar con nutricionista deportivo",
-        })
+        return _ok(
+            {
+                "delta_total_kg": round(delta_kg, 2),
+                "delta_pct": round(delta_pct, 2),
+                "fase_cronica": {
+                    "duracion_dias": max(0, dias_hasta_pesaje - 7),
+                    "perdida_objetivo_kg": round(cut_cronico_aplicable, 2),
+                    "ritmo_sem_pct": "0.5-0.7%",
+                    "deficit_kcal_dia": 300 if cut_cronico_aplicable < 3 else 500,
+                    "proteina_g_kg": 2.2,
+                    "carbs_g_kg": 4.0,
+                    "grasa_g_kg": 0.8,
+                },
+                "fase_aguda": {
+                    "ventana_h": 24 if cut_agudo_pct <= 3 else 48,
+                    "perdida_objetivo_kg": round(cut_agudo_aplicable, 2),
+                    "perdida_pct": round(cut_agudo_pct, 2),
+                    "estrategia": [
+                        "water loading -> water cut",
+                        "low fiber 48h",
+                        "glycogen depletion 36h",
+                        "sodio reducido 24h",
+                    ],
+                    "advertencias": [
+                        "NUNCA diureticos",
+                        "NO sauna >20 min consecutivos",
+                        "rehidratacion ORS post-pesaje OBLIGATORIA",
+                    ],
+                },
+                "cita_principal": "Reale R, Slater G, Burke LM. IJSPP 2017.",
+                "recomendacion": "validar con nutricionista deportivo",
+            }
+        )
     except Exception:
         logger.exception("Error en calcular_peso_objetivo_responsable")
         return _error("no pude calcular el plan")
@@ -1644,6 +1871,7 @@ async def evaluar_concusion_simplificado(
     """Triage SCAT6-simplificado post-golpe cabeza. No sustituye evaluacion medica.
 
     Args:
+    ----
         telegram_id: Telegram ID
         tuvo_perdida_conciencia: perdio conocimiento
         duracion_perdida_seg: segundos inconsciente (0=no)
@@ -1652,12 +1880,18 @@ async def evaluar_concusion_simplificado(
         confusion_amnesia: no recuerda eventos del golpe
         dolor_cabeza_severo: dolor cabeza fuerte
         sensibilidad_luz_ruido: molesta luz/ruido
+
     """
     try:
-        sintomas = sum([
-            nausea_vomito, mareo_persistente, confusion_amnesia,
-            dolor_cabeza_severo, sensibilidad_luz_ruido,
-        ])
+        sintomas = sum(
+            [
+                nausea_vomito,
+                mareo_persistente,
+                confusion_amnesia,
+                dolor_cabeza_severo,
+                sensibilidad_luz_ruido,
+            ]
+        )
 
         if tuvo_perdida_conciencia and duracion_perdida_seg > 30:
             severidad, off_dias, rec = (
@@ -1685,17 +1919,20 @@ async def evaluar_concusion_simplificado(
             )
 
         await log_evento(
-            telegram_id, "screening_concusion",
+            telegram_id,
+            "screening_concusion",
             {"severidad": severidad, "sintomas": sintomas},
         )
-        return _ok({
-            "severidad": severidad,
-            "off_sport_dias": off_dias,
-            "recomendacion": rec,
-            "sintomas_count": sintomas,
-            "cita": "McCrory 2023 Amsterdam consensus, GRTP 6 etapas",
-            "disclaimer": "Este triage NO sustituye evaluacion medica real",
-        })
+        return _ok(
+            {
+                "severidad": severidad,
+                "off_sport_dias": off_dias,
+                "recomendacion": rec,
+                "sintomas_count": sintomas,
+                "cita": "McCrory 2023 Amsterdam consensus, GRTP 6 etapas",
+                "disclaimer": "Este triage NO sustituye evaluacion medica real",
+            }
+        )
     except Exception:
         logger.exception("Error en evaluar_concusion_simplificado")
         return _error("no pude evaluar")
@@ -1707,13 +1944,38 @@ async def evaluar_concusion_simplificado(
 
 
 _DIAS_MAP = {
-    "lun": 0, "lunes": 0, "mon": 0, "monday": 0,
-    "mar": 1, "martes": 1, "tue": 1, "tuesday": 1,
-    "mie": 2, "mié": 2, "miercoles": 2, "miércoles": 2, "wed": 2, "wednesday": 2,
-    "jue": 3, "jueves": 3, "thu": 3, "thursday": 3,
-    "vie": 4, "viernes": 4, "fri": 4, "friday": 4,
-    "sab": 5, "sáb": 5, "sabado": 5, "sábado": 5, "sat": 5, "saturday": 5,
-    "dom": 6, "domingo": 6, "sun": 6, "sunday": 6,
+    "lun": 0,
+    "lunes": 0,
+    "mon": 0,
+    "monday": 0,
+    "mar": 1,
+    "martes": 1,
+    "tue": 1,
+    "tuesday": 1,
+    "mie": 2,
+    "mié": 2,
+    "miercoles": 2,
+    "miércoles": 2,
+    "wed": 2,
+    "wednesday": 2,
+    "jue": 3,
+    "jueves": 3,
+    "thu": 3,
+    "thursday": 3,
+    "vie": 4,
+    "viernes": 4,
+    "fri": 4,
+    "friday": 4,
+    "sab": 5,
+    "sáb": 5,
+    "sabado": 5,
+    "sábado": 5,
+    "sat": 5,
+    "saturday": 5,
+    "dom": 6,
+    "domingo": 6,
+    "sun": 6,
+    "sunday": 6,
 }
 
 
@@ -1726,7 +1988,14 @@ def _parse_dias_semana(raw: str) -> str:
     if not raw:
         return ""
     s = raw.strip().lower()
-    if s in {"diario", "todos", "todos_los_dias", "todos los dias", "daily", "everyday"}:
+    if s in {
+        "diario",
+        "todos",
+        "todos_los_dias",
+        "todos los dias",
+        "daily",
+        "everyday",
+    }:
         return "0,1,2,3,4,5,6"
     if s in {"finde", "fin_de_semana", "fin de semana", "weekend"}:
         return "5,6"
@@ -1772,11 +2041,13 @@ async def programar_recordatorio(
     """Programa recordatorio personalizado.
 
     Args:
+    ----
         telegram_id: Telegram ID
         mensaje: texto del recordatorio (max 500 chars)
         hora: HH:MM 24h (tz del usuario)
         dias_semana: 0=lun..6=dom csv, o diario|finde|laborales (vacio=one-shot)
         fecha_unica: YYYY-MM-DD one-shot (ignorada si dias_semana, vacio=manana)
+
     """
     try:
         if not mensaje or not mensaje.strip():
@@ -1825,14 +2096,16 @@ async def programar_recordatorio(
                 "fecha_unica": fecha.isoformat() if fecha else None,
             },
         )
-        return _ok({
-            "id": rec.id,
-            "mensaje": rec.mensaje,
-            "hora": t.strftime("%H:%M"),
-            "dias_semana": dias or "",
-            "fecha_unica": fecha.isoformat() if fecha else None,
-            "tz": rec.tz,
-        })
+        return _ok(
+            {
+                "id": rec.id,
+                "mensaje": rec.mensaje,
+                "hora": t.strftime("%H:%M"),
+                "dias_semana": dias or "",
+                "fecha_unica": fecha.isoformat() if fecha else None,
+                "tz": rec.tz,
+            }
+        )
     except Exception:
         logger.exception("Error en programar_recordatorio")
         return _error("no pude programar el recordatorio")
@@ -1844,7 +2117,9 @@ async def listar_recordatorios(telegram_id: int) -> str:
     """Lista recordatorios activos.
 
     Args:
+    ----
         telegram_id: Telegram ID
+
     """
     try:
         recs = await repo_listar_recordatorios(telegram_id, solo_activos=True)
@@ -1871,8 +2146,10 @@ async def cancelar_recordatorio(telegram_id: int, recordatorio_id: int) -> str:
     """Cancela recordatorio por id.
 
     Args:
+    ----
         telegram_id: Telegram ID (valida ownership)
         recordatorio_id: id de listar_recordatorios
+
     """
     try:
         ok = await repo_desactivar_recordatorio(recordatorio_id, telegram_id)
@@ -1909,8 +2186,10 @@ async def cerrar_sesion_entrenamiento(
     """Cierra sesion en curso. Evita duplicados en mensajes consecutivos.
 
     Args:
+    ----
         telegram_id: Telegram ID (valida ownership)
         sesion_id: id a cerrar (0=ultima abierta hoy)
+
     """
     try:
         sid = sesion_id if sesion_id > 0 else None
@@ -1926,12 +2205,14 @@ async def cerrar_sesion_entrenamiento(
                 "deporte": sesion.deporte_slug,
             },
         )
-        return _ok({
-            "sesion_id": sesion.id,
-            "cerrada": True,
-            "duracion_min": sesion.duracion_min,
-            "deporte": sesion.deporte_slug,
-        })
+        return _ok(
+            {
+                "sesion_id": sesion.id,
+                "cerrada": True,
+                "duracion_min": sesion.duracion_min,
+                "deporte": sesion.deporte_slug,
+            }
+        )
     except Exception:
         logger.exception("Error en cerrar_sesion_entrenamiento")
         return _error("no pude cerrar la sesion")
@@ -1939,38 +2220,40 @@ async def cerrar_sesion_entrenamiento(
 
 @function_tool
 @_log_tool
-async def consultar_ultima_sesion_skill(
-    telegram_id: int, deporte: str = ""
-) -> str:
+async def consultar_ultima_sesion_skill(telegram_id: int, deporte: str = "") -> str:
     """Ultima sesion skill de hoy. Usar antes de editar_sesion_reciente.
 
     Args:
+    ----
         telegram_id: Telegram ID
         deporte: slug deporte (vacio=cualquiera)
+
     """
     try:
         deporte_f = deporte.strip().lower() or None
         sesion = await repo_obtener_ultima_sesion_skill(telegram_id, deporte_f)
         if sesion is None:
             return _ok({"existe": False})
-        return _ok({
-            "existe": True,
-            "sesion_id": sesion.id,
-            "fecha": sesion.fecha.isoformat() if sesion.fecha else None,
-            "deporte": sesion.deporte_slug,
-            "duracion_min": sesion.duracion_min,
-            "trucos_intentados": sesion.trucos_intentados,
-            "trucos_aterrizados": sesion.trucos_aterrizados,
-            "num_caidas": sesion.num_caidas,
-            "sensacion_1_5": sesion.sensacion_1_5,
-            "foco_sesion": sesion.foco_sesion,
-            "spot": sesion.spot,
-            "notas": sesion.notas,
-            "cerrada": sesion.cerrada,
-            "updated_at": (
-                sesion.updated_at.isoformat() if sesion.updated_at else None
-            ),
-        })
+        return _ok(
+            {
+                "existe": True,
+                "sesion_id": sesion.id,
+                "fecha": sesion.fecha.isoformat() if sesion.fecha else None,
+                "deporte": sesion.deporte_slug,
+                "duracion_min": sesion.duracion_min,
+                "trucos_intentados": sesion.trucos_intentados,
+                "trucos_aterrizados": sesion.trucos_aterrizados,
+                "num_caidas": sesion.num_caidas,
+                "sensacion_1_5": sesion.sensacion_1_5,
+                "foco_sesion": sesion.foco_sesion,
+                "spot": sesion.spot,
+                "notas": sesion.notas,
+                "cerrada": sesion.cerrada,
+                "updated_at": (
+                    sesion.updated_at.isoformat() if sesion.updated_at else None
+                ),
+            }
+        )
     except Exception:
         logger.exception("Error en consultar_ultima_sesion_skill")
         return _error("no pude consultar la sesion")
@@ -1995,6 +2278,7 @@ async def editar_sesion_reciente(
     -1=no tocar (enteros), ""=no tocar (strings).
 
     Args:
+    ----
         telegram_id: Telegram ID (valida ownership)
         sesion_id: id especifico (0=ultima del dia)
         deporte: slug deporte para filtrar
@@ -2005,6 +2289,7 @@ async def editar_sesion_reciente(
         sensacion_1_5: 1-5 (-1=no tocar)
         foco_sesion: foco (""=no tocar)
         notas: notas completas (""=no tocar)
+
     """
     try:
         campos: dict = {}
@@ -2023,9 +2308,7 @@ async def editar_sesion_reciente(
         if notas.strip():
             campos["notas"] = notas.strip()
         if not campos:
-            return _error(
-                "no hay campos a editar (todos quedaron en -1 o vacios)"
-            )
+            return _error("no hay campos a editar (todos quedaron en -1 o vacios)")
 
         sid = sesion_id if sesion_id > 0 else None
         deporte_f = deporte.strip().lower() or None
@@ -2036,9 +2319,7 @@ async def editar_sesion_reciente(
             **campos,
         )
         if sesion is None:
-            return _error(
-                "no encontre sesion para editar (o no es de hoy)"
-            )
+            return _error("no encontre sesion para editar (o no es de hoy)")
         await log_evento(
             telegram_id,
             "sesion_editada",
@@ -2047,15 +2328,17 @@ async def editar_sesion_reciente(
                 "campos_editados": list(campos.keys()),
             },
         )
-        return _ok({
-            "sesion_id": sesion.id,
-            "actualizada": True,
-            "duracion_min": sesion.duracion_min,
-            "trucos_intentados": sesion.trucos_intentados,
-            "trucos_aterrizados": sesion.trucos_aterrizados,
-            "num_caidas": sesion.num_caidas,
-            "sensacion_1_5": sesion.sensacion_1_5,
-        })
+        return _ok(
+            {
+                "sesion_id": sesion.id,
+                "actualizada": True,
+                "duracion_min": sesion.duracion_min,
+                "trucos_intentados": sesion.trucos_intentados,
+                "trucos_aterrizados": sesion.trucos_aterrizados,
+                "num_caidas": sesion.num_caidas,
+                "sensacion_1_5": sesion.sensacion_1_5,
+            }
+        )
     except Exception:
         logger.exception("Error en editar_sesion_reciente")
         return _error("no pude editar la sesion")
@@ -2069,17 +2352,17 @@ async def eliminar_comida_reciente(
     """Borra una comida de HOY. Requiere comida_id o tipo.
 
     Args:
+    ----
         telegram_id: Telegram ID
         comida_id: id especifico (0=no usa)
         tipo: desayuno|almuerzo|cena|snack|post_entreno (borra mas reciente)
+
     """
     try:
         cid = comida_id if comida_id > 0 else None
         tipo_norm = tipo.strip().lower() or None
         if cid is None and tipo_norm is None:
-            return _error(
-                "necesito comida_id o tipo (desayuno/almuerzo/cena/snack)"
-            )
+            return _error("necesito comida_id o tipo (desayuno/almuerzo/cena/snack)")
         if tipo_norm and tipo_norm not in TIPOS_COMIDA_VALIDOS:
             return _error(
                 f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}"

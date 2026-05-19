@@ -4,22 +4,13 @@ Revision ID: 0004_wearables_comunidad
 Revises: 0003_tiers_pagos
 Create Date: 2026-05-17
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
-from src.db.models import (
-    ConsumoAgua,
-    DatosWearableRaw,
-    DeporteCatalogo,
-    Desafio,
-    DesafioParticipante,
-    IntegracionWearable,
-    Kudos,
-    MagicLink,
-    PlanSemanal,
-    RealtimeSesion,
-)
+from src.db.models import (ConsumoAgua, DatosWearableRaw, DeporteCatalogo,
+                           Desafio, DesafioParticipante, IntegracionWearable,
+                           Kudos, MagicLink, PlanSemanal, RealtimeSesion)
 
 revision: str = "0004_wearables_comunidad"
 down_revision: Union[str, None] = "0003_tiers_pagos"

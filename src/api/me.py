@@ -1,4 +1,5 @@
 """Endpoints REST para el Mini App. Auth via JWT del initData."""
+
 from __future__ import annotations
 
 import logging
@@ -6,37 +7,20 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from src.api.auth import get_uid_from_token
 from src.db.connection import async_session_factory
-from src.db.models import (
-    Comida,
-    MetricaCorporal,
-    MetricaSueno,
-    SesionEntrenamiento,
-    Usuario,
-)
-from src.db.repository import (
-    actualizar_usuario,
-    guardar_comida,
-    guardar_metrica_corporal,
-    guardar_sesion,
-    guardar_sueno,
-    historial_peso,
-    listar_prs,
-    obtener_o_crear_streak,
-    obtener_usuario,
-    reporte_semanal,
-    resumen_nutricional_dia,
-    set_quiet_hours,
-)
-from src.services.charts import (
-    chart_macros_dia,
-    chart_peso,
-    chart_streak_calendario,
-    chart_volumen_semanal,
-)
+from src.db.models import SesionEntrenamiento, Usuario
+from src.db.repository import (actualizar_usuario, guardar_comida,
+                               guardar_metrica_corporal, guardar_sesion,
+                               guardar_sueno, historial_peso, listar_prs,
+                               obtener_o_crear_streak, obtener_usuario,
+                               reporte_semanal, resumen_nutricional_dia,
+                               set_quiet_hours)
+from src.services.charts import (chart_macros_dia, chart_peso,
+                                 chart_streak_calendario,
+                                 chart_volumen_semanal)
 
 logger = logging.getLogger(__name__)
 
@@ -218,9 +202,7 @@ class LogPesoReq(BaseModel):
 
 
 @router.post("/log/peso")
-async def log_peso(
-    req: LogPesoReq, uid: int = Depends(get_uid_from_token)
-) -> dict:
+async def log_peso(req: LogPesoReq, uid: int = Depends(get_uid_from_token)) -> dict:
     m = await guardar_metrica_corporal(
         telegram_id=uid,
         peso_kg=req.peso_kg,
@@ -241,9 +223,7 @@ class LogComidaReq(BaseModel):
 
 
 @router.post("/log/comida")
-async def log_comida(
-    req: LogComidaReq, uid: int = Depends(get_uid_from_token)
-) -> dict:
+async def log_comida(req: LogComidaReq, uid: int = Depends(get_uid_from_token)) -> dict:
     c = await guardar_comida(
         telegram_id=uid,
         fecha_str=req.fecha,
@@ -265,9 +245,7 @@ class LogSuenoReq(BaseModel):
 
 
 @router.post("/log/sueno")
-async def log_sueno(
-    req: LogSuenoReq, uid: int = Depends(get_uid_from_token)
-) -> dict:
+async def log_sueno(req: LogSuenoReq, uid: int = Depends(get_uid_from_token)) -> dict:
     s = await guardar_sueno(
         telegram_id=uid,
         fecha_str=req.fecha,
@@ -359,7 +337,8 @@ async def generar_plan(uid: int = Depends(get_uid_from_token)) -> dict:
 
 @router.get("/wearables")
 async def listar_wearables(uid: int = Depends(get_uid_from_token)) -> dict:
-    from src.services.wearables import listar_para_usuario, PROVEEDORES_DISPONIBLES
+    from src.services.wearables import (PROVEEDORES_DISPONIBLES,
+                                        listar_para_usuario)
 
     items = await listar_para_usuario(uid)
     return {
@@ -379,9 +358,7 @@ async def connect_wearable(
 
 
 @router.post("/wearables/{proveedor}/sync")
-async def sync_wearable(
-    proveedor: str, uid: int = Depends(get_uid_from_token)
-) -> dict:
+async def sync_wearable(proveedor: str, uid: int = Depends(get_uid_from_token)) -> dict:
     from src.services.wearables import sync_proveedor
 
     n = await sync_proveedor(uid, proveedor)

@@ -4,12 +4,13 @@ Diseno: cada proveedor implementa connect (OAuth URL), callback (intercambia
 code por tokens) y sync (descarga datos nuevos). Implementacion stub para
 permitir que la Mini App funcione; el worker arq se encargara de la sync real.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select
@@ -47,9 +48,7 @@ async def listar_para_usuario(telegram_id: int) -> list[dict]:
         if user is None:
             return []
         result = await session.execute(
-            select(IntegracionWearable).where(
-                IntegracionWearable.usuario_id == user.id
-            )
+            select(IntegracionWearable).where(IntegracionWearable.usuario_id == user.id)
         )
         items = list(result.scalars().all())
     return [
@@ -79,8 +78,7 @@ async def construir_url_oauth(telegram_id: int, proveedor: str) -> str:
     # eso usamos webhook_base_url y NO admin_url. Fallback al dominio Railway
     # real (dominio custom configurado en Railway).
     api_base = str(
-        settings.webhook_base_url
-        or "https://entrenadorax.axsoftware.codes"
+        settings.webhook_base_url or "https://entrenadorax.axsoftware.codes"
     ).rstrip("/")
     redirect_uri = f"{api_base}/api/integraciones/{proveedor}/callback"
     scope = OAUTH_SCOPES[proveedor]

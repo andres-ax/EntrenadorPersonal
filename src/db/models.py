@@ -1,24 +1,12 @@
 """Modelos SQLAlchemy de EntrenadorAX."""
+
 import enum
 from datetime import date, time
 
-from sqlalchemy import (
-    JSON,
-    BigInteger,
-    Boolean,
-    Column,
-    Date,
-    DateTime,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    Time,
-    func,
-    text,
-)
+from sqlalchemy import JSON, BigInteger, Boolean, Column, Date, DateTime
 from sqlalchemy import Enum as _SAEnum
+from sqlalchemy import (Float, ForeignKey, Integer, String, Text, Time, func,
+                        text)
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -120,6 +108,7 @@ class CategoriaDeporte(str, enum.Enum):
     Cada categoria tiene un sub-prompt en REGLA #11 del coach con vocabulario
     nativo, metricas correctas y framework de periodizacion adecuado.
     """
+
     URBANO = "urbano"
     COMBATE = "combate"
     ESCALADA = "escalada"
@@ -135,6 +124,7 @@ class CategoriaDeporte(str, enum.Enum):
 
 class TipoPR(str, enum.Enum):
     """Tipo de Personal Record. Default PESO_REPS para back-compat fuerza."""
+
     PESO_REPS = "peso_reps"
     TIEMPO = "tiempo"
     TRUCO = "truco"
@@ -150,6 +140,7 @@ class TipoPR(str, enum.Enum):
 
 class SubtipoSesion(str, enum.Enum):
     """Subtipo de sesion para deportes que no son fuerza pura."""
+
     SETS = "sets"
     SKILL = "skill"
     SPARRING = "sparring"
@@ -211,9 +202,15 @@ class Usuario(Base):
     sesiones = relationship(
         "SesionEntrenamiento", back_populates="usuario", cascade="all, delete-orphan"
     )
-    comidas = relationship("Comida", back_populates="usuario", cascade="all, delete-orphan")
-    prs = relationship("PersonalRecord", back_populates="usuario", cascade="all, delete-orphan")
-    sueno = relationship("MetricaSueno", back_populates="usuario", cascade="all, delete-orphan")
+    comidas = relationship(
+        "Comida", back_populates="usuario", cascade="all, delete-orphan"
+    )
+    prs = relationship(
+        "PersonalRecord", back_populates="usuario", cascade="all, delete-orphan"
+    )
+    sueno = relationship(
+        "MetricaSueno", back_populates="usuario", cascade="all, delete-orphan"
+    )
     metricas_corporales = relationship(
         "MetricaCorporal", back_populates="usuario", cascade="all, delete-orphan"
     )
@@ -223,12 +220,18 @@ class Usuario(Base):
     estados_escalacion = relationship(
         "EscalacionState", back_populates="usuario", cascade="all, delete-orphan"
     )
-    streaks = relationship("Streak", back_populates="usuario", cascade="all, delete-orphan")
+    streaks = relationship(
+        "Streak", back_populates="usuario", cascade="all, delete-orphan"
+    )
     checkins = relationship(
         "CheckinNocturno", back_populates="usuario", cascade="all, delete-orphan"
     )
-    eventos = relationship("EventoBot", back_populates="usuario", cascade="all, delete-orphan")
-    crisis = relationship("CrisisLog", back_populates="usuario", cascade="all, delete-orphan")
+    eventos = relationship(
+        "EventoBot", back_populates="usuario", cascade="all, delete-orphan"
+    )
+    crisis = relationship(
+        "CrisisLog", back_populates="usuario", cascade="all, delete-orphan"
+    )
     feedbacks_comida = relationship(
         "FeedbackComida", back_populates="usuario", cascade="all, delete-orphan"
     )
@@ -281,7 +284,9 @@ class EjercicioRealizado(Base):
 
     id = Column(Integer, primary_key=True)
     sesion_id = Column(
-        Integer, ForeignKey("sesiones_entrenamiento.id", ondelete="CASCADE"), nullable=False
+        Integer,
+        ForeignKey("sesiones_entrenamiento.id", ondelete="CASCADE"),
+        nullable=False,
     )
     nombre = Column(String(100), nullable=False)
     series = Column(Integer)
@@ -321,7 +326,7 @@ class PersonalRecord(Base):
     - VELOCIDAD (patinaje velocidad, MTB)
     - RONDAS (combate: ej "primer KO en round 2")
     - CINTURON (BJJ/karate/TKD/judo: ej "purple belt BJJ")
-    - DISTANCIA (running/ciclismo PR de distancia nueva)
+    - DISTANCIA (running/ciclismo PR de distancia nueva).
     """
 
     __tablename__ = "personal_records"
@@ -330,9 +335,7 @@ class PersonalRecord(Base):
     usuario_id = Column(
         Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
     )
-    tipo_pr = Column(
-        Enum(TipoPR), default=TipoPR.PESO_REPS, nullable=False, index=True
-    )
+    tipo_pr = Column(Enum(TipoPR), default=TipoPR.PESO_REPS, nullable=False, index=True)
     ejercicio = Column(String(100), nullable=False)
     peso_kg = Column(Float)
     reps = Column(Integer)
@@ -388,13 +391,18 @@ class Compromiso(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     objetivo_texto = Column(Text, nullable=False)
     fecha_firma = Column(Date, nullable=False, default=date.today)
     deadline = Column(Date, nullable=False)
     frecuencia_semanal = Column(Integer, nullable=False, default=3)
-    tipo_compromiso = Column(Enum(TipoCompromiso), nullable=False, default=TipoCompromiso.GENERAL)
+    tipo_compromiso = Column(
+        Enum(TipoCompromiso), nullable=False, default=TipoCompromiso.GENERAL
+    )
     stake_simbolico = Column(String(300), default="")
     activo = Column(Boolean, default=True, nullable=False, index=True)
     citado_veces = Column(Integer, default=0, nullable=False)
@@ -409,7 +417,10 @@ class EscalacionState(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     tipo_accion = Column(
@@ -420,7 +431,9 @@ class EscalacionState(Base):
     mensajes_enviados_hoy = Column(Integer, default=0, nullable=False)
     ultimo_mensaje_id = Column(BigInteger)
     ultimo_envio = Column(DateTime)
-    ultima_actualizacion = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    ultima_actualizacion = Column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     usuario = relationship("Usuario", back_populates="estados_escalacion")
 
@@ -430,7 +443,10 @@ class Streak(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     tipo_streak = Column(Enum(TipoStreak), nullable=False, default=TipoStreak.ENTRENO)
     dias_actuales = Column(Integer, default=0, nullable=False)
@@ -448,7 +464,10 @@ class CheckinNocturno(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     opcion_id = Column(Integer, nullable=False)
@@ -483,7 +502,10 @@ class CrisisLog(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     keywords_detectadas = Column(JSON)
@@ -501,7 +523,10 @@ class FeedbackComida(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     foto_file_id = Column(String(256))
@@ -521,7 +546,10 @@ class Suscripcion(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     plan = Column(Enum(PlanSuscripcion), default=PlanSuscripcion.FREE, nullable=False)
     telegram_payment_charge_id = Column(String(128), unique=True)
@@ -530,7 +558,9 @@ class Suscripcion(Base):
     expira_en = Column(DateTime)
     activa = Column(Boolean, default=True, nullable=False)
 
-    metodo_pago = Column(Enum(MetodoPago), default=MetodoPago.MANUAL_ADMIN, nullable=False)
+    metodo_pago = Column(
+        Enum(MetodoPago), default=MetodoPago.MANUAL_ADMIN, nullable=False
+    )
     monto_cop = Column(Integer, nullable=True)
     comprobante_id = Column(
         Integer, ForeignKey("pagos_comprobantes.id", ondelete="SET NULL"), nullable=True
@@ -561,7 +591,10 @@ class PagoComprobante(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     foto_file_id = Column(String(256))
     foto_sha256 = Column(String(64), index=True)
@@ -587,7 +620,10 @@ class PagoComprobante(Base):
     dias_otorgados = Column(Integer, default=30, nullable=False)
 
     estado = Column(
-        Enum(EstadoPago), default=EstadoPago.PENDIENTE_HUMANO, nullable=False, index=True
+        Enum(EstadoPago),
+        default=EstadoPago.PENDIENTE_HUMANO,
+        nullable=False,
+        index=True,
     )
     motivo_rechazo = Column(Text, nullable=True)
 
@@ -639,7 +675,10 @@ class IntegracionWearable(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     proveedor = Column(String(32), nullable=False)
     access_token = Column(Text)
@@ -660,8 +699,10 @@ class DatosWearableRaw(Base):
 
     id = Column(Integer, primary_key=True)
     integracion_id = Column(
-        Integer, ForeignKey("integraciones_wearables.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        Integer,
+        ForeignKey("integraciones_wearables.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     tipo = Column(String(32), nullable=False)
     external_id = Column(String(120), nullable=False, index=True)
@@ -679,7 +720,10 @@ class PlanSemanal(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     semana_inicio = Column(Date, nullable=False, index=True)
     plan_json = Column(JSON, nullable=False, default=dict)
@@ -694,7 +738,10 @@ class ConsumoAgua(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     ml = Column(Integer, nullable=False)
     registrado_en = Column(DateTime, server_default=func.now(), index=True)
@@ -720,10 +767,16 @@ class DesafioParticipante(Base):
 
     id = Column(Integer, primary_key=True)
     desafio_id = Column(
-        Integer, ForeignKey("desafios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("desafios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     valor_actual = Column(Float, default=0.0, nullable=False)
     posicion = Column(Integer, nullable=True)
@@ -737,10 +790,16 @@ class Kudos(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_origen = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     usuario_destino = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     tipo = Column(String(32), default="pr")
     creado_en = Column(DateTime, server_default=func.now(), index=True)
@@ -766,7 +825,10 @@ class RealtimeSesion(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     iniciada_en = Column(DateTime, server_default=func.now(), index=True)
     terminada_en = Column(DateTime, nullable=True)
@@ -792,7 +854,10 @@ class Recordatorio(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     telegram_id = Column(BigInteger, nullable=False, index=True)
     mensaje = Column(String(500), nullable=False)
@@ -812,7 +877,10 @@ class LlmUsage(Base):
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer,
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     telegram_id = Column(BigInteger, nullable=True, index=True)
     servicio = Column(String(32), nullable=False, index=True)
@@ -847,7 +915,5 @@ class DeporteCatalogo(Base):
     spots_colombia = Column(JSON, default=list)
     referentes_colombia = Column(JSON, default=list)
     federacion = Column(String(120), default="")
-    activo = Column(
-        Boolean, default=True, server_default=text("true"), nullable=False
-    )
+    activo = Column(Boolean, default=True, server_default=text("true"), nullable=False)
     creado_en = Column(DateTime, server_default=func.now())

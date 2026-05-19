@@ -2,6 +2,7 @@
 
 Rate-limited en memoria simple para evitar abuso.
 """
+
 from __future__ import annotations
 
 import logging
@@ -9,23 +10,15 @@ import time as _t
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 
-import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
 
 from src.config import settings
 from src.db.connection import async_session_factory
-from src.db.models import (
-    Comida,
-    DeporteCatalogo,
-    EventoBot,
-    PersonalRecord,
-    PlanSuscripcion,
-    SesionEntrenamiento,
-    Streak,
-    Usuario,
-)
+from src.db.models import (Comida, DeporteCatalogo, EventoBot, PersonalRecord,
+                           PlanSuscripcion, SesionEntrenamiento, Streak,
+                           Usuario)
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +100,7 @@ async def stats_publicas() -> dict:
             .order_by(func.count(Usuario.id).desc())
             .limit(5)
         )
-        paises_top = [
-            {"pais": pais or "??", "n": cnt} for pais, cnt in paises_q
-        ]
+        paises_top = [{"pais": pais or "??", "n": cnt} for pais, cnt in paises_q]
 
     data = {
         "usuarios_totales": total_usuarios,
@@ -195,11 +186,8 @@ async def chat_demo_endpoint(req: ChatDemoReq, request: Request) -> dict:
 async def precios_publicos() -> dict:
     """Precios actuales por tier para que la landing los muestre dinamicamente."""
     from src.db.models import DuracionPago
-    from src.services.pricing import (
-        descripcion_plan,
-        formatear_precio,
-        precio_cop,
-    )
+    from src.services.pricing import (descripcion_plan, formatear_precio,
+                                      precio_cop)
 
     planes = []
     for plan in [

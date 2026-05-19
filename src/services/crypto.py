@@ -3,6 +3,7 @@
 FERNET_KEY debe ser un string base64 url-safe de 32 bytes:
     python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 """
+
 from __future__ import annotations
 
 import logging

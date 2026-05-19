@@ -1,4 +1,5 @@
 """Cuotas de minutos Realtime por tier, contadas en Redis por mes."""
+
 from __future__ import annotations
 
 import logging

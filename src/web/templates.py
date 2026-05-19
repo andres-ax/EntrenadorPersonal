@@ -5,6 +5,7 @@ Configura:
 - Filtros custom: `cop` (formato peso colombiano), `humano` (fechas relativas)
 - Globals: `settings`, helpers de URL
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -15,9 +16,7 @@ from starlette.requests import Request
 
 from src.config import settings
 
-TEMPLATES_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "frontend" / "templates"
-)
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "templates"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 

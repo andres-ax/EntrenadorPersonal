@@ -1,4 +1,5 @@
 """Tests del sistema de tiers (FREE/STARTER/PRO/ELITE/LIFETIME)."""
+
 from __future__ import annotations
 
 import pytest

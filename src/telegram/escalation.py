@@ -11,6 +11,7 @@ Algoritmo basado en research/tough-love-coaching-framework.md seccion 3.
 - Honoring pausado_hasta y bot_bloqueado.
 - Auto-cancel cuando el usuario cumple.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,29 +19,17 @@ from datetime import date, datetime, time, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-import telegram.error
 from sqlalchemy import func, select
+
+import telegram.error
+from src.db.connection import async_session_factory
+from src.db.models import (Comida, MetricaCorporal, MetricaSueno,
+                           SesionEntrenamiento, TonoCoach, Usuario)
+from src.db.repository import (avanzar_escalacion, listar_usuarios_activos,
+                               log_evento, marcar_bot_bloqueado,
+                               obtener_o_crear_escalacion, reset_escalacion)
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-
-from src.db.connection import async_session_factory
-from src.db.models import (
-    Comida,
-    EscalacionState,
-    MetricaCorporal,
-    MetricaSueno,
-    SesionEntrenamiento,
-    TonoCoach,
-    Usuario,
-)
-from src.db.repository import (
-    avanzar_escalacion,
-    listar_usuarios_activos,
-    log_evento,
-    marcar_bot_bloqueado,
-    obtener_o_crear_escalacion,
-    reset_escalacion,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -401,7 +390,9 @@ async def _dias_consecutivos_sin(usuario_id: int, tipo_accion: str) -> int:
                 SesionEntrenamiento.usuario_id == usuario_id
             )
         elif tipo_accion == "comida":
-            query = select(func.max(Comida.fecha)).where(Comida.usuario_id == usuario_id)
+            query = select(func.max(Comida.fecha)).where(
+                Comida.usuario_id == usuario_id
+            )
         elif tipo_accion == "sueno":
             query = select(func.max(MetricaSueno.fecha)).where(
                 MetricaSueno.usuario_id == usuario_id
@@ -442,7 +433,10 @@ def _formatear_copy(
     fuente = _COPY_POR_LANG.get(lang, ESCALADO_COPY)
     plantillas = fuente.get(tipo_accion, {}).get(tono)
     if not plantillas:
-        plantillas = fuente.get(tipo_accion, {}).get("firme") or ESCALADO_COPY[tipo_accion]["firme"]
+        plantillas = (
+            fuente.get(tipo_accion, {}).get("firme")
+            or ESCALADO_COPY[tipo_accion]["firme"]
+        )
     level = max(0, min(level, MAX_LEVEL))
     template = plantillas[level] if level < len(plantillas) else plantillas[-1]
     texto = template.format(
@@ -454,6 +448,7 @@ def _formatear_copy(
     )
     if pais and tono != "militar":
         from src.i18n import aplicar_jerga
+
         texto = aplicar_jerga(texto, pais)
     return texto
 
@@ -466,9 +461,7 @@ async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     async with async_session_factory() as session:
         u = (
-            await session.execute(
-                select(Usuario).where(Usuario.telegram_id == uid)
-            )
+            await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
         ).scalar_one_or_none()
 
     if u is None or u.bot_bloqueado or not u.onboarding_completo:
@@ -542,8 +535,12 @@ async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
             voz_ok = False
             if es_pro:
                 voz_ok = await enviar_voz(
-                    ctx.bot, uid, texto.replace("<b>", "").replace("</b>", "")
-                                       .replace("<i>", "").replace("</i>", ""),
+                    ctx.bot,
+                    uid,
+                    texto.replace("<b>", "")
+                    .replace("</b>", "")
+                    .replace("<i>", "")
+                    .replace("</i>", ""),
                     tono=tono,
                 )
             if not voz_ok:
@@ -617,7 +614,11 @@ async def disparar_escalado_inicial(ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ctx.job_queue.run_once(
                 recordatorio_escalado,
                 when=timedelta(seconds=1),
-                data={"uid": u.telegram_id, "tipo_accion": tipo, "freq": u.dias_entreno or 3},
+                data={
+                    "uid": u.telegram_id,
+                    "tipo_accion": tipo,
+                    "freq": u.dias_entreno or 3,
+                },
                 name=f"escalado_{u.telegram_id}_{tipo}_1",
             )
 
@@ -630,12 +631,15 @@ async def cancelar_escalado_hoy(
     Llamado desde el handler cuando el usuario confirma una accion.
 
     Args:
+    ----
         uid: telegram_id del usuario.
         ctx: contexto con ctx.job_queue.
         tipo_accion: si None, cancela todos los tipos.
 
     Returns:
+    -------
         Numero de jobs cancelados.
+
     """
     cancelados = 0
     tipos = [tipo_accion] if tipo_accion else ["entreno", "comida", "sueno", "peso"]

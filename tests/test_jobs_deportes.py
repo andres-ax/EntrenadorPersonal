@@ -1,4 +1,5 @@
 """Tests del modulo jobs_deportes (PR3): registrar y validar callbacks."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,8 +33,7 @@ def test_registrar_jobs_deportes_registra_5_callbacks():
     app = MagicMock()
     registrar_jobs_deportes(app)
     names_registrados = {
-        call.kwargs.get("name")
-        for call in app.job_queue.run_daily.call_args_list
+        call.kwargs.get("name") for call in app.job_queue.run_daily.call_args_list
     }
     assert "recordar_sesion_skill" in names_registrados
     assert "peso_diario_camp" in names_registrados
@@ -82,7 +82,8 @@ async def test_recordar_sesion_skill_sin_usuarios():
     from unittest.mock import AsyncMock, patch
 
     with patch.object(
-        jobs_deportes, "listar_usuarios_activos",
+        jobs_deportes,
+        "listar_usuarios_activos",
         new=AsyncMock(return_value=[]),
     ):
         await jobs_deportes.recordar_sesion_skill(ctx)

@@ -10,6 +10,7 @@ Centraliza para evitar:
 - Race conditions en singletons globales
 - Deprecation warnings (close() -> aclose())
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -58,8 +59,10 @@ async def close_redis() -> None:
 async def limpiar_keys_usuario(uid: int) -> int:
     """Elimina todas las keys de sesion del agente para un usuario.
 
-    Returns:
+    Returns
+    -------
         Numero de keys eliminadas.
+
     """
     client = await get_redis()
     keys: list[str] = []

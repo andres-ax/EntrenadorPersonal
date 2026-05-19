@@ -1,4 +1,5 @@
 """Fixtures comunes. Setea env vars dummy antes de importar src."""
+
 import json
 import os
 

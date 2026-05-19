@@ -2,15 +2,16 @@
 
 Todos los textos vienen de `src.i18n` JSON files (es/en/pt) para mantener una unica fuente.
 """
+
 from __future__ import annotations
 
 import logging
 
-from telegram import BotCommand, MenuButtonCommands, MenuButtonWebApp, WebAppInfo
-from telegram.ext import Application
-
 from src.config import settings
 from src.i18n import IDIOMAS_SOPORTADOS, t
+from telegram import (BotCommand, MenuButtonCommands, MenuButtonWebApp,
+                      WebAppInfo)
+from telegram.ext import Application
 
 logger = logging.getLogger(__name__)
 
@@ -119,10 +120,16 @@ async def setup_bot(app: Application) -> None:
         for lang in IDIOMAS_SOPORTADOS:
             try:
                 await bot.set_my_name(BOT_NAME, language_code=lang)
-                await bot.set_my_short_description(t("bot_short_desc", lang=lang), language_code=lang)
-                await bot.set_my_description(t("bot_descripcion", lang=lang), language_code=lang)
+                await bot.set_my_short_description(
+                    t("bot_short_desc", lang=lang), language_code=lang
+                )
+                await bot.set_my_description(
+                    t("bot_descripcion", lang=lang), language_code=lang
+                )
             except Exception:
-                logger.warning("No pude setear nombre/desc para lang=%s", lang, exc_info=True)
+                logger.warning(
+                    "No pude setear nombre/desc para lang=%s", lang, exc_info=True
+                )
 
         if settings.miniapp_url:
             try:
@@ -139,6 +146,8 @@ async def setup_bot(app: Application) -> None:
         else:
             await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
-        logger.info("Bot identity completa configurada para %d idiomas", len(IDIOMAS_SOPORTADOS))
+        logger.info(
+            "Bot identity completa configurada para %d idiomas", len(IDIOMAS_SOPORTADOS)
+        )
     except Exception:
         logger.exception("Error configurando identidad del bot")

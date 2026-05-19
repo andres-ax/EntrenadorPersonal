@@ -19,11 +19,12 @@ Cambios derivados de la auditoria de datos en prod:
      (Andy tenia 2 filas con horas=0.0 porque el LLM llamaba la tool sin
      tener el dato. Ya fue arreglado en src/tools.py.)
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 
+from alembic import op
 
 revision: str = "0008_data_integrity"
 down_revision: Union[str, None] = "0007_recordatorios"
@@ -60,28 +61,22 @@ def upgrade() -> None:
         )
         # Backfill: copia telegram_id de la tabla usuarios cuando el FK
         # todavia apunta a una fila viva.
-        op.execute(
-            """UPDATE eventos_bot e
+        op.execute("""UPDATE eventos_bot e
                SET telegram_id = u.telegram_id
                FROM usuarios u
                WHERE e.usuario_id = u.id
-                 AND e.telegram_id IS NULL"""
-        )
+                 AND e.telegram_id IS NULL""")
 
     # 3. CHECK constraints. Usamos nombres explicitos para downgrade limpio.
     # Postgres no permite IF NOT EXISTS en ADD CONSTRAINT; usamos check
     # antes via information_schema.
     def _add_check(table: str, name: str, expr: str) -> None:
         row = bind.execute(
-            sa.text(
-                "SELECT 1 FROM pg_constraint WHERE conname = :n"
-            ),
+            sa.text("SELECT 1 FROM pg_constraint WHERE conname = :n"),
             {"n": name},
         ).fetchone()
         if row is None:
-            op.execute(
-                f'ALTER TABLE "{table}" ADD CONSTRAINT "{name}" CHECK ({expr})'
-            )
+            op.execute(f'ALTER TABLE "{table}" ADD CONSTRAINT "{name}" CHECK ({expr})')
 
     _add_check(
         "metricas_sueno",

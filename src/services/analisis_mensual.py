@@ -3,12 +3,12 @@
 Compone una narrativa basada en datos del mes (entrenos, comidas, sueno, peso)
 y devuelve un PDF bytes listo para enviar via Telegram send_document.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from datetime import date, datetime
-from io import BytesIO
 from typing import Optional
 
 from openai import AsyncOpenAI
@@ -16,15 +16,9 @@ from sqlalchemy import func, select
 
 from src.config import settings
 from src.db.connection import async_session_factory
+from src.db.models import (Comida, MetricaCorporal, MetricaSueno,
+                           PersonalRecord, SesionEntrenamiento, Usuario)
 from src.db.repository import log_llm_usage
-from src.db.models import (
-    Comida,
-    MetricaCorporal,
-    MetricaSueno,
-    PersonalRecord,
-    SesionEntrenamiento,
-    Usuario,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +152,13 @@ async def _generar_narrativa(datos: dict) -> str:
         )
         if response.usage:
             try:
-                await log_llm_usage(None, "analisis", "gpt-4o-mini", response.usage.prompt_tokens, response.usage.completion_tokens)
+                await log_llm_usage(
+                    None,
+                    "analisis",
+                    "gpt-4o-mini",
+                    response.usage.prompt_tokens,
+                    response.usage.completion_tokens,
+                )
             except Exception:
                 pass
         return response.choices[0].message.content or ""
@@ -178,7 +178,7 @@ def _render_pdf(datos: dict, narrativa: str, ano: int, mes: int) -> bytes:
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
-    pdf.cell(0, 12, f"Tu mes en EntrenadorAX", ln=True)
+    pdf.cell(0, 12, "Tu mes en EntrenadorAX", ln=True)
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 8, f"{datos.get('nombre', '?')} - {mes:02d}/{ano}", ln=True)
     pdf.ln(4)
@@ -187,9 +187,7 @@ def _render_pdf(datos: dict, narrativa: str, ano: int, mes: int) -> bytes:
     pdf.cell(0, 8, "Resumen ejecutivo", ln=True)
     pdf.set_font("Helvetica", "", 11)
     delta_peso = datos.get("delta_peso")
-    delta_str = (
-        f"{delta_peso:+.1f} kg" if delta_peso is not None else "sin medidas"
-    )
+    delta_str = f"{delta_peso:+.1f} kg" if delta_peso is not None else "sin medidas"
     resumen = [
         f"Entrenos: {datos.get('n_entrenos', 0)} sesiones, {datos.get('dias_entrenados', 0)} dias activos.",
         f"Minutos entrenados: {datos.get('minutos_total', 0)} min.",

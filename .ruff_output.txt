@@ -1,0 +1,2781 @@
+warning: The top-level linter settings are deprecated in favour of their counterparts in the `lint` section. Please update the following options in `pyproject.toml`:
+  - 'ignore' -> 'lint.ignore'
+  - 'select' -> 'lint.select'
+warning: `incorrect-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible. Ignoring `incorrect-blank-line-before-class`.
+warning: `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
+D104 Missing docstring in public package
+--> src/__init__.py:1:1
+
+D104 Missing docstring in public package
+--> src/api/__init__.py:1:1
+
+D103 Missing docstring in public function
+  --> src/api/admin.py:67:11
+   |
+66 | @router.post("/auth/login", response_model=LoginResponse)
+67 | async def admin_login(req: LoginRequest) -> LoginResponse:
+   |           ^^^^^^^^^^^
+68 |     return await autenticar_admin(req)
+   |
+
+D103 Missing docstring in public function
+  --> src/api/admin.py:72:11
+   |
+71 | @router.get("/auth/me")
+72 | async def admin_me(admin: dict = Depends(get_admin_from_token)) -> dict:
+   |           ^^^^^^^^
+73 |     return admin
+   |
+
+D101 Missing docstring in public class
+  --> src/api/admin.py:76:7
+   |
+76 | class CrearAdminReq(BaseModel):
+   |       ^^^^^^^^^^^^^
+77 |     email: str
+78 |     password: str
+   |
+
+D103 Missing docstring in public function
+  --> src/api/admin.py:83:11
+   |
+82 | @router.post("/admins")
+83 | async def crear_admin(
+   |           ^^^^^^^^^^^
+84 |     req: CrearAdminReq,
+85 |     admin: dict = Depends(get_admin_from_token),
+   |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:111:11
+    |
+110 | @router.get("/admins")
+111 | async def listar_admins(admin: dict = Depends(get_admin_from_token)) -> list[dict]:
+    |           ^^^^^^^^^^^^^
+112 |     await require_super(admin)
+113 |     async with async_session_factory() as session:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:151:11
+    |
+150 | @router.get("/usuarios")
+151 | async def listar_usuarios(
+    |           ^^^^^^^^^^^^^^^
+152 |     admin: dict = Depends(get_admin_from_token),
+153 |     q: str = "",
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:200:11
+    |
+199 | @router.get("/usuarios/{uid}")
+200 | async def detalle_usuario(
+    |           ^^^^^^^^^^^^^^^
+201 |     uid: int, admin: dict = Depends(get_admin_from_token)
+202 | ) -> dict:
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin.py:304:7
+    |
+304 | class AsignarPlanReq(BaseModel):
+    |       ^^^^^^^^^^^^^^
+305 |     plan: str
+306 |     dias: int = 30
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:310:11
+    |
+309 | @router.post("/usuarios/{uid}/asignar_plan")
+310 | async def asignar_plan_manual(
+    |           ^^^^^^^^^^^^^^^^^^^
+311 |     uid: int,
+312 |     req: AsignarPlanReq,
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin.py:333:7
+    |
+333 | class PausarReq(BaseModel):
+    |       ^^^^^^^^^
+334 |     dias: int = 7
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:338:11
+    |
+337 | @router.post("/usuarios/{uid}/pausar")
+338 | async def pausar_usuario(
+    |           ^^^^^^^^^^^^^^
+339 |     uid: int, req: PausarReq, admin: dict = Depends(get_admin_from_token)
+340 | ) -> dict:
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin.py:347:7
+    |
+347 | class BloquearReq(BaseModel):
+    |       ^^^^^^^^^^^
+348 |     motivo: str
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:352:11
+    |
+351 | @router.post("/usuarios/{uid}/bloquear")
+352 | async def bloquear_endpoint(
+    |           ^^^^^^^^^^^^^^^^^
+353 |     uid: int, req: BloquearReq, admin: dict = Depends(get_admin_from_token)
+354 | ) -> dict:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:360:11
+    |
+359 | @router.delete("/usuarios/{uid}/bloquear")
+360 | async def desbloquear_endpoint(
+    |           ^^^^^^^^^^^^^^^^^^^^
+361 |     uid: int, admin: dict = Depends(get_admin_from_token)
+362 | ) -> dict:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:368:11
+    |
+367 | @router.delete("/usuarios/{uid}")
+368 | async def eliminar_endpoint(
+    |           ^^^^^^^^^^^^^^^^^
+369 |     uid: int, admin: dict = Depends(get_admin_from_token)
+370 | ) -> dict:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:406:11
+    |
+405 | @router.get("/pagos")
+406 | async def listar_pagos(
+    |           ^^^^^^^^^^^^
+407 |     admin: dict = Depends(get_admin_from_token),
+408 |     estado: Optional[str] = None,
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:469:11
+    |
+468 | @router.get("/pagos/{comp_id}")
+469 | async def detalle_pago(
+    |           ^^^^^^^^^^^^
+470 |     comp_id: int, admin: dict = Depends(get_admin_from_token)
+471 | ) -> dict:
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin.py:486:7
+    |
+486 | class AprobarReq(BaseModel):
+    |       ^^^^^^^^^^
+487 |     notas: str = ""
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:491:11
+    |
+490 | @router.post("/pagos/{comp_id}/aprobar")
+491 | async def aprobar(
+    |           ^^^^^^^
+492 |     comp_id: int,
+493 |     req: AprobarReq,
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin.py:517:7
+    |
+517 | class RechazarReq(BaseModel):
+    |       ^^^^^^^^^^^
+518 |     motivo: str
+519 |     bloquear: bool = False
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:523:11
+    |
+522 | @router.post("/pagos/{comp_id}/rechazar")
+523 | async def rechazar(
+    |           ^^^^^^^^
+524 |     comp_id: int,
+525 |     req: RechazarReq,
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:555:11
+    |
+554 | @router.get("/crisis")
+555 | async def listar_crisis(
+    |           ^^^^^^^^^^^^^
+556 |     admin: dict = Depends(get_admin_from_token),
+557 |     nivel: Optional[int] = None,
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:587:11
+    |
+586 | @router.get("/escalation/{uid}")
+587 | async def estado_escalation(
+    |           ^^^^^^^^^^^^^^^^^
+588 |     uid: int, admin: dict = Depends(get_admin_from_token)
+589 | ) -> dict:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin.py:621:11
+    |
+620 | @router.get("/eventos")
+621 | async def listar_eventos(
+    |           ^^^^^^^^^^^^^^
+622 |     admin: dict = Depends(get_admin_from_token),
+623 |     tipo: Optional[str] = None,
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin.py:704:7
+    |
+704 | class BroadcastReq(BaseModel):
+    |       ^^^^^^^^^^^^
+705 |     mensaje: str
+706 |     plan_minimo: Optional[str] = None
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/api/admin.py:752:5
+    |
+750 |           out["bot_api"]["db"] = await _ping_d()
+751 |           out["bot_api"]["redis"] = await _ping_r()
+752 | /     except Exception:
+753 | |         pass
+    | |____________^
+754 |       realtime_url = settings.realtime_ws_url
+755 |       if realtime_url:
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/api/admin.py:766:9
+    |
+764 |                   r = await client.get(http_url)
+765 |                   out["realtime_ws"] = r.json()
+766 | /         except Exception:
+767 | |             pass
+    | |________________^
+768 |       return out
+    |
+
+D103 Missing docstring in public function
+  --> src/api/admin_auth.py:38:5
+   |
+38 | def hash_password(plain: str) -> str:
+   |     ^^^^^^^^^^^^^
+39 |     return _pwd_context.hash(_truncate(plain))
+   |
+
+D103 Missing docstring in public function
+  --> src/api/admin_auth.py:42:5
+   |
+42 | def verify_password(plain: str, hashed: str) -> bool:
+   |     ^^^^^^^^^^^^^^^
+43 |     try:
+44 |         return _pwd_context.verify(_truncate(plain), hashed)
+   |
+
+D103 Missing docstring in public function
+  --> src/api/admin_auth.py:70:5
+   |
+70 | def verify_admin_jwt(token: str) -> Optional[dict]:
+   |     ^^^^^^^^^^^^^^^^
+71 |     try:
+72 |         body, sig = token.rsplit(".", 1)
+   |
+
+D103 Missing docstring in public function
+   --> src/api/admin_auth.py:114:11
+    |
+114 | async def require_super(admin: dict) -> dict:
+    |           ^^^^^^^^^^^^^
+115 |     if admin.get("rol") != RolAdmin.SUPER.value:
+116 |         raise HTTPException(403, "Requiere rol super")
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin_auth.py:171:7
+    |
+171 | class LoginRequest(BaseModel):
+    |       ^^^^^^^^^^^^
+172 |     email: str
+173 |     password: str
+    |
+
+D101 Missing docstring in public class
+   --> src/api/admin_auth.py:176:7
+    |
+176 | class LoginResponse(BaseModel):
+    |       ^^^^^^^^^^^^^
+177 |     jwt: str
+178 |     admin_id: int
+    |
+
+D103 Missing docstring in public function
+   --> src/api/admin_auth.py:218:11
+    |
+218 | async def autenticar_admin(req: LoginRequest) -> LoginResponse:
+    |           ^^^^^^^^^^^^^^^^
+219 |     async with async_session_factory() as session:
+220 |         result = await session.execute(
+    |
+
+D101 Missing docstring in public class
+   --> src/api/auth.py:115:7
+    |
+115 | class InitDataReq(BaseModel):
+    |       ^^^^^^^^^^^
+116 |     init_data: str
+    |
+
+D101 Missing docstring in public class
+   --> src/api/auth.py:119:7
+    |
+119 | class TokenResp(BaseModel):
+    |       ^^^^^^^^^
+120 |     jwt: str
+121 |     uid: int
+    |
+
+D101 Missing docstring in public class
+   --> src/api/auth.py:125:7
+    |
+125 | class CodigoWebReq(BaseModel):
+    |       ^^^^^^^^^^^^
+126 |     codigo: str
+    |
+
+E402 Module level import not at top of file
+   --> src/api/auth.py:230:1
+    |
+228 | import secrets as _secrets  # noqa: E402
+229 | from datetime import datetime as _dt  # noqa: E402
+230 | from datetime import timedelta as _td
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+231 |
+232 | import httpx  # noqa: E402
+    |
+
+D101 Missing docstring in public class
+   --> src/api/auth.py:239:7
+    |
+239 | class MagicLinkReq(BaseModel):
+    |       ^^^^^^^^^^^^
+240 |     email: str
+    |
+
+D101 Missing docstring in public class
+   --> src/api/auth.py:243:7
+    |
+243 | class MagicLinkResp(BaseModel):
+    |       ^^^^^^^^^^^^^
+244 |     ok: bool
+245 |     message: str
+    |
+
+D103 Missing docstring in public function
+  --> src/api/integraciones.py:82:11
+   |
+81 | @router.get("/{proveedor}/callback", response_class=HTMLResponse)
+82 | async def oauth_callback(
+   |           ^^^^^^^^^^^^^^
+83 |     proveedor: str,
+84 |     code: str = Query(""),
+   |
+
+D103 Missing docstring in public function
+  --> src/api/me.py:42:11
+   |
+41 | @router.get("/perfil")
+42 | async def perfil(uid: int = Depends(get_uid_from_token)) -> dict:
+   |           ^^^^^^
+43 |     u = await obtener_usuario(uid)
+44 |     if u is None:
+   |
+
+D103 Missing docstring in public function
+  --> src/api/me.py:61:11
+   |
+60 | @router.get("/dashboard")
+61 | async def dashboard(uid: int = Depends(get_uid_from_token)) -> dict:
+   |           ^^^^^^^^^
+62 |     reporte = await reporte_semanal(uid)
+63 |     streak = await obtener_o_crear_streak(uid, "entreno")
+   |
+
+D103 Missing docstring in public function
+  --> src/api/me.py:81:11
+   |
+80 | @router.get("/prs")
+81 | async def prs(uid: int = Depends(get_uid_from_token)) -> dict:
+   |           ^^^
+82 |     items = await listar_prs(uid)
+83 |     return {
+   |
+
+D103 Missing docstring in public function
+  --> src/api/me.py:92:11
+   |
+91 | @router.get("/charts/peso.png")
+92 | async def chart_peso_png(uid: int = Depends(get_uid_from_token)) -> Response:
+   |           ^^^^^^^^^^^^^^
+93 |     img = await chart_peso(uid)
+94 |     if img is None:
+   |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:100:11
+    |
+ 99 | @router.get("/charts/volumen.png")
+100 | async def chart_volumen_png(uid: int = Depends(get_uid_from_token)) -> Response:
+    |           ^^^^^^^^^^^^^^^^^
+101 |     img = await chart_volumen_semanal(uid)
+102 |     if img is None:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:108:11
+    |
+107 | @router.get("/charts/macros.png")
+108 | async def chart_macros_png(
+    |           ^^^^^^^^^^^^^^^^
+109 |     uid: int = Depends(get_uid_from_token), fecha: str | None = None
+110 | ) -> Response:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:119:11
+    |
+118 | @router.get("/charts/streak.png")
+119 | async def chart_streak_png(uid: int = Depends(get_uid_from_token)) -> Response:
+    |           ^^^^^^^^^^^^^^^^
+120 |     img = await chart_streak_calendario(uid)
+121 |     if img is None:
+    |
+
+D101 Missing docstring in public class
+   --> src/api/me.py:180:7
+    |
+180 | class LogEntrenoReq(BaseModel):
+    |       ^^^^^^^^^^^^^
+181 |     fecha: str
+182 |     tipo: str = "fuerza"
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:190:11
+    |
+189 | @router.post("/log/entreno")
+190 | async def log_entreno(
+    |           ^^^^^^^^^^^
+191 |     req: LogEntrenoReq, uid: int = Depends(get_uid_from_token)
+192 | ) -> dict:
+    |
+
+D101 Missing docstring in public class
+   --> src/api/me.py:209:7
+    |
+209 | class LogPesoReq(BaseModel):
+    |       ^^^^^^^^^^
+210 |     peso_kg: float
+211 |     grasa_pct: float | None = None
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:216:11
+    |
+215 | @router.post("/log/peso")
+216 | async def log_peso(req: LogPesoReq, uid: int = Depends(get_uid_from_token)) -> dict:
+    |           ^^^^^^^^
+217 |     m = await guardar_metrica_corporal(
+218 |         telegram_id=uid,
+    |
+
+D101 Missing docstring in public class
+   --> src/api/me.py:226:7
+    |
+226 | class LogComidaReq(BaseModel):
+    |       ^^^^^^^^^^^^
+227 |     fecha: str
+228 |     tipo: str = "almuerzo"
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:237:11
+    |
+236 | @router.post("/log/comida")
+237 | async def log_comida(req: LogComidaReq, uid: int = Depends(get_uid_from_token)) -> dict:
+    |           ^^^^^^^^^^
+238 |     c = await guardar_comida(
+239 |         telegram_id=uid,
+    |
+
+D101 Missing docstring in public class
+   --> src/api/me.py:251:7
+    |
+251 | class LogSuenoReq(BaseModel):
+    |       ^^^^^^^^^^^
+252 |     fecha: str
+253 |     horas: float
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:259:11
+    |
+258 | @router.post("/log/sueno")
+259 | async def log_sueno(req: LogSuenoReq, uid: int = Depends(get_uid_from_token)) -> dict:
+    |           ^^^^^^^^^
+260 |     s = await guardar_sueno(
+261 |         telegram_id=uid,
+    |
+
+D101 Missing docstring in public class
+   --> src/api/me.py:273:7
+    |
+273 | class SettingsPatchReq(BaseModel):
+    |       ^^^^^^^^^^^^^^^^
+274 |     tono: str | None = None
+275 |     idioma: str | None = None
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:282:11
+    |
+281 | @router.get("/settings")
+282 | async def get_settings(uid: int = Depends(get_uid_from_token)) -> dict:
+    |           ^^^^^^^^^^^^
+283 |     u = await obtener_usuario(uid)
+284 |     if u is None:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:302:11
+    |
+301 | @router.patch("/settings")
+302 | async def patch_settings(
+    |           ^^^^^^^^^^^^^^
+303 |     req: SettingsPatchReq, uid: int = Depends(get_uid_from_token)
+304 | ) -> dict:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:350:11
+    |
+349 | @router.get("/wearables")
+350 | async def listar_wearables(uid: int = Depends(get_uid_from_token)) -> dict:
+    |           ^^^^^^^^^^^^^^^^
+351 |     from src.services.wearables import PROVEEDORES_DISPONIBLES, listar_para_usuario
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:361:11
+    |
+360 | @router.post("/wearables/{proveedor}/connect")
+361 | async def connect_wearable(
+    |           ^^^^^^^^^^^^^^^^
+362 |     proveedor: str, uid: int = Depends(get_uid_from_token)
+363 | ) -> dict:
+    |
+
+D103 Missing docstring in public function
+   --> src/api/me.py:371:11
+    |
+370 | @router.post("/wearables/{proveedor}/sync")
+371 | async def sync_wearable(proveedor: str, uid: int = Depends(get_uid_from_token)) -> dict:
+    |           ^^^^^^^^^^^^^
+372 |     from src.services.wearables import sync_proveedor
+    |
+
+D101 Missing docstring in public class
+   --> src/api/public.py:131:7
+    |
+131 | class NewsletterReq(BaseModel):
+    |       ^^^^^^^^^^^^^
+132 |     email: EmailStr
+133 |     fuente: str = "landing"
+    |
+
+D101 Missing docstring in public class
+   --> src/api/public.py:170:7
+    |
+170 | class ChatDemoReq(BaseModel):
+    |       ^^^^^^^^^^^
+171 |     mensaje: str
+172 |     session_id: str | None = None
+    |
+
+D102 Missing docstring in public method
+   --> src/config.py:116:9
+    |
+115 |     @property
+116 |     def is_prod(self) -> bool:
+    |         ^^^^^^^
+117 |         return self.env == "prod"
+    |
+
+D102 Missing docstring in public method
+   --> src/config.py:120:9
+    |
+119 |     @property
+120 |     def database_url_str(self) -> str:
+    |         ^^^^^^^^^^^^^^^^
+121 |         return str(self.database_url)
+    |
+
+D102 Missing docstring in public method
+   --> src/config.py:124:9
+    |
+123 |     @property
+124 |     def redis_url_str(self) -> str:
+    |         ^^^^^^^^^^^^^
+125 |         return str(self.redis_url)
+    |
+
+D101 Missing docstring in public class
+  --> src/data/deportes.py:24:7
+   |
+24 | class Deporte(TypedDict, total=False):
+   |       ^^^^^^^
+25 |     slug: str
+26 |     nombre: str
+   |
+
+D104 Missing docstring in public package
+--> src/db/__init__.py:1:1
+
+D205 1 blank line required between summary line and description
+  --> src/db/models.py:29:5
+   |
+28 |   def Enum(*args, **kwargs):
+29 | /     """Wrapper que fuerza a SQLAlchemy a usar los `.value` (no los `.name`) del
+30 | |     Python enum cuando crea el tipo Postgres. Sin esto, Enum(PlanSuscripcion)
+31 | |     crearia el tipo plansuscripcion con valores en MAYUSCULAS ('FREE') porque
+32 | |     SQLAlchemy usa los names por defecto, rompiendo migraciones que asumen
+33 | |     minusculas ('free'). Aplica a TODOS los Enum del archivo via shadowing.
+34 | |     """
+   | |_______^
+35 |       kwargs.setdefault("values_callable", lambda obj: [e.value for e in obj])
+36 |       return _SAEnum(*args, **kwargs)
+   |
+help: Insert single blank line
+
+D401 First line of docstring should be in imperative mood: "Wrapper que fuerza a SQLAlchemy a usar los `.value` (no los `.name`) del"
+  --> src/db/models.py:29:5
+   |
+28 |   def Enum(*args, **kwargs):
+29 | /     """Wrapper que fuerza a SQLAlchemy a usar los `.value` (no los `.name`) del
+30 | |     Python enum cuando crea el tipo Postgres. Sin esto, Enum(PlanSuscripcion)
+31 | |     crearia el tipo plansuscripcion con valores en MAYUSCULAS ('FREE') porque
+32 | |     SQLAlchemy usa los names por defecto, rompiendo migraciones que asumen
+33 | |     minusculas ('free'). Aplica a TODOS los Enum del archivo via shadowing.
+34 | |     """
+   | |_______^
+35 |       kwargs.setdefault("values_callable", lambda obj: [e.value for e in obj])
+36 |       return _SAEnum(*args, **kwargs)
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:39:7
+   |
+39 | class TipoEjercicio(str, enum.Enum):
+   |       ^^^^^^^^^^^^^
+40 |     FUERZA = "fuerza"
+41 |     CARDIO = "cardio"
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:46:7
+   |
+46 | class TipoComida(str, enum.Enum):
+   |       ^^^^^^^^^^
+47 |     DESAYUNO = "desayuno"
+48 |     ALMUERZO = "almuerzo"
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:54:7
+   |
+54 | class TonoCoach(str, enum.Enum):
+   |       ^^^^^^^^^
+55 |     AMIGABLE = "amigable"
+56 |     FIRME = "firme"
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:60:7
+   |
+60 | class TipoCompromiso(str, enum.Enum):
+   |       ^^^^^^^^^^^^^^
+61 |     ENTRENO = "entreno"
+62 |     COMIDA = "comida"
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:67:7
+   |
+67 | class TipoStreak(str, enum.Enum):
+   |       ^^^^^^^^^^
+68 |     ENTRENO = "entreno"
+69 |     COMIDA = "comida"
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:75:7
+   |
+75 | class TipoAccionEscalacion(str, enum.Enum):
+   |       ^^^^^^^^^^^^^^^^^^^^
+76 |     ENTRENO = "entreno"
+77 |     COMIDA = "comida"
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:82:7
+   |
+82 | class PlanSuscripcion(str, enum.Enum):
+   |       ^^^^^^^^^^^^^^^
+83 |     FREE = "free"
+84 |     STARTER = "starter"
+   |
+
+D101 Missing docstring in public class
+  --> src/db/models.py:90:7
+   |
+90 | class MetodoPago(str, enum.Enum):
+   |       ^^^^^^^^^^
+91 |     BRE_B = "bre_b"
+92 |     NEQUI = "nequi"
+   |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:100:7
+    |
+100 | class DuracionPago(str, enum.Enum):
+    |       ^^^^^^^^^^^^
+101 |     MENSUAL = "mensual"
+102 |     ANUAL = "anual"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:106:7
+    |
+106 | class EstadoPago(str, enum.Enum):
+    |       ^^^^^^^^^^
+107 |     PENDIENTE_HUMANO = "pendiente_humano"
+108 |     APROBADO = "aprobado"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:113:7
+    |
+113 | class RolAdmin(str, enum.Enum):
+    |       ^^^^^^^^
+114 |     SUPER = "super"
+115 |     SOPORTE = "soporte"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:168:7
+    |
+168 | class Usuario(Base):
+    |       ^^^^^^^
+169 |     __tablename__ = "usuarios"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:256:7
+    |
+256 | class SesionEntrenamiento(Base):
+    |       ^^^^^^^^^^^^^^^^^^^
+257 |     __tablename__ = "sesiones_entrenamiento"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:295:7
+    |
+295 | class EjercicioRealizado(Base):
+    |       ^^^^^^^^^^^^^^^^^^
+296 |     __tablename__ = "ejercicios_realizados"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:313:7
+    |
+313 | class Comida(Base):
+    |       ^^^^^^
+314 |     __tablename__ = "comidas"
+    |
+
+D205 1 blank line required between summary line and description
+   --> src/db/models.py:332:5
+    |
+331 |   class PersonalRecord(Base):
+332 | /     """PR polimorfico. Soporta:
+333 | |     - PESO_REPS (gimnasio/powerlifting/halterofilia) - default back-compat
+334 | |     - TIEMPO (running, natacion: ej PR de 5K en 22:15)
+335 | |     - TRUCO (skate/BMX/rollers/parkour: ej "primer kickflip aterrizado")
+336 | |     - GRADO (escalada: ej V6 boulder, 5.12a sport)
+337 | |     - PROFUNDIDAD (apnea/buceo: ej 35m CWT)
+338 | |     - WATTS (ciclismo: ej FTP 320w)
+339 | |     - VELOCIDAD (patinaje velocidad, MTB)
+340 | |     - RONDAS (combate: ej "primer KO en round 2")
+341 | |     - CINTURON (BJJ/karate/TKD/judo: ej "purple belt BJJ")
+342 | |     - DISTANCIA (running/ciclismo PR de distancia nueva)
+343 | |     """
+    | |_______^
+344 |
+345 |       __tablename__ = "personal_records"
+    |
+help: Insert single blank line
+
+D400 First line should end with a period
+   --> src/db/models.py:332:5
+    |
+331 |   class PersonalRecord(Base):
+332 | /     """PR polimorfico. Soporta:
+333 | |     - PESO_REPS (gimnasio/powerlifting/halterofilia) - default back-compat
+334 | |     - TIEMPO (running, natacion: ej PR de 5K en 22:15)
+335 | |     - TRUCO (skate/BMX/rollers/parkour: ej "primer kickflip aterrizado")
+336 | |     - GRADO (escalada: ej V6 boulder, 5.12a sport)
+337 | |     - PROFUNDIDAD (apnea/buceo: ej 35m CWT)
+338 | |     - WATTS (ciclismo: ej FTP 320w)
+339 | |     - VELOCIDAD (patinaje velocidad, MTB)
+340 | |     - RONDAS (combate: ej "primer KO en round 2")
+341 | |     - CINTURON (BJJ/karate/TKD/judo: ej "purple belt BJJ")
+342 | |     - DISTANCIA (running/ciclismo PR de distancia nueva)
+343 | |     """
+    | |_______^
+344 |
+345 |       __tablename__ = "personal_records"
+    |
+help: Add period
+
+D415 First line should end with a period, question mark, or exclamation point
+   --> src/db/models.py:332:5
+    |
+331 |   class PersonalRecord(Base):
+332 | /     """PR polimorfico. Soporta:
+333 | |     - PESO_REPS (gimnasio/powerlifting/halterofilia) - default back-compat
+334 | |     - TIEMPO (running, natacion: ej PR de 5K en 22:15)
+335 | |     - TRUCO (skate/BMX/rollers/parkour: ej "primer kickflip aterrizado")
+336 | |     - GRADO (escalada: ej V6 boulder, 5.12a sport)
+337 | |     - PROFUNDIDAD (apnea/buceo: ej 35m CWT)
+338 | |     - WATTS (ciclismo: ej FTP 320w)
+339 | |     - VELOCIDAD (patinaje velocidad, MTB)
+340 | |     - RONDAS (combate: ej "primer KO en round 2")
+341 | |     - CINTURON (BJJ/karate/TKD/judo: ej "purple belt BJJ")
+342 | |     - DISTANCIA (running/ciclismo PR de distancia nueva)
+343 | |     """
+    | |_______^
+344 |
+345 |       __tablename__ = "personal_records"
+    |
+help: Add closing punctuation
+
+D101 Missing docstring in public class
+   --> src/db/models.py:372:7
+    |
+372 | class MetricaSueno(Base):
+    |       ^^^^^^^^^^^^
+373 |     __tablename__ = "metricas_sueno"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:387:7
+    |
+387 | class MetricaCorporal(Base):
+    |       ^^^^^^^^^^^^^^^
+388 |     __tablename__ = "metricas_corporales"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:402:7
+    |
+402 | class Compromiso(Base):
+    |       ^^^^^^^^^^
+403 |     __tablename__ = "compromisos"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:428:7
+    |
+428 | class EscalacionState(Base):
+    |       ^^^^^^^^^^^^^^^
+429 |     __tablename__ = "escalacion_state"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:454:7
+    |
+454 | class Streak(Base):
+    |       ^^^^^^
+455 |     __tablename__ = "streaks"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:475:7
+    |
+475 | class CheckinNocturno(Base):
+    |       ^^^^^^^^^^^^^^^
+476 |     __tablename__ = "checkins_nocturnos"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:493:7
+    |
+493 | class EventoBot(Base):
+    |       ^^^^^^^^^
+494 |     __tablename__ = "eventos_bot"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:513:7
+    |
+513 | class CrisisLog(Base):
+    |       ^^^^^^^^^
+514 |     __tablename__ = "crisis_log"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:534:7
+    |
+534 | class FeedbackComida(Base):
+    |       ^^^^^^^^^^^^^^
+535 |     __tablename__ = "feedback_comida"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:557:7
+    |
+557 | class Suscripcion(Base):
+    |       ^^^^^^^^^^^
+558 |     __tablename__ = "suscripciones"
+    |
+
+D101 Missing docstring in public class
+   --> src/db/models.py:778:7
+    |
+778 | class DesafioParticipante(Base):
+    |       ^^^^^^^^^^^^^^^^^^^
+779 |     __tablename__ = "desafios_participantes"
+    |
+
+E402 Module level import not at top of file
+  --> src/db/repository.py:15:1
+   |
+13 | logger = logging.getLogger(__name__)
+14 |
+15 | from src.db.connection import async_session_factory
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+16 | from src.db.models import (
+17 |     CheckinNocturno,
+   |
+
+E402 Module level import not at top of file
+  --> src/db/repository.py:16:1
+   |
+15 |   from src.db.connection import async_session_factory
+16 | / from src.db.models import (
+17 | |     CheckinNocturno,
+18 | |     Comida,
+19 | |     Compromiso,
+20 | |     CrisisLog,
+21 | |     DeporteCatalogo,
+22 | |     DuracionPago,
+23 | |     EjercicioRealizado,
+24 | |     EscalacionState,
+25 | |     EstadoPago,
+26 | |     EventoBot,
+27 | |     FeedbackComida,
+28 | |     LlmUsage,
+29 | |     MetodoPago,
+30 | |     MetricaCorporal,
+31 | |     MetricaSueno,
+32 | |     PagoComprobante,
+33 | |     PersonalRecord,
+34 | |     PlanSuscripcion,
+35 | |     Recordatorio,
+36 | |     SesionEntrenamiento,
+37 | |     Streak,
+38 | |     SubtipoSesion,
+39 | |     Suscripcion,
+40 | |     TipoAccionEscalacion,
+41 | |     TipoComida,
+42 | |     TipoCompromiso,
+43 | |     TipoEjercicio,
+44 | |     TipoPR,
+45 | |     TipoStreak,
+46 | |     TonoCoach,
+47 | |     Usuario,
+48 | |     UsuarioBloqueado,
+49 | | )
+   | |_^
+   |
+
+D103 Missing docstring in public function
+  --> src/db/repository.py:62:11
+   |
+62 | async def obtener_o_crear_usuario(telegram_id: int, nombre: str = "") -> Usuario:
+   |           ^^^^^^^^^^^^^^^^^^^^^^^
+63 |     async with async_session_factory() as session:
+64 |         result = await session.execute(
+   |
+
+D103 Missing docstring in public function
+  --> src/db/repository.py:80:11
+   |
+80 | async def obtener_usuario(telegram_id: int) -> Optional[Usuario]:
+   |           ^^^^^^^^^^^^^^^
+81 |     async with async_session_factory() as session:
+82 |         result = await session.execute(
+   |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:124:11
+    |
+124 | async def actualizar_usuario(telegram_id: int, **kwargs) -> Optional[Usuario]:
+    |           ^^^^^^^^^^^^^^^^^^
+125 |     async with async_session_factory() as session:
+126 |         result = await session.execute(
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:277:11
+    |
+277 | async def obtener_ultimas_sesiones(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^
+278 |     telegram_id: int, limite: int = 10
+279 | ) -> list[SesionEntrenamiento]:
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:297:11
+    |
+297 | async def obtener_pr_ejercicio(
+    |           ^^^^^^^^^^^^^^^^^^^^
+298 |     telegram_id: int, ejercicio: str
+299 | ) -> Optional[PersonalRecord]:
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:316:11
+    |
+316 | async def guardar_pr(
+    |           ^^^^^^^^^^
+317 |     telegram_id: int,
+318 |     ejercicio: str,
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:344:11
+    |
+344 | async def listar_prs(telegram_id: int) -> list[PersonalRecord]:
+    |           ^^^^^^^^^^
+345 |     async with async_session_factory() as session:
+346 |         uid = await _get_usuario_id(session, telegram_id)
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:360:11
+    |
+360 | async def guardar_metrica_corporal(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^
+361 |     telegram_id: int,
+362 |     peso_kg: float,
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:388:11
+    |
+388 | async def historial_peso(telegram_id: int, limit: int = 10) -> list[MetricaCorporal]:
+    |           ^^^^^^^^^^^^^^
+389 |     async with async_session_factory() as session:
+390 |         uid = await _get_usuario_id(session, telegram_id)
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:405:11
+    |
+405 | async def guardar_comida(
+    |           ^^^^^^^^^^^^^^
+406 |     telegram_id: int,
+407 |     fecha_str: str,
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:566:11
+    |
+566 | async def guardar_sueno(
+    |           ^^^^^^^^^^^^^
+567 |     telegram_id: int,
+568 |     fecha_str: str,
+    |
+
+D401 First line of docstring should be in imperative mood: "True si la comida tiene al menos un macro o calorias > 0."
+   --> src/db/repository.py:621:5
+    |
+620 |   def _comida_tiene_datos(c: "Comida") -> bool:
+621 | /     """True si la comida tiene al menos un macro o calorias > 0.
+622 | |
+623 | |     Comidas con calorias=0 y todos los macros en 0 son "placeholders" que
+624 | |     el coach registraba antes de la validacion dura; las excluimos de los
+625 | |     reportes para no inflar conteos.
+626 | |     """
+    | |_______^
+627 |       if (c.calorias or 0) > 0:
+628 |           return True
+    |
+
+D401 First line of docstring should be in imperative mood: "Reporte semanal: entrenos + PRs + sueno + nutricion de hoy."
+   --> src/db/repository.py:644:5
+    |
+643 |   async def reporte_semanal(telegram_id: int) -> dict:
+644 | /     """Reporte semanal: entrenos + PRs + sueno + nutricion de hoy.
+645 | |
+646 | |     Devuelve:
+647 | |     - dias_unicos_entreno: COUNT(DISTINCT fecha) de sesiones de la semana.
+648 | |       Es el campo "humano" para "N entrenos esta semana".
+649 | |     - sesiones_registradas: COUNT(*) de filas en SesionEntrenamiento (puede
+650 | |       ser mayor que dias_unicos_entreno si hay duplicados o multiples sesiones).
+651 | |     - dias_entrenados: alias = dias_unicos_entreno (mantiene compat con miniapp
+652 | |       y handlers que ya leen ese campo).
+653 | |     - nutricion_hoy: solo cuenta comidas con datos (calorias>0 o macros>0).
+654 | |       Tambien expone `comidas_totales` (incluye placeholder) por si el coach
+655 | |       quiere mencionar diferencia.
+656 | |     """
+    | |_______^
+657 |       async with async_session_factory() as session:
+658 |           uid = await _get_usuario_id(session, telegram_id)
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:745:11
+    |
+745 | async def crear_compromiso(
+    |           ^^^^^^^^^^^^^^^^
+746 |     telegram_id: int,
+747 |     objetivo_texto: str,
+    |
+
+E712 Avoid equality comparisons to `True`; use `Compromiso.activo:` for truth checks
+   --> src/db/repository.py:760:47
+    |
+758 |         await session.execute(
+759 |             select(Compromiso).where(
+760 |                 Compromiso.usuario_id == uid, Compromiso.activo == True
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^
+761 |             )  # noqa: E712
+762 |         )
+    |
+help: Replace with `Compromiso.activo`
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:802:11
+    |
+802 | async def obtener_compromiso_activo(telegram_id: int) -> Optional[Compromiso]:
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+803 |     async with async_session_factory() as session:
+804 |         uid = await _get_usuario_id(session, telegram_id)
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:819:11
+    |
+819 | async def incrementar_citado_compromiso(compromiso_id: int) -> None:
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+820 |     async with async_session_factory() as session:
+821 |         result = await session.execute(
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:833:11
+    |
+833 | async def obtener_o_crear_escalacion(
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+834 |     telegram_id: int, tipo_accion: str = "entreno"
+835 | ) -> EscalacionState:
+    |
+
+D103 Missing docstring in public function
+   --> src/db/repository.py:928:11
+    |
+928 | async def obtener_o_crear_streak(
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+929 |     telegram_id: int, tipo_streak: str = "entreno"
+930 | ) -> Streak:
+    |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1013:11
+     |
+1013 | async def guardar_checkin_nocturno(
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^
+1014 |     telegram_id: int, opcion_id: int, via: str = "poll"
+1015 | ) -> CheckinNocturno:
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1051:11
+     |
+1051 | async def log_evento(
+     |           ^^^^^^^^^^
+1052 |     telegram_id: Optional[int], tipo_evento: str, payload: Optional[dict] = None
+1053 | ) -> None:
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1068:11
+     |
+1068 | async def ultimos_eventos(telegram_id: int, limit: int = 3) -> list[EventoBot]:
+     |           ^^^^^^^^^^^^^^^
+1069 |     async with async_session_factory() as session:
+1070 |         uid = await _get_usuario_id(session, telegram_id)
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1085:11
+     |
+1085 | async def log_crisis(
+     |           ^^^^^^^^^^
+1086 |     telegram_id: int,
+1087 |     nivel: int,
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1114:11
+     |
+1114 | async def guardar_feedback_comida(
+     |           ^^^^^^^^^^^^^^^^^^^^^^^
+1115 |     telegram_id: int,
+1116 |     foto_file_id: str,
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1144:11
+     |
+1144 | async def contar_fotos_hoy(telegram_id: int) -> int:
+     |           ^^^^^^^^^^^^^^^^
+1145 |     hoy = date.today()
+1146 |     async with async_session_factory() as session:
+     |
+
+D401 First line of docstring should be in imperative mood: "True si el plan vigente cumple o supera el tier minimo."
+    --> src/db/repository.py:1204:5
+     |
+1203 | async def es_plan_minimo(telegram_id: int, tier_minimo: PlanSuscripcion) -> bool:
+1204 |     """True si el plan vigente cumple o supera el tier minimo."""
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1205 |     actual = await obtener_plan_actual(telegram_id)
+1206 |     return PLAN_RANKING.get(actual, 0) >= PLAN_RANKING.get(tier_minimo, 0)
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1389:11
+     |
+1389 | async def marcar_comprobante_duplicado(comp_id: int, razon: str) -> None:
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1390 |     async with async_session_factory() as session:
+1391 |         result = await session.execute(
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1402:11
+     |
+1402 | async def obtener_comprobante(comp_id: int) -> Optional[PagoComprobante]:
+     |           ^^^^^^^^^^^^^^^^^^^
+1403 |     async with async_session_factory() as session:
+1404 |         result = await session.execute(
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1506:11
+     |
+1506 | async def listar_comprobantes_admin(
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+1507 |     estado: Optional[EstadoPago] = None,
+1508 |     limit: int = 50,
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1525:11
+     |
+1525 | async def bloquear_usuario(telegram_id: int, admin_email: str, motivo: str) -> bool:
+     |           ^^^^^^^^^^^^^^^^
+1526 |     async with async_session_factory() as session:
+1527 |         uid = await _get_usuario_id(session, telegram_id)
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1554:11
+     |
+1554 | async def desbloquear_usuario(telegram_id: int) -> bool:
+     |           ^^^^^^^^^^^^^^^^^^^
+1555 |     async with async_session_factory() as session:
+1556 |         uid = await _get_usuario_id(session, telegram_id)
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1571:11
+     |
+1571 | async def cambiar_tono(telegram_id: int, tono: str) -> Optional[Usuario]:
+     |           ^^^^^^^^^^^^
+1572 |     return await actualizar_usuario(telegram_id, tono=TonoCoach(tono))
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1575:11
+     |
+1575 | async def aceptar_modo_militar(telegram_id: int) -> Optional[Usuario]:
+     |           ^^^^^^^^^^^^^^^^^^^^
+1576 |     return await actualizar_usuario(
+1577 |         telegram_id, modo_militar_aceptado_en=datetime.utcnow()
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1581:11
+     |
+1581 | async def pausar_recordatorios(telegram_id: int, dias: int) -> Optional[Usuario]:
+     |           ^^^^^^^^^^^^^^^^^^^^
+1582 |     hasta = date.today() + timedelta(days=dias)
+1583 |     return await actualizar_usuario(telegram_id, pausado_hasta=hasta)
+     |
+
+D103 Missing docstring in public function
+    --> src/db/repository.py:1586:11
+     |
+1586 | async def set_quiet_hours(
+     |           ^^^^^^^^^^^^^^^
+1587 |     telegram_id: int, inicio_hhmm: str, fin_hhmm: str
+1588 | ) -> Optional[Usuario]:
+     |
+
+C901 `actualizar_sesion_skill_set` is too complex (11 > 10)
+    --> src/db/repository.py:1984:11
+     |
+1984 | async def actualizar_sesion_skill_set(
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1985 |     telegram_id: int,
+1986 |     sesion_id: Optional[int] = None,
+     |
+
+D401 First line of docstring should be in imperative mood: "Persiste registro de uso de API OpenAI para tracking de costos."
+    --> src/db/repository.py:2411:5
+     |
+2409 |     rounds: int = 1,
+2410 | ) -> None:
+2411 |     """Persiste registro de uso de API OpenAI para tracking de costos."""
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2412 |     try:
+2413 |         costo = _estimar_costo(modelo, input_tokens, output_tokens)
+     |
+
+D401 First line of docstring should be in imperative mood: "Helper: setea telegram_id en el ContextVar y devuelve el token reset."
+   --> src/log_setup.py:149:5
+    |
+148 |   def bind_telegram_id(telegram_id: int | str | None) -> Any:
+149 | /     """Helper: setea telegram_id en el ContextVar y devuelve el token reset.
+150 | |
+151 | |     Usar como:
+152 | |
+153 | |         token = bind_telegram_id(uid)
+154 | |         try:
+155 | |             ...
+156 | |         finally:
+157 | |             telegram_id_ctx.reset(token)
+158 | |     """
+    | |_______^
+159 |       return telegram_id_ctx.set(str(telegram_id) if telegram_id is not None else "-")
+    |
+
+D401 First line of docstring should be in imperative mood: "Helper: setea request_id (lo crea si es None) y devuelve token reset."
+   --> src/log_setup.py:163:5
+    |
+162 | def bind_request_id(request_id: str | None) -> Any:
+163 |     """Helper: setea request_id (lo crea si es None) y devuelve token reset."""
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+164 |     rid = request_id or get_or_make_request_id()
+165 |     return request_id_ctx.set(rid)
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> src/main.py:73:5
+   |
+71 |           if update is not None and getattr(update, "effective_user", None):
+72 |               uid = update.effective_user.id
+73 | /     except Exception:
+74 | |         pass
+   | |____________^
+75 |       logger.error(
+76 |           "Excepcion en handler de Telegram uid=%s update_id=%s",
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> src/main.py:88:9
+   |
+86 |                   sentry_sdk.set_user({"id": uid})
+87 |               sentry_sdk.set_tag("source", "telegram_handler")
+88 | /         except Exception:
+89 | |             pass
+   | |________________^
+90 |       if settings.developer_chat_id is None:
+91 |           return
+   |
+
+D103 Missing docstring in public function
+   --> src/main.py:109:11
+    |
+108 | @asynccontextmanager
+109 | async def lifespan(app: FastAPI):
+    |           ^^^^^^^^
+110 |     global telegram_app, pubsub_task
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/main.py:181:9
+    |
+179 |           try:
+180 |               await pubsub_task
+181 | /         except (asyncio.CancelledError, Exception):
+182 | |             pass
+    | |________________^
+183 |       if telegram_app:
+184 |           try:
+    |
+
+D103 Missing docstring in public function
+   --> src/main.py:221:11
+    |
+220 | @app.middleware("http")
+221 | async def security_headers(request: Request, call_next):
+    |           ^^^^^^^^^^^^^^^^
+222 |     response = await call_next(request)
+223 |     response.headers["X-Content-Type-Options"] = "nosniff"
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/main.py:247:9
+    |
+246 |               sentry_sdk.set_tag("request_id", rid)
+247 | /         except Exception:
+248 | |             pass
+    | |________________^
+249 |       t0 = time.perf_counter()
+250 |       status_code = 500
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/main.py:282:9
+    |
+280 |           try:
+281 |               request_id_ctx.reset(rid_token)
+282 | /         except Exception:
+283 | |             pass
+    | |________________^
+    |
+
+D401 First line of docstring should be in imperative mood: "Handler global para 500s no controlados."
+   --> src/main.py:288:5
+    |
+286 |   @app.exception_handler(Exception)
+287 |   async def unhandled_exception_handler(request: Request, exc: Exception):
+288 | /     """Handler global para 500s no controlados.
+289 | |
+290 | |     HTTPException ya tiene su propio handler en FastAPI; aqui solo entran
+291 | |     excepciones genuinamente inesperadas. Devuelve un body con request_id
+292 | |     para que el usuario nos lo cite y podamos buscarlo en los logs.
+293 | |     """
+    | |_______^
+294 |       rid = request_id_ctx.get()
+295 |       logger.exception(
+    |
+
+D103 Missing docstring in public function
+   --> src/main.py:346:11
+    |
+345 | @app.get("/health")
+346 | async def health() -> dict:
+    |           ^^^^^^
+347 |     bot_ok = telegram_app is not None and telegram_app.running
+348 |     db_ok = await ping_db()
+    |
+
+D103 Missing docstring in public function
+   --> src/main.py:357:11
+    |
+356 | @app.post("/webhook")
+357 | async def webhook(
+    |           ^^^^^^^
+358 |     request: Request,
+359 |     x_telegram_bot_api_secret_token: str = Header(None),
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/main.py:397:9
+    |
+396 |               sentry_sdk.set_user({"id": uid})
+397 | /         except Exception:
+398 | |             pass
+    | |________________^
+399 |       logger.info(
+400 |           "TG update_id=%s type=%s uid=%s chat_id=%s text=%r",
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/main.py:429:9
+    |
+427 |           try:
+428 |               telegram_id_ctx.reset(tid_token)
+429 | /         except Exception:
+430 | |             pass
+    | |________________^
+431 |       return {"ok": True}
+    |
+
+C901 `_detect_update_type` is too complex (11 > 10)
+   --> src/main.py:434:5
+    |
+434 | def _detect_update_type(update: Update) -> str:
+    |     ^^^^^^^^^^^^^^^^^^^
+435 |     """Resume el tipo de update para logs (sin reemplazar logica del bot)."""
+436 |     if update.message is not None:
+    |
+
+D104 Missing docstring in public package
+--> src/realtime/__init__.py:1:1
+
+D103 Missing docstring in public function
+  --> src/realtime/cuotas.py:30:11
+   |
+30 | async def cuota_total_segundos(telegram_id: int) -> int:
+   |           ^^^^^^^^^^^^^^^^^^^^
+31 |     plan = await obtener_plan_actual(telegram_id)
+32 |     return CUOTAS_MIN_POR_TIER.get(plan, 0) * 60
+   |
+
+D103 Missing docstring in public function
+  --> src/realtime/cuotas.py:35:11
+   |
+35 | async def consumido_segundos(telegram_id: int) -> int:
+   |           ^^^^^^^^^^^^^^^^^^
+36 |     client = await get_redis()
+37 |     val = await client.get(_key(telegram_id))
+   |
+
+D103 Missing docstring in public function
+  --> src/realtime/cuotas.py:44:11
+   |
+44 | async def disponible_segundos(telegram_id: int) -> int:
+   |           ^^^^^^^^^^^^^^^^^^^
+45 |     total = await cuota_total_segundos(telegram_id)
+46 |     consumido = await consumido_segundos(telegram_id)
+   |
+
+D107 Missing docstring in `__init__`
+  --> src/realtime/openai_client.py:41:9
+   |
+39 |     """Conecta cliente WebSocket (Mini App) con OpenAI Realtime API."""
+40 |
+41 |     def __init__(self, tono: str = "firme"):
+   |         ^^^^^^^^
+42 |         self.tono = tono
+43 |         self.voice = VOZ_POR_TONO.get(tono, "ash")
+   |
+
+D102 Missing docstring in public method
+  --> src/realtime/openai_client.py:46:15
+   |
+44 |         self.ws: Optional[websockets.WebSocketClientProtocol] = None
+45 |
+46 |     async def conectar(self) -> None:
+   |               ^^^^^^^^
+47 |         api_key = settings.openai_api_key.get_secret_value()
+48 |         headers = {
+   |
+
+D102 Missing docstring in public method
+  --> src/realtime/openai_client.py:96:15
+   |
+94 |         await self._enviar_evento({"type": "input_audio_buffer.append", "audio": b64})
+95 |
+96 |     async def cerrar(self) -> None:
+   |               ^^^^^^
+97 |         if self.ws is not None:
+98 |             try:
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/realtime/openai_client.py:100:13
+    |
+ 98 |               try:
+ 99 |                   await self.ws.close()
+100 | /             except Exception:
+101 | |                 pass
+    | |____________________^
+102 |               self.ws = None
+    |
+
+C901 `ws_realtime` is too complex (35 > 10)
+  --> src/realtime/server.py:58:11
+   |
+57 | @router.websocket("/ws/realtime")
+58 | async def ws_realtime(ws: WebSocket) -> None:
+   |           ^^^^^^^^^^^
+59 |     token = ws.query_params.get("token", "")
+60 |     uid = verify_jwt(token)
+   |
+
+D103 Missing docstring in public function
+  --> src/realtime/server.py:58:11
+   |
+57 | @router.websocket("/ws/realtime")
+58 | async def ws_realtime(ws: WebSocket) -> None:
+   |           ^^^^^^^^^^^
+59 |     token = ws.query_params.get("token", "")
+60 |     uid = verify_jwt(token)
+   |
+
+C901 `bombear_openai_a_cliente` is too complex (19 > 10)
+   --> src/realtime/server.py:140:15
+    |
+138 |             cerrado = True
+139 |
+140 |     async def bombear_openai_a_cliente() -> None:
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^
+141 |         nonlocal tokens_in, tokens_out, cerrado
+142 |         async for evento in bridge.iterar_eventos():
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/realtime/server.py:188:21
+    |
+186 |                       try:
+187 |                           await ws.send_json({"type": "cuota", "segundos_restantes": 0})
+188 | /                     except Exception:
+189 | |                         pass
+    | |____________________________^
+190 |                       cerrado = True
+191 |                       break
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/realtime/server.py:203:17
+    |
+201 |                           }
+202 |                       )
+203 | /                 except Exception:
+204 | |                     pass
+    | |________________________^
+205 |
+206 |       try:
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/realtime/server.py:231:13
+    |
+229 |               try:
+230 |                   await ws.close()
+231 | /             except Exception:
+232 | |                 pass
+    | |____________________^
+    |
+
+D104 Missing docstring in public package
+--> src/services/__init__.py:1:1
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/analisis_mensual.py:168:13
+    |
+166 |                       response.usage.completion_tokens,
+167 |                   )
+168 | /             except Exception:
+169 | |                 pass
+    | |____________________^
+170 |           return response.choices[0].message.content or ""
+171 |       except Exception:
+    |
+
+D103 Missing docstring in public function
+  --> src/services/canal_logros.py:29:11
+   |
+29 | async def opt_out_canal_logros(telegram_id: int) -> bool:
+   |           ^^^^^^^^^^^^^^^^^^^^
+30 |     client = await get_redis()
+31 |     await client.delete(f"canal_logros_optin:{telegram_id}")
+   |
+
+D103 Missing docstring in public function
+  --> src/services/canal_logros.py:35:11
+   |
+35 | async def esta_opted_in(telegram_id: int) -> bool:
+   |           ^^^^^^^^^^^^^
+36 |     client = await get_redis()
+37 |     val = await client.get(f"canal_logros_optin:{telegram_id}")
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/chat_demo.py:102:9
+    |
+100 |           try:
+101 |               await session.close()
+102 | /         except Exception:
+103 | |             pass
+    | |________________^
+104 |
+105 |       restantes = max(0, DEMO_MAX_MESSAGES - count)
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/comprobantes.py:153:13
+    |
+151 |                       response.usage.completion_tokens,
+152 |                   )
+153 | /             except Exception:
+154 | |                 pass
+    | |____________________^
+155 |           raw = response.choices[0].message.content or "{}"
+156 |           data = json.loads(raw)
+    |
+
+D103 Missing docstring in public function
+  --> src/services/comunidad.py:16:11
+   |
+16 | async def listar_desafios_activos() -> list[Desafio]:
+   |           ^^^^^^^^^^^^^^^^^^^^^^^
+17 |     hoy = date.today()
+18 |     async with async_session_factory() as session:
+   |
+
+D103 Missing docstring in public function
+  --> src/services/comunidad.py:27:11
+   |
+27 | async def inscribir_en_desafio(telegram_id: int, desafio_slug: str) -> bool:
+   |           ^^^^^^^^^^^^^^^^^^^^
+28 |     async with async_session_factory() as session:
+29 |         user_q = await session.execute(
+   |
+
+D103 Missing docstring in public function
+  --> src/services/comunidad.py:55:11
+   |
+55 | async def ranking_desafio(desafio_slug: str, top: int = 10) -> list[dict]:
+   |           ^^^^^^^^^^^^^^^
+56 |     async with async_session_factory() as session:
+57 |         des_q = await session.execute(
+   |
+
+D101 Missing docstring in public class
+   --> src/services/crisis.py:136:7
+    |
+135 | @dataclass(frozen=True)
+136 | class CrisisDetected:
+    |       ^^^^^^^^^^^^^^
+137 |     nivel: int
+138 |     keywords: list[str]
+    |
+
+C901 `_detectar_inner` is too complex (12 > 10)
+   --> src/services/crisis.py:376:5
+    |
+376 | def _detectar_inner(
+    |     ^^^^^^^^^^^^^^^
+377 |     texto: str, pais: str | None = "CO", peso_actual_kg: float | None = None
+378 | ) -> CrisisDetected | None:
+    |
+
+D103 Missing docstring in public function
+  --> src/services/hidratacion.py:16:11
+   |
+16 | async def registrar_agua(telegram_id: int, ml: int) -> int:
+   |           ^^^^^^^^^^^^^^
+17 |     async with async_session_factory() as session:
+18 |         user_q = await session.execute(
+   |
+
+D103 Missing docstring in public function
+  --> src/services/hidratacion.py:30:11
+   |
+30 | async def consumo_hoy_ml(telegram_id: int) -> int:
+   |           ^^^^^^^^^^^^^^
+31 |     hoy_inicio = datetime.combine(date.today(), datetime.min.time())
+32 |     async with async_session_factory() as session:
+   |
+
+S108 Probable insecure usage of temporary file or directory: "/tmp/entrenadorax_mindfulness"
+  --> src/services/mindfulness.py:13:18
+   |
+11 | logger = logging.getLogger(__name__)
+12 |
+13 | CACHE_DIR = Path("/tmp/entrenadorax_mindfulness")
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+14 | CACHE_DIR.mkdir(exist_ok=True)
+   |
+
+D103 Missing docstring in public function
+  --> src/services/mindfulness.py:87:5
+   |
+87 | def listar_sesiones() -> list[dict]:
+   |     ^^^^^^^^^^^^^^^
+88 |     return [{"slug": k, "titulo": v["titulo"]} for k, v in SESIONES.items()]
+   |
+
+D101 Missing docstring in public class
+  --> src/services/plan_generator.py:32:7
+   |
+32 | class EjercicioPlan(BaseModel):
+   |       ^^^^^^^^^^^^^
+33 |     nombre: str
+34 |     series: int
+   |
+
+D101 Missing docstring in public class
+  --> src/services/plan_generator.py:41:7
+   |
+41 | class DiaPlan(BaseModel):
+   |       ^^^^^^^
+42 |     dia_semana: int
+43 |     tipo: str
+   |
+
+D101 Missing docstring in public class
+  --> src/services/plan_generator.py:48:7
+   |
+48 | class PlanSemanal(BaseModel):
+   |       ^^^^^^^^^^^
+49 |     semana_inicio: str
+50 |     dias: list[DiaPlan]
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/plan_generator.py:112:13
+    |
+110 |                       response.usage.completion_tokens,
+111 |                   )
+112 | /             except Exception:
+113 | |                 pass
+    | |____________________^
+114 |           raw = response.choices[0].message.content or "{}"
+115 |           data = json.loads(raw)
+    |
+
+D103 Missing docstring in public function
+  --> src/services/pricing.py:55:5
+   |
+55 | def dias_duracion(plan: PlanSuscripcion, duracion: DuracionPago) -> int:
+   |     ^^^^^^^^^^^^^
+56 |     if plan == PlanSuscripcion.LIFETIME or duracion == DuracionPago.LIFETIME:
+57 |         return 36500
+   |
+
+S108 Probable insecure usage of temporary file or directory: "/tmp/entrenadorax_tts"
+  --> src/services/tts.py:21:18
+   |
+19 | logger = logging.getLogger(__name__)
+20 |
+21 | CACHE_DIR = Path("/tmp/entrenadorax_tts")
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^
+22 | CACHE_DIR.mkdir(exist_ok=True)
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+  --> src/services/tts.py:81:17
+   |
+79 |                   try:
+80 |                       await log_llm_usage(None, "whisper", model, 0, 0)
+81 | /                 except Exception:
+82 | |                     pass
+   | |________________________^
+83 |                   return text
+84 |               except (openai.RateLimitError, openai.APITimeoutError) as e:
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/tts.py:129:9
+    |
+127 |           try:
+128 |               await log_llm_usage(None, "tts", "tts-1", len(texto), 0)
+129 | /         except Exception:
+130 | |             pass
+    | |________________^
+131 |           return BytesIO(audio_bytes)
+132 |       except Exception:
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/tts.py:153:5
+    |
+151 |       try:
+152 |           await bot.send_chat_action(chat_id=chat_id, action=ChatAction.RECORD_VOICE)
+153 | /     except Exception:
+154 | |         pass
+    | |____________^
+155 |
+156 |       audio = await generar_voz(texto, voice=voice)
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/tts.py:186:13
+    |
+184 |                       chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML
+185 |                   )
+186 | /             except Exception:
+187 | |                 pass
+    | |____________________^
+188 |           return False
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/services/vision.py:126:13
+    |
+124 |                       response.usage.completion_tokens,
+125 |                   )
+126 | /             except Exception:
+127 | |                 pass
+    | |____________________^
+128 |           raw = response.choices[0].message.content or "{}"
+129 |           data = json.loads(raw)
+    |
+
+D104 Missing docstring in public package
+--> src/telegram/__init__.py:1:1
+
+C901 `recordatorio_escalado` is too complex (15 > 10)
+   --> src/telegram/escalation.py:467:11
+    |
+467 | async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    |           ^^^^^^^^^^^^^^^^^^^^^
+468 |     """Callback ejecutado por JobQueue: lee state, decide level, envia y agenda siguiente."""
+469 |     data = ctx.job.data or {}
+    |
+
+D401 First line of docstring should be in imperative mood: "Callback ejecutado por JobQueue: lee state, decide level, envia y agenda siguiente."
+   --> src/telegram/escalation.py:468:5
+    |
+467 | async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+468 |     """Callback ejecutado por JobQueue: lee state, decide level, envia y agenda siguiente."""
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+469 |     data = ctx.job.data or {}
+470 |     uid: int = data["uid"]
+    |
+
+C901 `_build_prompt` is too complex (18 > 10)
+   --> src/telegram/handlers.py:192:11
+    |
+192 | async def _build_prompt(texto: str, uid: int) -> str:
+    |           ^^^^^^^^^^^^^
+193 |     """Construye el prompt con perfil + tono + compromiso + streak inyectados.
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/telegram/handlers.py:266:5
+    |
+264 |           streak = await obtener_o_crear_streak(uid, "entreno")
+265 |           estaticos.append(f"streak_entreno={streak.dias_actuales}")
+266 | /     except Exception:
+267 | |         pass
+    | |____________^
+268 |       if user.pausado_hasta and user.pausado_hasta >= hoy_user:
+269 |           estaticos.append(f"pausado_hasta={user.pausado_hasta.isoformat()}")
+    |
+
+C901 `_procesar` is too complex (13 > 10)
+   --> src/telegram/handlers.py:275:11
+    |
+275 | async def _procesar(
+    |           ^^^^^^^^^
+276 |     message,
+277 |     texto: str,
+    |
+
+D205 1 blank line required between summary line and description
+   --> src/telegram/handlers.py:282:5
+    |
+280 |       ctx: ContextTypes.DEFAULT_TYPE | None = None,
+281 |   ) -> None:
+282 | /     """Ejecuta el agente con sesion Redis. Sesion DB cerrada antes del LLM.
+283 | |     Cancela escalation de los tipos que el usuario cumplio durante el run.
+284 | |     """
+    | |_______^
+285 |       prompt = await _build_prompt(texto, uid)
+286 |       session = SafeRedisSession.from_url(
+    |
+help: Insert single blank line
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/telegram/handlers.py:360:13
+    |
+358 |                       rounds=len(result.raw_responses),
+359 |                   )
+360 | /             except Exception:
+361 | |                 pass
+    | |____________________^
+362 |
+363 |           diag = detectar_diagnostico_output(output)
+    |
+
+D103 Missing docstring in public function
+   --> src/telegram/handlers.py:412:11
+    |
+412 | async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    |           ^^^^^
+413 |     uid = update.effective_user.id
+414 |     nombre = update.effective_user.first_name
+    |
+
+C901 `mensaje` is too complex (17 > 10)
+   --> src/telegram/handlers.py:432:11
+    |
+432 | async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    |           ^^^^^^^
+433 |     uid = update.effective_user.id
+434 |     texto = update.message.text or ""
+    |
+
+D103 Missing docstring in public function
+   --> src/telegram/handlers.py:432:11
+    |
+432 | async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    |           ^^^^^^^
+433 |     uid = update.effective_user.id
+434 |     texto = update.message.text or ""
+    |
+
+D103 Missing docstring in public function
+   --> src/telegram/handlers.py:612:11
+    |
+612 | async def borrar_datos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    |           ^^^^^^^^^^^^
+613 |     uid = update.effective_user.id
+614 |     username = update.effective_user.username
+    |
+
+D401 First line of docstring should be in imperative mood: "Factory: crea un handler que dispara _procesar con un prompt fijo."
+   --> src/telegram/handlers.py:704:5
+    |
+703 | def _make_menu_slash_handler(prompt: str):
+704 |     """Factory: crea un handler que dispara _procesar con un prompt fijo."""
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+705 |
+706 |     async def _handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    |
+
+D400 First line should end with a period
+   --> src/telegram/handlers.py:718:5
+    |
+717 | async def cmd_quiet_hours(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+718 |     """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00"""
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+719 |     uid = update.effective_user.id
+720 |     args = ctx.args or []
+    |
+help: Add period
+
+D415 First line should end with a period, question mark, or exclamation point
+   --> src/telegram/handlers.py:718:5
+    |
+717 | async def cmd_quiet_hours(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+718 |     """Cambia quiet hours. Uso: /quiet_hours 22:00 07:00"""
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+719 |     uid = update.effective_user.id
+720 |     args = ctx.args or []
+    |
+help: Add closing punctuation
+
+D103 Missing docstring in public function
+   --> src/telegram/handlers.py:902:11
+    |
+902 | async def cmd_peso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    |           ^^^^^^^^
+903 |     uid = update.effective_user.id
+904 |     if not await check_rate_limit(uid):
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/telegram/handlers.py:962:9
+    |
+960 |           try:
+961 |               await q.answer(ok=False, error_message="Error temporal. Intenta de nuevo.")
+962 | /         except Exception:
+963 | |             pass
+    | |________________^
+    |
+
+D400 First line should end with a period
+    --> src/telegram/handlers.py:1088:5
+     |
+1086 | @requiere_tier(PlanSuscripcion.STARTER)
+1087 | async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+1088 |     """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]"""
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1089 |     from src.services.charts import (
+1090 |         chart_macros_dia,
+     |
+help: Add period
+
+D415 First line should end with a period, question mark, or exclamation point
+    --> src/telegram/handlers.py:1088:5
+     |
+1086 | @requiere_tier(PlanSuscripcion.STARTER)
+1087 | async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+1088 |     """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]"""
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1089 |     from src.services.charts import (
+1090 |         chart_macros_dia,
+     |
+help: Add closing punctuation
+
+D103 Missing docstring in public function
+    --> src/telegram/handlers.py:1164:11
+     |
+1164 | async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+     |           ^^^^^^^^^
+1165 |     await update.message.reply_text(
+1166 |         "<b>Como funciono</b>\n\n"
+     |
+
+C901 `boton` is too complex (50 > 10)
+    --> src/telegram/handlers.py:1221:11
+     |
+1221 | async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+     |           ^^^^^
+1222 |     q = update.callback_query
+1223 |     await q.answer()
+     |
+
+D103 Missing docstring in public function
+    --> src/telegram/handlers.py:1221:11
+     |
+1221 | async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+     |           ^^^^^
+1222 |     q = update.callback_query
+1223 |     await q.answer()
+     |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+    --> src/telegram/handlers.py:1276:17
+     |
+1274 |                           ),
+1275 |                       )
+1276 | /                 except Exception:
+1277 | |                     pass
+     | |________________________^
+1278 |                   # Actualizar el caption de la notificacion
+1279 |                   await q.edit_message_caption(
+     |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+    --> src/telegram/handlers.py:1313:17
+     |
+1311 |                           ),
+1312 |                       )
+1313 | /                 except Exception:
+1314 | |                     pass
+     | |________________________^
+1315 |                   await q.edit_message_caption(
+1316 |                       caption=q.message.caption + "\n\nRECHAZADO.",
+     |
+
+C901 `recibir_foto` is too complex (23 > 10)
+    --> src/telegram/handlers.py:1667:11
+     |
+1667 | async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+     |           ^^^^^^^^^^^^
+1668 |     """Recibe foto del usuario.
+     |
+
+C901 `recibir_voz` is too complex (12 > 10)
+    --> src/telegram/handlers.py:1899:11
+     |
+1899 | async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+     |           ^^^^^^^^^^^
+1900 |     """Recibe nota de voz / audio, transcribe con Whisper y procesa como texto.
+     |
+
+C901 `_procesar_comprobante` is too complex (12 > 10)
+    --> src/telegram/handlers.py:2003:11
+     |
+2003 | async def _procesar_comprobante(
+     |           ^^^^^^^^^^^^^^^^^^^^^
+2004 |     update: Update, ctx: ContextTypes.DEFAULT_TYPE, uid: int
+2005 | ) -> None:
+     |
+
+D103 Missing docstring in public function
+    --> src/telegram/handlers.py:2476:5
+     |
+2476 | def registrar(app: Application) -> None:
+     |     ^^^^^^^^^
+2477 |     app.add_handler(CommandHandler("start", start))
+2478 |     app.add_handler(CommandHandler("menu", menu))
+     |
+
+D401 First line of docstring should be in imperative mood: "Helper minimal: importa la implementacion del scheduler base si existe."
+  --> src/telegram/jobs_deportes.py:32:5
+   |
+31 | async def _enviar(bot, chat_id: int, texto: str, silent: bool = False) -> None:
+32 |     """Helper minimal: importa la implementacion del scheduler base si existe."""
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+33 |     try:
+34 |         from src.telegram.scheduler import _enviar_safe
+   |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/telegram/pubsub_listener.py:190:9
+    |
+188 |               await pubsub.unsubscribe()
+189 |               await pubsub.aclose()
+190 | /         except Exception:
+191 | |             pass
+    | |________________^
+    |
+
+S311 Standard pseudo-random generators are not suitable for cryptographic purposes
+  --> src/telegram/quiz.py:83:13
+   |
+81 |     try:
+82 |         usuarios = await listar_usuarios_activos()
+83 |         q = random.choice(QUIZ_EDUCATIVO)
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+84 |         for u in usuarios:
+85 |             try:
+   |
+
+D103 Missing docstring in public function
+   --> src/telegram/quiz.py:124:5
+    |
+124 | def registrar_handlers_quiz(app: Application) -> None:
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+125 |     app.add_handler(PollAnswerHandler(manejar_poll_answer))
+    |
+
+D102 Missing docstring in public method
+  --> src/telegram/safe_session.py:53:15
+   |
+51 |     """
+52 |
+53 |     async def get_items(self, limit: int | None = None) -> list[TResponseInputItem]:
+   |               ^^^^^^^^^
+54 |         items = await super().get_items(limit=limit)
+55 |         if not items:
+   |
+
+D401 First line of docstring should be in imperative mood: "Forwarder a RedisSession.from_url que devuelve nuestra subclase."
+   --> src/telegram/safe_session.py:100:9
+    |
+ 98 |           **kwargs: Any,
+ 99 |       ) -> SafeRedisSession:
+100 | /         """Forwarder a RedisSession.from_url que devuelve nuestra subclase.
+101 | |
+102 | |         Necesario porque el `from_url` del padre hace `cls(...)`, pero queremos
+103 | |         ser explicitos en el tipo de retorno.
+104 | |         """
+    | |___________^
+105 |           session = super().from_url(
+106 |               session_id,
+    |
+
+D401 First line of docstring should be in imperative mood: "Callback de JobQueue para un recordatorio del usuario."
+   --> src/telegram/scheduler.py:336:5
+    |
+335 |   async def enviar_recordatorio_personalizado(context) -> None:
+336 | /     """Callback de JobQueue para un recordatorio del usuario.
+337 | |
+338 | |     `context.job.data` trae {'recordatorio_id': int, 'telegram_id': int, 'mensaje': str}.
+339 | |     Marca `ultimo_envio` y, si es one-shot, lo desactiva (ver repository).
+340 | |     """
+    | |_______^
+341 |       data = (context.job.data or {}) if context.job else {}
+342 |       chat_id = data.get("telegram_id")
+    |
+
+D401 First line of docstring should be in imperative mood: "Wrapper sync: programa la carga inicial via JobQueue.run_once(t=0)."
+   --> src/telegram/scheduler.py:484:5
+    |
+483 |   def cargar_recordatorios_al_jobqueue(app: Application) -> None:
+484 | /     """Wrapper sync: programa la carga inicial via JobQueue.run_once(t=0).
+485 | |
+486 | |     Se llama desde `registrar_jobs` antes de que el JobQueue arranque, asi
+487 | |     que no podemos hacer await aqui. Lanzamos un job 1s diferido para
+488 | |     correr la carga cuando el loop ya este vivo.
+489 | |     """
+    | |_______^
+490 |       jq = app.job_queue
+491 |       if jq is None:
+    |
+
+D205 1 blank line required between summary line and description
+ --> src/tools.py:1:1
+  |
+1 | / """Tools del agente OpenAI. Toda funcion con @function_tool debe:
+2 | | - Ser async def.
+3 | | - Docstring Google-style con seccion Args:.
+4 | | - Devolver str JSON-serializable.
+5 | | - No lanzar excepciones (try/except interno, devolver {"ok": False, "error": ...}).
+6 | | """
+  | |___^
+7 |
+8 |   from __future__ import annotations
+  |
+help: Insert single blank line
+
+C901 `guardar_perfil` is too complex (15 > 10)
+   --> src/tools.py:335:11
+    |
+333 | @function_tool
+334 | @_log_tool
+335 | async def guardar_perfil(
+    |           ^^^^^^^^^^^^^^
+336 |     telegram_id: int,
+337 |     nombre: str = "",
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> src/tools.py:550:9
+    |
+548 |                   ),
+549 |               )
+550 | /         except Exception:
+551 | |             pass
+    | |________________^
+552 |           return _ok({"ejercicio": pr.ejercicio, "peso_kg": pr.peso_kg, "reps": pr.reps})
+553 |       except Exception:
+    |
+
+D401 First line of docstring should be in imperative mood: "Reporte semanal: sesiones, volumen, PRs y sueno (7 dias)."
+   --> src/tools.py:824:5
+    |
+822 |   @_log_tool
+823 |   async def reporte_progreso(telegram_id: int) -> str:
+824 | /     """Reporte semanal: sesiones, volumen, PRs y sueno (7 dias).
+825 | |
+826 | |     Args:
+827 | |         telegram_id: Telegram ID
+828 | |
+829 | |     """
+    | |_______^
+830 |       try:
+831 |           return json.dumps(await reporte_semanal(telegram_id), default=str)
+    |
+
+S311 Standard pseudo-random generators are not suitable for cryptographic purposes
+    --> src/tools.py:1169:16
+     |
+1167 |         "descanso activo",
+1168 |     ]
+1169 |     eleccion = random.choice(opciones)
+     |                ^^^^^^^^^^^^^^^^^^^^^^^
+1170 |     await log_evento(telegram_id, "rueda_ejercicio", {"eleccion": eleccion})
+1171 |     return _ok({"foco_propuesto": eleccion, "mensaje": f"Hoy toca: {eleccion}"})
+     |
+
+S311 Standard pseudo-random generators are not suitable for cryptographic purposes
+    --> src/tools.py:1192:28
+     |
+1190 |     ]
+1191 |     await log_evento(telegram_id, "premio_motivacional", {})
+1192 |     return _ok({"mensaje": random.choice(mensajes)})
+     |                            ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+
+C901 `editar_sesion_reciente` is too complex (11 > 10)
+    --> src/tools.py:2222:11
+     |
+2220 | @function_tool
+2221 | @_log_tool
+2222 | async def editar_sesion_reciente(
+     |           ^^^^^^^^^^^^^^^^^^^^^^
+2223 |     telegram_id: int,
+2224 |     sesion_id: int = 0,
+     |
+
+D103 Missing docstring in public function
+  --> src/web/admin_ui.py:51:11
+   |
+50 | @router.get("/login", response_class=HTMLResponse)
+51 | async def login_page(
+   |           ^^^^^^^^^^
+52 |     request: Request, admin: dict | None = Depends(get_admin_optional)
+53 | ):
+   |
+
+D103 Missing docstring in public function
+  --> src/web/admin_ui.py:60:11
+   |
+59 | @router.post("/login", response_class=HTMLResponse)
+60 | async def login_submit(
+   |           ^^^^^^^^^^^^
+61 |     request: Request,
+62 |     email: str = Form(...),
+   |
+
+D103 Missing docstring in public function
+  --> src/web/admin_ui.py:96:11
+   |
+95 | @router.get("/logout")
+96 | async def logout():
+   |           ^^^^^^
+97 |     response = RedirectResponse(url="/admin/login", status_code=303)
+98 |     response.delete_cookie(ADMIN_COOKIE_NAME, path="/")
+   |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:108:11
+    |
+107 | @router.get("/", response_class=HTMLResponse)
+108 | async def dashboard(request: Request, admin: dict = Depends(get_admin_from_cookie)):
+    |           ^^^^^^^^^
+109 |     # Llama a finanzas() directamente (es una funcion async dentro de admin_api)
+110 |     finanzas_data = await admin_api.finanzas(admin=admin, dias=30)
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:136:11
+    |
+135 | @router.get("/usuarios", response_class=HTMLResponse)
+136 | async def usuarios_lista(
+    |           ^^^^^^^^^^^^^^
+137 |     request: Request,
+138 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:180:11
+    |
+179 | @router.get("/usuarios/{uid}", response_class=HTMLResponse)
+180 | async def usuario_detalle(
+    |           ^^^^^^^^^^^^^^^
+181 |     uid: int, request: Request, admin: dict = Depends(get_admin_from_cookie)
+182 | ):
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:192:11
+    |
+191 | @router.post("/usuarios/{uid}/asignar_plan_form")
+192 | async def asignar_plan_form(
+    |           ^^^^^^^^^^^^^^^^^
+193 |     uid: int,
+194 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:205:11
+    |
+204 | @router.post("/usuarios/{uid}/pausar_form")
+205 | async def pausar_form(
+    |           ^^^^^^^^^^^
+206 |     uid: int, admin: dict = Depends(get_admin_from_cookie), dias: int = Form(7)
+207 | ):
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:215:11
+    |
+214 | @router.post("/usuarios/{uid}/bloquear_form")
+215 | async def bloquear_form(
+    |           ^^^^^^^^^^^^^
+216 |     uid: int,
+217 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:227:11
+    |
+226 | @router.post("/usuarios/{uid}/desbloquear_form")
+227 | async def desbloquear_form(uid: int, admin: dict = Depends(get_admin_from_cookie)):
+    |           ^^^^^^^^^^^^^^^^
+228 |     await admin_api.desbloquear_endpoint(uid=uid, admin=admin)
+229 |     return RedirectResponse(url=f"/admin/usuarios/{uid}", status_code=303)
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:233:11
+    |
+232 | @router.post("/usuarios/{uid}/eliminar_form")
+233 | async def eliminar_form(uid: int, admin: dict = Depends(get_admin_from_cookie)):
+    |           ^^^^^^^^^^^^^
+234 |     await require_super(admin)
+235 |     await admin_api.eliminar_endpoint(uid=uid, admin=admin)
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:245:11
+    |
+244 | @router.get("/pagos", response_class=HTMLResponse)
+245 | async def pagos_lista(
+    |           ^^^^^^^^^^^
+246 |     request: Request,
+247 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:309:11
+    |
+308 | @router.get("/pagos/{comp_id}", response_class=HTMLResponse)
+309 | async def pago_detalle(
+    |           ^^^^^^^^^^^^
+310 |     comp_id: int, request: Request, admin: dict = Depends(get_admin_from_cookie)
+311 | ):
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:321:11
+    |
+320 | @router.post("/pagos/{comp_id}/aprobar_form")
+321 | async def pago_aprobar_form(
+    |           ^^^^^^^^^^^^^^^^^
+322 |     comp_id: int,
+323 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:336:11
+    |
+335 | @router.post("/pagos/{comp_id}/rechazar_form")
+336 | async def pago_rechazar_form(
+    |           ^^^^^^^^^^^^^^^^^^
+337 |     comp_id: int,
+338 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:358:11
+    |
+357 | @router.get("/crisis", response_class=HTMLResponse)
+358 | async def crisis_lista(
+    |           ^^^^^^^^^^^^
+359 |     request: Request,
+360 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:386:11
+    |
+385 | @router.get("/finanzas", response_class=HTMLResponse)
+386 | async def finanzas_view(
+    |           ^^^^^^^^^^^^^
+387 |     request: Request,
+388 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:405:11
+    |
+404 | @router.get("/operaciones", response_class=HTMLResponse)
+405 | async def operaciones_view(
+    |           ^^^^^^^^^^^^^^^^
+406 |     request: Request, admin: dict = Depends(get_admin_from_cookie)
+407 | ):
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:417:11
+    |
+416 | @router.post("/operaciones/broadcast_form", response_class=HTMLResponse)
+417 | async def broadcast_form(
+    |           ^^^^^^^^^^^^^^
+418 |     request: Request,
+419 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:448:11
+    |
+447 | @router.get("/admins", response_class=HTMLResponse)
+448 | async def admins_lista(request: Request, admin: dict = Depends(get_admin_from_cookie)):
+    |           ^^^^^^^^^^^^
+449 |     await require_super(admin)
+450 |     items = await admin_api.listar_admins(admin=admin)
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:459:11
+    |
+458 | @router.post("/admins/crear_form", response_class=HTMLResponse)
+459 | async def admin_crear_form(
+    |           ^^^^^^^^^^^^^^^^
+460 |     request: Request,
+461 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:491:11
+    |
+490 | @router.get("/costos", response_class=HTMLResponse)
+491 | async def costos_dashboard(
+    |           ^^^^^^^^^^^^^^^^
+492 |     request: Request,
+493 |     admin: dict = Depends(get_admin_from_cookie),
+    |
+
+D103 Missing docstring in public function
+   --> src/web/admin_ui.py:637:11
+    |
+636 | @router.get("/costos/csv")
+637 | async def costos_csv(
+    |           ^^^^^^^^^^
+638 |     admin: dict = Depends(get_admin_from_cookie),
+639 |     dias: int = Query(30),
+    |
+
+D103 Missing docstring in public function
+  --> src/web/app_ui.py:67:11
+   |
+66 | @router.get("/", response_class=HTMLResponse)
+67 | async def app_root(request: Request, user: dict | None = Depends(get_user_from_cookie)):
+   |           ^^^^^^^^
+68 |     if user is None:
+69 |         return _redirect_login()
+   |
+
+D103 Missing docstring in public function
+   --> src/web/app_ui.py:166:11
+    |
+165 | @router.get("/plan", response_class=HTMLResponse)
+166 | async def plan(request: Request, user: dict | None = Depends(get_user_from_cookie)):
+    |           ^^^^
+167 |     if user is None:
+168 |         return _redirect_login()
+    |
+
+D103 Missing docstring in public function
+   --> src/web/app_ui.py:182:11
+    |
+181 | @router.get("/prs", response_class=HTMLResponse)
+182 | async def prs(request: Request, user: dict | None = Depends(get_user_from_cookie)):
+    |           ^^^
+183 |     if user is None:
+184 |         return _redirect_login()
+    |
+
+D103 Missing docstring in public function
+   --> src/web/app_ui.py:341:11
+    |
+340 | @router.get("/settings", response_class=HTMLResponse)
+341 | async def settings_view(
+    |           ^^^^^^^^^^^^^
+342 |     request: Request, user: dict | None = Depends(get_user_from_cookie)
+343 | ):
+    |
+
+D103 Missing docstring in public function
+   --> src/web/app_ui.py:371:11
+    |
+370 | @router.get("/pagar", response_class=HTMLResponse)
+371 | async def pagar(request: Request, user: dict | None = Depends(get_user_from_cookie)):
+    |           ^^^^^
+372 |     from src.config import settings
+    |
+
+D103 Missing docstring in public function
+   --> src/web/app_ui.py:400:11
+    |
+399 | @router.get("/llamar", response_class=HTMLResponse)
+400 | async def llamar(request: Request, user: dict | None = Depends(get_user_from_cookie)):
+    |           ^^^^^^
+401 |     if user is None:
+402 |         return _redirect_login()
+    |
+
+D103 Missing docstring in public function
+   --> src/web/app_ui.py:416:11
+    |
+415 | @router.get("/wearables", response_class=HTMLResponse)
+416 | async def wearables(
+    |           ^^^^^^^^^
+417 |     request: Request, user: dict | None = Depends(get_user_from_cookie)
+418 | ):
+    |
+
+D103 Missing docstring in public function
+  --> src/web/landing.py:38:11
+   |
+37 | @router.get("/", response_class=HTMLResponse)
+38 | async def home(request: Request):
+   |           ^^^^
+39 |     return render(
+40 |         request,
+   |
+
+D103 Missing docstring in public function
+  --> src/web/landing.py:47:11
+   |
+46 | @router.get("/precios", response_class=HTMLResponse)
+47 | async def precios(request: Request):
+   |           ^^^^^^^
+48 |     return render(
+49 |         request,
+   |
+
+D103 Missing docstring in public function
+  --> src/web/landing.py:67:11
+   |
+66 | @router.get("/deportes", response_class=HTMLResponse)
+67 | async def deportes_index(request: Request):
+   |           ^^^^^^^^^^^^^^
+68 |     return render(
+69 |         request,
+   |
+
+D103 Missing docstring in public function
+  --> src/web/landing.py:80:11
+   |
+79 | @router.get("/deportes/{slug}", response_class=HTMLResponse)
+80 | async def deporte_detalle(slug: str, request: Request):
+   |           ^^^^^^^^^^^^^^^
+81 |     deporte = deporte_por_slug(slug)
+82 |     if deporte is None:
+   |
+
+D103 Missing docstring in public function
+  --> src/web/landing.py:96:11
+   |
+95 | @router.get("/politicas/privacidad", response_class=HTMLResponse)
+96 | async def politicas_privacidad(request: Request):
+   |           ^^^^^^^^^^^^^^^^^^^^
+97 |     return render(
+98 |         request,
+   |
+
+D103 Missing docstring in public function
+   --> src/web/landing.py:105:11
+    |
+104 | @router.get("/politicas/terminos", response_class=HTMLResponse)
+105 | async def politicas_terminos(request: Request):
+    |           ^^^^^^^^^^^^^^^^^^
+106 |     return render(
+107 |         request,
+    |
+
+D103 Missing docstring in public function
+   --> src/web/landing.py:114:11
+    |
+113 | @router.get("/politicas/manejo-datos-tca", response_class=HTMLResponse)
+114 | async def politicas_tca(request: Request):
+    |           ^^^^^^^^^^^^^
+115 |     return render(
+116 |         request,
+    |
+
+D103 Missing docstring in public function
+   --> src/web/landing.py:251:11
+    |
+250 | @router.get("/robots.txt", response_class=PlainTextResponse)
+251 | async def robots(request: Request):
+    |           ^^^^^^
+252 |     return (
+253 |         "User-agent: *\n"
+    |
+
+Found 277 errors.
+No fixes available (7 hidden fixes can be enabled with the `--unsafe-fixes` option).

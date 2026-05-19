@@ -3,6 +3,7 @@
 Genera un plan basado en perfil del usuario (nivel, dias disponibles, deporte,
 objetivo, lesiones). Persiste en tabla planes_semanales.
 """
+
 from __future__ import annotations
 
 import json
@@ -65,8 +66,10 @@ PROMPT_PLAN = (
 async def generar_plan_semanal_para(telegram_id: int) -> dict:
     """Llama LLM para generar plan semanal estructurado.
 
-    Returns:
+    Returns
+    -------
         dict con la forma PlanSemanal (validado pydantic).
+
     """
     user = await obtener_usuario(telegram_id)
     if user is None:
@@ -80,7 +83,7 @@ async def generar_plan_semanal_para(telegram_id: int) -> dict:
         "peso_kg": user.peso_kg,
         "altura_cm": user.altura_cm,
     }
-    inicio_semana = (date.today() + timedelta(days=(7 - date.today().weekday()) % 7))
+    inicio_semana = date.today() + timedelta(days=(7 - date.today().weekday()) % 7)
 
     user_msg = (
         f"Perfil del atleta: {json.dumps(perfil, ensure_ascii=False)}. "
@@ -100,7 +103,13 @@ async def generar_plan_semanal_para(telegram_id: int) -> dict:
         )
         if response.usage:
             try:
-                await log_llm_usage(telegram_id, "plan", "gpt-4o-mini", response.usage.prompt_tokens, response.usage.completion_tokens)
+                await log_llm_usage(
+                    telegram_id,
+                    "plan",
+                    "gpt-4o-mini",
+                    response.usage.prompt_tokens,
+                    response.usage.completion_tokens,
+                )
             except Exception:
                 pass
         raw = response.choices[0].message.content or "{}"
