@@ -35,6 +35,8 @@ from src.tools import (
     proponer_ejercicio_aleatorio,
     registrar_comida,
     registrar_entreno,
+    registrar_hidratacion,
+    consultar_hidratacion_hoy,
     registrar_pelea,
     registrar_peso,
     registrar_sesion_skill,
