@@ -17,8 +17,16 @@ from openai import AsyncOpenAI
 
 from src.config import settings
 from src.db.repository import log_llm_usage
+from src.services.integration_lifecycle import IntegrationCircuitBreaker
 
 logger = logging.getLogger(__name__)
+
+# Circuit Breaker global para proteger la API de OpenAI Vision contra indisponibilidad o latencia
+comprobantes_breaker = IntegrationCircuitBreaker(
+    name="openai_comprobantes_vision",
+    threshold=3,
+    cooldown_seconds=60,
+)
 
 _client: Optional[AsyncOpenAI] = None
 
@@ -117,28 +125,34 @@ async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
     """
     try:
         b64 = base64.b64encode(foto_bytes).decode("ascii")
-        response = await _get_client().chat.completions.create(
-            model=settings.comprobante_model,
-            messages=[
-                {"role": "system", "content": PROMPT_COMPROBANTE},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Extrae los datos del comprobante.",
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
-                        },
-                    ],
-                },
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=600,
-            temperature=0.0,
-        )
+
+        async def _invocar_vision_api() -> Any:
+            return await _get_client().chat.completions.create(
+                model=settings.comprobante_model,
+                messages=[
+                    {"role": "system", "content": PROMPT_COMPROBANTE},
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Extrae los datos del comprobante.",
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                            },
+                        ],
+                    },
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=600,
+                temperature=0.0,
+            )
+
+        # Envoltura asíncrona segura con Circuit Breaker y timeout de 15 segundos
+        response = await comprobantes_breaker.call(_invocar_vision_api, timeout_seconds=15.0)
+
         if response.usage:
             try:
                 await log_llm_usage(None, "comprobante", settings.comprobante_model, response.usage.prompt_tokens, response.usage.completion_tokens)
@@ -149,9 +163,10 @@ async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
     except json.JSONDecodeError:
         logger.exception("Vision devolvio JSON invalido en comprobante")
         return {"ok": False, "es_comprobante": False, "razon": "json_invalido", "raw": {}}
-    except Exception:
-        logger.exception("Error en extraer_datos_comprobante")
-        return {"ok": False, "es_comprobante": False, "razon": "api_error", "raw": {}}
+    except Exception as e:
+        logger.exception("Error en extraer_datos_comprobante a traves del Circuit Breaker")
+        # Devolver un error elegante y recuperable (modo degradado) para no colgar el bot
+        return {"ok": False, "es_comprobante": False, "razon": f"api_error_{type(e).__name__}", "raw": {}}
 
     if not data.get("es_comprobante", False):
         return {

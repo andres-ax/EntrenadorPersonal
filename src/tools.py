@@ -17,6 +17,8 @@ from zoneinfo import ZoneInfo
 
 from agents import function_tool
 
+from src.telegram.permissions import enforce_permissions
+
 from src.db.repository import (
     actualizar_usuario,
     aceptar_modo_militar,
@@ -256,6 +258,7 @@ def _ok(data: dict | None = None) -> str:
 
 @function_tool
 @_log_tool
+@enforce_permissions
 async def obtener_perfil(telegram_id: int) -> str:
     """Obtiene perfil completo del usuario.
 
@@ -374,6 +377,7 @@ async def guardar_perfil(
 
 @function_tool
 @_log_tool
+@enforce_permissions
 async def registrar_entreno(
     telegram_id: int,
     fecha: str,
@@ -1631,6 +1635,7 @@ async def calcular_peso_objetivo_responsable(
 
 @function_tool
 @_log_tool
+@enforce_permissions
 async def evaluar_concusion_simplificado(
     telegram_id: int,
     tuvo_perdida_conciencia: bool = False,
@@ -1794,6 +1799,15 @@ async def programar_recordatorio(
                     return _error("fecha_unica invalida, usa YYYY-MM-DD")
             else:
                 fecha = (await _hoy_usuario(telegram_id)) + timedelta(days=1)
+
+            tz = await _tz_usuario(telegram_id)
+            ahora_local = datetime.now(tz)
+            when_local = datetime.combine(fecha, t, tzinfo=tz)
+            if when_local <= ahora_local:
+                return json.dumps({
+                    "ok": False,
+                    "error": "La hora especificada ya pasó para hoy. Por favor programar a una hora futura."
+                })
 
         rec = await repo_crear_recordatorio(
             telegram_id=telegram_id,
@@ -2063,6 +2077,7 @@ async def editar_sesion_reciente(
 
 @function_tool
 @_log_tool
+@enforce_permissions
 async def eliminar_comida_reciente(
     telegram_id: int, comida_id: int = 0, tipo: str = ""
 ) -> str:

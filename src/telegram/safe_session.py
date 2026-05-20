@@ -33,6 +33,7 @@ normalmente; los items huerfanos quedan en Redis pero el LLM nunca los ve.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -43,11 +44,45 @@ logger = logging.getLogger(__name__)
 
 
 class SafeRedisSession(RedisSession):
-    """RedisSession que filtra `function_call_output` huerfanos al leer.
+    """RedisSession que filtra `function_call_output` huerfanos al leer y comprime reportes.
 
-    El metodo `add_items`, `pop_item`, `clear_session` y el resto siguen
-    delegando al padre. Solo `get_items` es reescrito.
+    El metodo `pop_item`, `clear_session` y el resto siguen delegando al padre.
+    `get_items` filtra los outputs huerfanos, y `add_items` comprime los reportes.
     """
+
+    async def add_items(self, items: list[TResponseInputItem]) -> None:
+        """Agrega ítems a la sesión comprimiendo reportes y resúmenes de forma no-bloqueante."""
+        from src.services.summary_compression import compress_summary_text
+
+        nuevos_items: list[TResponseInputItem] = []
+        for it in items:
+            if isinstance(it, dict) and it.get("type") == "function_call_output":
+                output_val = it.get("output")
+                # Si es un output de herramienta y es extenso, comprobar si es un reporte o resumen
+                if isinstance(output_val, str) and len(output_val) > 400:
+                    lowered = output_val.lower()
+                    # Identificar reportes de comida, nutrición, progreso o resúmenes semanales
+                    es_reporte = any(
+                        keyword in lowered
+                        for keyword in ["reporte", "resumen", "comida", "nutricional", "progreso", "semanal"]
+                    )
+                    if es_reporte:
+                        try:
+                            # Compresión no-bloqueante en un hilo de fondo (CPU bound)
+                            compressed_val = await asyncio.to_thread(compress_summary_text, output_val)
+                            it = dict(it)  # Clonar diccionario para evitar mutaciones directas colaterales
+                            it["output"] = compressed_val
+                            logger.info(
+                                "SafeRedisSession session_id=%s comprimió reporte largo de %d a %d caracteres de forma no-bloqueante",
+                                self.session_id,
+                                len(output_val),
+                                len(compressed_val),
+                            )
+                        except Exception:
+                            logger.exception("Error al intentar comprimir reporte en SafeRedisSession")
+            nuevos_items.append(it)
+
+        await super().add_items(nuevos_items)
 
     async def get_items(self, limit: int | None = None) -> list[TResponseInputItem]:
         items = await super().get_items(limit=limit)
