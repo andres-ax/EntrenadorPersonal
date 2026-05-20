@@ -1,0 +1,95 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+  <div class="px-5 py-3 border-b border-slate-100 text-sm flex justify-between items-center">
+    <div><strong>{{ data.total }}</strong> interacciones registradas</div>
+    <div class="text-xs text-slate-500">
+      mostrando {{ data["items"]|length }} (offset {{ filtros.offset }})
+    </div>
+  </div>
+  
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[800px]">
+      <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+        <tr>
+          <th class="px-4 py-3 text-left">Fecha</th>
+          <th class="px-4 py-3 text-left">Usuario (Telegram ID)</th>
+          <th class="px-4 py-3 text-left">Request ID (Log)</th>
+          <th class="px-4 py-3 text-left">Mensaje de Entrada</th>
+          <th class="px-4 py-3 text-center">Tools</th>
+          <th class="px-4 py-3 text-right">Tokens / Costo</th>
+          <th class="px-4 py-3 text-center">Duración</th>
+          <th class="px-4 py-3 text-center">Estado</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in data["items"] %}
+          <tr class="hover:bg-slate-50 {% if r.con_error %}bg-rose-50/30{% endif %}">
+            <td class="px-4 py-3 text-xs text-slate-500 font-medium">
+              {{ r.creado_en|humano }}
+            </td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-700">
+              <a href="/admin/usuarios/{{ r.telegram_id }}" class="text-brand-600 hover:underline font-semibold">{{ r.telegram_id }}</a>
+            </td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-400">
+              {{ r.request_id[:12] }}...
+            </td>
+            <td class="px-4 py-3 text-slate-600 max-w-xs truncate">
+              {{ r.prompt_usuario or "<i>[Mensaje multimedia o vacío]</i>"|safe }}
+            </td>
+            <td class="px-4 py-3 text-center">
+              {% if r.error and "guardrail" in r.error %}
+                <span class="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800 font-semibold">Guardrail</span>
+              {% else %}
+                <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700 font-mono">{{ r.tools_invocadas|length }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right text-xs">
+              <div class="font-medium">{{ r.tokens_input + r.tokens_output }} tkn</div>
+              <div class="text-slate-400 font-mono">${{ "%.5f"|format(r.costo_estimado_usd) }}</div>
+            </td>
+            <td class="px-4 py-3 text-center text-xs text-slate-500">
+              {{ "%.2f"|format(r.duracion_ms / 1000) }}s
+            </td>
+            <td class="px-4 py-3 text-center">
+              {% if r.con_error %}
+                <span class="px-2 py-0.5 rounded text-xs bg-rose-100 text-rose-800 font-medium" title="{{ r.error }}">Fallo</span>
+              {% else %}
+                <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 font-medium">Ok</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <a href="/admin/auditoria/{{ r.request_id }}" class="text-sm font-semibold text-brand-600 hover:text-brand-800 hover:underline">Ver Trazabilidad</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No se encontraron registros de auditoría que coincidan con los filtros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if data.total > filtros.limit %}
+    <div class="px-5 py-3 border-t border-slate-100 flex justify-between items-center text-sm bg-slate-50/50">
+      {% set prev_off = (filtros.offset - filtros.limit) %}
+      {% set next_off = filtros.offset + filtros.limit %}
+      
+      {% if prev_off >= 0 %}
+        <a href="?telegram_id={{ filtros.telegram_id }}&request_id={{ filtros.request_id }}&con_error={{ filtros.con_error or '' }}&offset={{ prev_off }}&limit={{ filtros.limit }}"
+           hx-get="/admin/auditoria?telegram_id={{ filtros.telegram_id }}&request_id={{ filtros.request_id }}&con_error={{ filtros.con_error or '' }}&offset={{ prev_off }}&limit={{ filtros.limit }}"
+           hx-target="#auditoria-tabla"
+           hx-push-url="true"
+           class="text-brand-600 hover:underline font-medium">&larr; Anterior</a>
+      {% else %}<span></span>{% endif %}
+      
+      <span class="text-xs text-slate-500 font-medium font-semibold">Mostrando del {{ filtros.offset + 1 }} al {{ filtros.offset + data["items"]|length }} de un total de {{ data.total }} interacciones</span>
+      
+      {% if next_off < data.total %}
+        <a href="?telegram_id={{ filtros.telegram_id }}&request_id={{ filtros.request_id }}&con_error={{ filtros.con_error or '' }}&offset={{ next_off }}&limit={{ filtros.limit }}"
+           hx-get="/admin/auditoria?telegram_id={{ filtros.telegram_id }}&request_id={{ filtros.request_id }}&con_error={{ filtros.con_error or '' }}&offset={{ next_off }}&limit={{ filtros.limit }}"
+           hx-target="#auditoria-tabla"
+           hx-push-url="true"
+           class="text-brand-600 hover:underline font-medium font-semibold font-medium">Siguiente &rarr;</a>
+      {% else %}<span></span>{% endif %}
+    </div>
+  {% endif %}
+</div>

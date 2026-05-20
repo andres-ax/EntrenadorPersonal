@@ -1,0 +1,47 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Auditoría de Conversaciones" %}
+
+{% block admin_content %}
+<div class="bg-white rounded-xl shadow-sm p-5 mb-4">
+  <form method="get" action="/admin/auditoria"
+        hx-get="/admin/auditoria"
+        hx-target="#auditoria-tabla"
+        hx-trigger="submit, change from:select"
+        hx-push-url="true"
+        class="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+    
+    <div>
+      <label class="block text-xs text-slate-500 mb-1 uppercase font-semibold">Telegram ID (Usuario)</label>
+      <input type="number" name="telegram_id" value="{{ filtros.telegram_id }}"
+             placeholder="Ej: 8324604749"
+             class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-brand-500 focus:border-brand-500" />
+    </div>
+
+    <div>
+      <label class="block text-xs text-slate-500 mb-1 uppercase font-semibold">Request ID (ID de Log)</label>
+      <input type="text" name="request_id" value="{{ filtros.request_id }}"
+             placeholder="Buscar ID de log"
+             class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-brand-500 focus:border-brand-500 font-mono" />
+    </div>
+
+    <div>
+      <label class="block text-xs text-slate-500 mb-1 uppercase font-semibold">Filtrar Estado</label>
+      <select name="con_error" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-brand-500 focus:border-brand-500">
+        <option value="">Todos los turnos</option>
+        <option value="true" {% if filtros.con_error is sameas true %}selected{% endif %}>Solo errores / guardrails</option>
+        <option value="false" {% if filtros.con_error is sameas false %}selected{% endif %}>Solo exitosos</option>
+      </select>
+    </div>
+
+    <div class="flex items-end">
+      <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+        Filtrar Auditoría
+      </button>
+    </div>
+  </form>
+</div>
+
+<div id="auditoria-tabla">
+  {% include "admin/_auditoria_tabla.html" %}
+</div>
+{% endblock %}

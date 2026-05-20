@@ -620,3 +620,63 @@ async def costos_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# -----------------------------------------------------------------------------
+# Auditoría de Turnos y Conversaciones
+# -----------------------------------------------------------------------------
+
+
+@router.get("/auditoria", response_class=HTMLResponse)
+async def auditoria_lista(
+    request: Request,
+    admin: dict = Depends(get_admin_from_cookie),
+    telegram_id: Optional[int] = Query(None),
+    request_id: Optional[str] = Query(None),
+    con_error: Optional[bool] = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = 0,
+):
+    data = await admin_api.listar_auditoria(
+        admin=admin,
+        telegram_id=telegram_id,
+        request_id=request_id,
+        con_error=con_error,
+        limit=limit,
+        offset=offset,
+    )
+    template = "admin/_auditoria_tabla.html" if request.headers.get("hx-request") else "admin/auditoria.html"
+    return render(
+        request,
+        template,
+        {
+            "admin": admin,
+            "data": data,
+            "filtros": {
+                "telegram_id": telegram_id or "",
+                "request_id": request_id or "",
+                "con_error": con_error,
+                "limit": limit,
+                "offset": offset,
+            },
+            "active": "auditoria",
+        },
+    )
+
+
+@router.get("/auditoria/{request_id}", response_class=HTMLResponse)
+async def auditoria_detalle(
+    request_id: str,
+    request: Request,
+    admin: dict = Depends(get_admin_from_cookie),
+):
+    data = await admin_api.detalle_auditoria(request_id=request_id, admin=admin)
+    return render(
+        request,
+        "admin/auditoria_detalle.html",
+        {
+            "admin": admin,
+            "row": data,
+            "active": "auditoria",
+        },
+    )

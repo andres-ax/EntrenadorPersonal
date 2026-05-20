@@ -1,0 +1,128 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Trazabilidad del Turno" %}
+
+{% block admin_content %}
+<a href="/admin/auditoria" class="text-sm text-slate-500 hover:text-slate-800 transition-colors">&larr; Volver a Auditoría</a>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+  
+  {# Columna Principal: El Chat y Conversación #}
+  <div class="lg:col-span-2 space-y-6">
+    <div class="bg-white rounded-xl shadow-sm p-6">
+      <h2 class="font-bold text-lg text-slate-800 border-b border-slate-100 pb-3 mb-4 font-semibold">Flujo de Conversación de este Turno</h2>
+      
+      <div class="space-y-4 bg-slate-50 p-4 rounded-xl min-h-[250px] flex flex-col justify-end">
+        {# Burbuja de Mensaje del Usuario (Derecha) #}
+        <div class="flex justify-end">
+          <div class="max-w-[80%] bg-brand-600 text-white rounded-2xl rounded-tr-none px-4 py-2.5 text-sm shadow-sm">
+            <div class="font-bold text-[10px] text-brand-200 mb-1 uppercase font-semibold">USUARIO (ID: {{ row.telegram_id }})</div>
+            <p class="whitespace-pre-line leading-relaxed">{{ row.prompt_usuario or "<i>[Mensaje multimedia o de comandos sin texto]</i>"|safe }}</p>
+          </div>
+        </div>
+
+        {# Burbuja de Respuesta del Bot (Izquierda) #}
+        <div class="flex justify-start">
+          <div class="max-w-[80%] bg-white border border-slate-100 text-slate-800 rounded-2xl rounded-tl-none px-4 py-2.5 text-sm shadow-sm">
+            <div class="font-bold text-[10px] text-slate-400 mb-1 uppercase font-semibold">BOT (EntrenadorAX)</div>
+            <p class="whitespace-pre-line leading-relaxed">{{ row.respuesta_bot or "<i>[No se emitió respuesta de texto, posible cancelación de flujo]</i>"|safe }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Terminal de Auditoría Técnica de Tools #}
+    <div class="bg-white rounded-xl shadow-sm p-6">
+      <h3 class="font-bold text-lg text-slate-800 mb-2 font-semibold">Herramientas Ejecutadas por el Agente ({{ row.tools_invocadas|length }})</h3>
+      <p class="text-xs text-slate-400 mb-4">Esta terminal detalla la secuencia de llamadas que el cerebro de la IA realizó para responder al usuario.</p>
+      
+      {% if row.tools_invocadas %}
+        <div class="space-y-4">
+          {% for t in row.tools_invocadas %}
+            <div class="border border-slate-200 rounded-lg overflow-hidden">
+              <div class="bg-slate-950 px-4 py-2 flex justify-between items-center text-xs font-mono">
+                <span class="text-emerald-400 font-bold">@function_tool.{{ t.tool }}()</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold {% if t.ok %}bg-emerald-950 text-emerald-400{% else %}bg-rose-950 text-rose-400{% endif %}">
+                  {{ "EXITOSO" if t.ok else "FALLÓ" }}
+                </span>
+              </div>
+              <div class="p-3 bg-slate-900 text-slate-300 font-mono text-xs overflow-x-auto space-y-2">
+                <div>
+                  <span class="text-slate-500"># Argumentos enviados por el modelo:</span>
+                  <pre class="text-sky-300 mt-1">{{ t.args|tojson(indent=2) }}</pre>
+                </div>
+                <div class="pt-2 border-t border-slate-800">
+                  <span class="text-slate-500"># Respuesta devuelta por el sistema:</span>
+                  {% if t.ok %}
+                    <pre class="text-slate-200 mt-1 whitespace-pre-wrap">{{ t.result }}</pre>
+                  {% else %}
+                    <pre class="text-rose-400 mt-1 whitespace-pre-wrap">{{ t.error_info or t.result }}</pre>
+                  {% endif %}
+                </div>
+                <div class="text-[10px] text-slate-500 text-right">Latencia: {{ t.elapsed_ms }}ms</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="p-4 rounded-lg bg-slate-50 border border-slate-100 text-center text-slate-500 text-sm">
+          El modelo no invocó ninguna herramienta técnica para responder en este turno de conversación.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Columna Derecha: Métricas y Detalles del Turno #}
+  <div class="space-y-6">
+    <div class="bg-white rounded-xl shadow-sm p-5 space-y-4">
+      <h3 class="font-bold text-slate-800 border-b border-slate-100 pb-3 font-semibold">Detalle Técnico del Turno</h3>
+      
+      <div class="space-y-3 text-sm">
+        <div class="flex justify-between">
+          <span class="text-slate-500">Estado:</span>
+          {% if row.error %}
+            <span class="px-2 py-0.5 rounded text-xs bg-rose-100 text-rose-800 font-bold font-semibold">Fallido</span>
+          {% else %}
+            <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 font-bold font-semibold">Exitoso</span>
+          {% endif %}
+        </div>
+
+        <div class="flex justify-between">
+          <span class="text-slate-500">Duración total:</span>
+          <span class="font-medium font-mono text-slate-800 font-semibold">{{ "%.2f"|format(row.duracion_ms / 1000) }} segundos</span>
+        </div>
+
+        <div class="flex justify-between">
+          <span class="text-slate-500 font-semibold">Tokens Input:</span>
+          <span class="font-mono text-slate-700 font-medium">{{ row.tokens_input }} tkns</span>
+        </div>
+
+        <div class="flex justify-between">
+          <span class="text-slate-500 font-semibold">Tokens Output:</span>
+          <span class="font-mono text-slate-700 font-medium">{{ row.tokens_output }} tkns</span>
+        </div>
+
+        <div class="flex justify-between border-t border-slate-100 pt-3">
+          <span class="text-slate-500 font-bold font-semibold">Costo Estimado:</span>
+          <span class="font-mono text-emerald-700 font-bold">${{ "%.5f"|format(row.costo_estimado_usd) }} USD</span>
+        </div>
+      </div>
+    </div>
+
+    {% if row.error %}
+      <div class="bg-rose-50 border border-rose-200 rounded-xl p-5 text-sm space-y-2">
+        <h4 class="font-bold text-rose-800 font-semibold">Detalles del Error / Alerta</h4>
+        <p class="text-rose-700 text-xs font-mono leading-relaxed bg-rose-100/50 p-3 rounded-lg border border-rose-100 overflow-x-auto whitespace-pre-wrap">{{ row.error }}</p>
+      </div>
+    {% endif %}
+
+    <div class="bg-white rounded-xl shadow-sm p-5 space-y-3 text-xs">
+      <div class="font-bold text-slate-700 uppercase font-semibold">Metadatos de Correlación</div>
+      <div class="space-y-1 font-mono text-slate-400">
+        <div>Turno ID: <span class="text-slate-600">{{ row.id }}</span></div>
+        <div>Request ID: <span class="text-slate-600 block break-all">{{ row.request_id }}</span></div>
+        <div>Creado en: <span class="text-slate-600 block">{{ row.creado_en }}</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
