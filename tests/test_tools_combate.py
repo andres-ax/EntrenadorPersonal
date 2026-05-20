@@ -153,7 +153,8 @@ async def test_evaluar_concusion_minima():
     from src.tools import evaluar_concusion_simplificado
 
     with patch("src.tools.log_evento", new=AsyncMock()):
-        raw = await call_tool(evaluar_concusion_simplificado, telegram_id=1)
+        with patch("src.telegram.permissions.ToolPermissionEnforcer.check", return_value=(True, None)):
+            raw = await call_tool(evaluar_concusion_simplificado, telegram_id=1)
     data = _ok(raw)
     assert data["severidad"] == "minima"
     assert data["off_sport_dias"] == 1
@@ -164,12 +165,13 @@ async def test_evaluar_concusion_alta_perdida_consciencia():
     from src.tools import evaluar_concusion_simplificado
 
     with patch("src.tools.log_evento", new=AsyncMock()):
-        raw = await call_tool(
-            evaluar_concusion_simplificado,
-            telegram_id=1,
-            tuvo_perdida_conciencia=True,
-            duracion_perdida_seg=45,
-        )
+        with patch("src.telegram.permissions.ToolPermissionEnforcer.check", return_value=(True, None)):
+            raw = await call_tool(
+                evaluar_concusion_simplificado,
+                telegram_id=1,
+                tuvo_perdida_conciencia=True,
+                duracion_perdida_seg=45,
+            )
     data = _ok(raw)
     assert data["severidad"] == "alta"
     assert data["off_sport_dias"] == 21
@@ -181,13 +183,14 @@ async def test_evaluar_concusion_moderada_multi_sintomas():
     from src.tools import evaluar_concusion_simplificado
 
     with patch("src.tools.log_evento", new=AsyncMock()):
-        raw = await call_tool(
-            evaluar_concusion_simplificado,
-            telegram_id=1,
-            nausea_vomito=True,
-            mareo_persistente=True,
-            confusion_amnesia=True,
-        )
+        with patch("src.telegram.permissions.ToolPermissionEnforcer.check", return_value=(True, None)):
+            raw = await call_tool(
+                evaluar_concusion_simplificado,
+                telegram_id=1,
+                nausea_vomito=True,
+                mareo_persistente=True,
+                confusion_amnesia=True,
+            )
     data = _ok(raw)
     assert data["severidad"] == "moderada"
     assert data["off_sport_dias"] == 14
