@@ -281,9 +281,25 @@ async def _procesar(
     """Ejecuta el agente con sesion Redis. Sesion DB cerrada antes del LLM.
     Cancela escalation de los tipos que el usuario cumplio during the run.
     """
-    from src.telegram.permissions import current_session_uid
+    import time
+    import uuid
+    from src.telegram.permissions import current_session_uid, current_turn_tools
+    from src.db.repository import grabar_auditoria_turno
+
+    t_start = time.perf_counter()
+    request_id = uuid.uuid4().hex
+
+    # Variables de recopilación de auditoría
+    prompt_usuario = texto
+    respuesta_bot = None
+    tokens_input = 0
+    tokens_output = 0
+    costo_estimado = 0.0
+    error_message = None
 
     token = current_session_uid.set(uid)
+    token_tools = current_turn_tools.set([])
+
     try:
         prompt = await _build_prompt(texto, uid)
         session = SafeRedisSession.from_url(
@@ -292,135 +308,151 @@ async def _procesar(
             ttl=settings.session_ttl_seconds,
         )
         try:
-            result = await Runner.run(
-                coach, prompt, session=session, run_config=RUN_CONFIG
-            )
-            output = result.final_output
-
-            if result.raw_responses:
-                try:
-                    total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
-                    total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
-                    await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
-                except Exception:
-                    pass
-
-            diag = detectar_diagnostico_output(output)
-            if diag:
-                logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
-                output = (
-                    "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
-                    "que un profesional medico/nutricionista/psicologo evalue tu caso. "
-                    "Sigamos con habitos concretos: que vamos a hacer hoy?"
-                )
-                await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
-
-            output = _sanitize_telegram_html(output)
-            chunks = [output[i : i + 4000] for i in range(0, len(output), 4000)] or [""]
-            for i, chunk in enumerate(chunks):
-                kwargs = {}
-                if with_keyboard and i == len(chunks) - 1:
-                    kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
-                await _enviar_con_retry(message, chunk, **kwargs)
-
-            if ctx is not None and ctx.job_queue is not None:
-                await _autocancelar_escalation_si_cumplio(uid, ctx)
-
-        except InputGuardrailTripwireTriggered as e:
-            guardrail_obj = getattr(getattr(e, "guardrail_result", None), "guardrail", None)
-            g_name = getattr(guardrail_obj, "name", "")
-            logger.warning("Input guardrail triggered uid=%s name=%s", uid, g_name)
-            
-            if g_name == "guardrail_red_flags_medicos" or "red_flags" in g_name:
-                await _enviar_con_retry(
-                    message,
-                    "<b>Atención médica recomendada</b>\n\n"
-                    "Lo que describes (como dolor de pecho, dificultad respiratoria o mareo grave) es un síntoma de alerta médica inmediata. "
-                    "Por tu propia seguridad, <b>detén cualquier actividad física de inmediato</b>, descansa y busca asistencia o valoración médica.\n\n"
-                    "Puedes comunicarte a la línea de emergencias local (ej: <b>123</b> en Colombia, <b>911</b> en otros países) si te sientes mal. Tu salud es lo primero.",
-                )
-            elif g_name == "guardrail_anti_pollution" or "anti_pollution" in g_name:
-                await _enviar_con_retry(
-                    message,
-                    "Entiendo que puedas tener dudas o inconvenientes con soporte técnico o facturación de otras plataformas, "
-                    "pero mi único rol es ser tu coach deportivo y ayudarte con tus entrenamientos, comidas y descanso saludable.\n\n"
-                    "<b>Volvamos a lo nuestro:</b> ¿cómo va tu actividad física hoy? ¿Qué tal estuvo tu entrenamiento o descanso?",
-                )
-            else:
-                await _enviar_con_retry(
-                    message,
-                    "Ese mensaje no se ve bien. Intentalo de nuevo con algo mas claro.",
-                )
-            return
-        except OutputGuardrailTripwireTriggered:
-            logger.warning("Output guardrail (SDK) triggered uid=%s", uid)
-            await _enviar_con_retry(
-                message,
-                "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
-                "que un profesional medico/nutricionista/psicologo evalue tu caso. "
-                "Sigamos con habitos concretos: que vamos a hacer hoy?",
-            )
-            await log_evento(uid, "output_guardrail_diagnostico", {"source": "sdk"})
-            return
-        except openai.BadRequestError as e:
-            if "No tool call found" not in str(e):
-                raise
-            logger.warning(
-                "Sesion Redis corrupta uid=%s, limpiando y reintentando. "
-                "Error original: %s",
-                uid,
-                str(e)[:200],
-            )
             try:
-                await session.close()
-            except Exception:
-                logger.debug("Error cerrando session corrupta uid=%s", uid, exc_info=True)
-            await limpiar_keys_usuario(uid)
-            await log_evento(
-                uid,
-                "sesion_redis_recuperada",
-                {"error": str(e)[:200]},
-            )
-            session = SafeRedisSession.from_url(
-                str(uid),
-                url=settings.redis_url_str,
-                ttl=settings.session_ttl_seconds,
-            )
-            result = await Runner.run(
-                coach, prompt, session=session, run_config=RUN_CONFIG
-            )
-            output = result.final_output
+                result = await Runner.run(
+                    coach, prompt, session=session, run_config=RUN_CONFIG
+                )
+                output = result.final_output
 
-            if result.raw_responses:
-                try:
-                    total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
-                    total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
-                    await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
-                except Exception:
-                    pass
+                if result.raw_responses:
+                    try:
+                        total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
+                        total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
+                        tokens_input = total_in
+                        tokens_output = total_out
+                        costo_estimado = (total_in / 1_000_000) * 0.15 + (total_out / 1_000_000) * 0.60
+                        if settings.coach_model in ("gpt-4o", "gpt-4"):
+                            costo_estimado = (total_in / 1_000_000) * 2.50 + (total_out / 1_000_000) * 10.00
+                        await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
+                    except Exception:
+                        pass
 
-            diag = detectar_diagnostico_output(output)
-            if diag:
-                logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
-                output = (
+                diag = detectar_diagnostico_output(output)
+                if diag:
+                    logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
+                    output = (
+                        "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
+                        "que un profesional medico/nutricionista/psicologo evalue tu caso. "
+                        "Sigamos con habitos concretos: que vamos a hacer hoy?"
+                    )
+                    await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
+
+                respuesta_bot = output
+                output_sanitized = _sanitize_telegram_html(output)
+                chunks = [output_sanitized[i : i + 4000] for i in range(0, len(output_sanitized), 4000)] or [""]
+                for i, chunk in enumerate(chunks):
+                    kwargs = {}
+                    if with_keyboard and i == len(chunks) - 1:
+                        kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
+                    await _enviar_con_retry(message, chunk, **kwargs)
+
+                if ctx is not None and ctx.job_queue is not None:
+                    await _autocancelar_escalation_si_cumplio(uid, ctx)
+
+            except InputGuardrailTripwireTriggered as e:
+                guardrail_obj = getattr(getattr(e, "guardrail_result", None), "guardrail", None)
+                g_name = getattr(guardrail_obj, "name", "")
+                logger.warning("Input guardrail triggered uid=%s name=%s", uid, g_name)
+                error_message = f"InputGuardrailTripwireTriggered: {g_name}"
+
+                if g_name == "guardrail_red_flags_medicos" or "red_flags" in g_name:
+                    await _enviar_con_retry(
+                        message,
+                        "<b>Atención médica recomendada</b>\n\n"
+                        "Lo que describes (como dolor de pecho, dificultad respiratoria o mareo grave) es un síntoma de alerta médica inmediata. "
+                        "Por tu propia seguridad, <b>detén cualquier actividad física de inmediato</b>, descansa y busca asistencia o valoración médica.\n\n"
+                        "Puedes comunicarte a la línea de emergencias local (ej: <b>123</b> en Colombia, <b>911</b> en otros países) si te sientes mal. Tu salud es lo primero.",
+                    )
+                elif g_name == "guardrail_anti_pollution" or "anti_pollution" in g_name:
+                    await _enviar_con_retry(
+                        message,
+                        "Entiendo que puedas tener dudas o inconvenientes con soporte técnico o facturación de otras plataformas, "
+                        "pero mi único rol es ser tu coach deportivo y ayudarte con tus entrenamientos, comidas y descanso saludable.\n\n"
+                        "<b>Volvamos a lo nuestro:</b> ¿cómo va tu actividad física hoy? ¿Qué tal estuvo tu entrenamiento o descanso?",
+                    )
+                else:
+                    await _enviar_con_retry(
+                        message,
+                        "Ese mensaje no se ve bien. Intentalo de nuevo con algo mas claro.",
+                    )
+                return
+            except OutputGuardrailTripwireTriggered:
+                logger.warning("Output guardrail (SDK) triggered uid=%s", uid)
+                error_message = "OutputGuardrailTripwireTriggered"
+                await _enviar_con_retry(
+                    message,
                     "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
                     "que un profesional medico/nutricionista/psicologo evalue tu caso. "
-                    "Sigamos con habitos concretos: que vamos a hacer hoy?"
+                    "Sigamos con habitos concretos: que vamos a hacer hoy?",
                 )
-                await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
+                await log_evento(uid, "output_guardrail_diagnostico", {"source": "sdk"})
+                return
+            except openai.BadRequestError as e:
+                if "No tool call found" not in str(e):
+                    raise
+                logger.warning(
+                    "Sesion Redis corrupta uid=%s, limpiando y reintentando. "
+                    "Error original: %s",
+                    uid,
+                    str(e)[:200],
+                )
+                try:
+                    await session.close()
+                except Exception:
+                    logger.debug("Error cerrando session corrupta uid=%s", uid, exc_info=True)
+                await limpiar_keys_usuario(uid)
+                await log_evento(
+                    uid,
+                    "sesion_redis_recuperada",
+                    {"error": str(e)[:200]},
+                )
+                session = SafeRedisSession.from_url(
+                    str(uid),
+                    url=settings.redis_url_str,
+                    ttl=settings.session_ttl_seconds,
+                )
+                result = await Runner.run(
+                    coach, prompt, session=session, run_config=RUN_CONFIG
+                )
+                output = result.final_output
 
-            output = _sanitize_telegram_html(output)
-            chunks = [output[i : i + 4000] for i in range(0, len(output), 4000)] or [""]
-            for i, chunk in enumerate(chunks):
-                kwargs = {}
-                if with_keyboard and i == len(chunks) - 1:
-                    kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
-                await _enviar_con_retry(message, chunk, **kwargs)
+                if result.raw_responses:
+                    try:
+                        total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
+                        total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
+                        tokens_input = total_in
+                        tokens_output = total_out
+                        costo_estimado = (total_in / 1_000_000) * 0.15 + (total_out / 1_000_000) * 0.60
+                        if settings.coach_model in ("gpt-4o", "gpt-4"):
+                            costo_estimado = (total_in / 1_000_000) * 2.50 + (total_out / 1_000_000) * 10.00
+                        await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
+                    except Exception:
+                        pass
 
-            if ctx is not None and ctx.job_queue is not None:
-                await _autocancelar_escalation_si_cumplio(uid, ctx)
-        except Exception:
+                diag = detectar_diagnostico_output(output)
+                if diag:
+                    logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
+                    output = (
+                        "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
+                        "que un profesional medico/nutricionista/psicologo evalue tu caso. "
+                        "Sigamos con habitos concretos: que vamos a hacer hoy?"
+                    )
+                    await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
+
+                respuesta_bot = output
+                output_sanitized = _sanitize_telegram_html(output)
+                chunks = [output_sanitized[i : i + 4000] for i in range(0, len(output_sanitized), 4000)] or [""]
+                for i, chunk in enumerate(chunks):
+                    kwargs = {}
+                    if with_keyboard and i == len(chunks) - 1:
+                        kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
+                    await _enviar_con_retry(message, chunk, **kwargs)
+
+                if ctx is not None and ctx.job_queue is not None:
+                    await _autocancelar_escalation_si_cumplio(uid, ctx)
+        except Exception as e:
             logger.exception("Error procesando mensaje uid=%s", uid)
+            error_message = f"{type(e).__name__}: {str(e)}"
             await _enviar_con_retry(
                 message,
                 "Tuve un saltico tecnico. Vuelve a escribirme y arrancamos.",
@@ -428,6 +460,26 @@ async def _procesar(
         finally:
             await session.close()
     finally:
+        # En el finally más externo registramos de forma 100% segura la auditoría de turno
+        duracion_ms = int((time.perf_counter() - t_start) * 1000)
+        tools_invocadas = current_turn_tools.get()
+        try:
+            await grabar_auditoria_turno(
+                telegram_id=uid,
+                request_id=request_id,
+                prompt_usuario=prompt_usuario,
+                respuesta_bot=respuesta_bot,
+                tools_invocadas=tools_invocadas,
+                tokens_input=tokens_input,
+                tokens_output=tokens_output,
+                costo_estimado_usd=costo_estimado,
+                duracion_ms=duracion_ms,
+                error=error_message,
+            )
+        except Exception as ae:
+            logger.warning("Error llamando a grabar_auditoria_turno en finally de _procesar: %s", ae, exc_info=True)
+
+        current_turn_tools.reset(token_tools)
         current_session_uid.reset(token)
 
 

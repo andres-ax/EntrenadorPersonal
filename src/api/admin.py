@@ -758,6 +758,96 @@ async def health_all(admin: dict = Depends(get_admin_from_token)) -> dict:
     return out
 
 
+@router.get("/auditoria")
+async def listar_auditoria(
+    admin: dict = Depends(get_admin_from_token),
+    telegram_id: Optional[int] = Query(None),
+    request_id: Optional[str] = Query(None),
+    con_error: Optional[bool] = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = 0,
+) -> dict:
+    from src.db.models import AuditoriaTurno
+
+    async with async_session_factory() as session:
+        query = select(AuditoriaTurno)
+        if telegram_id is not None:
+            query = query.where(AuditoriaTurno.telegram_id == telegram_id)
+        if request_id is not None:
+            query = query.where(AuditoriaTurno.request_id == request_id)
+        if con_error is True:
+            query = query.where(AuditoriaTurno.error.is_not(None))
+        elif con_error is False:
+            query = query.where(AuditoriaTurno.error.is_(None))
+
+        # Contamos el total para paginación
+        total_q = await session.execute(
+            select(func.count()).select_from(query.subquery())
+        )
+        total = total_q.scalar() or 0
+
+        # Ordenamos por creado_en desc
+        query = query.order_by(AuditoriaTurno.creado_en.desc()).limit(limit).offset(offset)
+        result = await session.execute(query)
+        items = list(result.scalars().all())
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "items": [
+            {
+                "id": row.id,
+                "telegram_id": row.telegram_id,
+                "usuario_id": row.usuario_id,
+                "request_id": row.request_id,
+                "prompt_usuario": row.prompt_usuario,
+                "respuesta_bot": row.respuesta_bot,
+                "tokens_input": row.tokens_input,
+                "tokens_output": row.tokens_output,
+                "costo_estimado_usd": row.costo_estimado_usd,
+                "duracion_ms": row.duracion_ms,
+                "con_error": row.error is not None,
+                "error": row.error,
+                "creado_en": row.creado_en.isoformat() if row.creado_en else None,
+            }
+            for row in items
+        ],
+    }
+
+
+@router.get("/auditoria/{request_id}")
+async def detalle_auditoria(
+    request_id: str,
+    admin: dict = Depends(get_admin_from_token),
+) -> dict:
+    from src.db.models import AuditoriaTurno
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(AuditoriaTurno).where(AuditoriaTurno.request_id == request_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise HTTPException(404, "Registro de auditoría no encontrado")
+
+    return {
+        "id": row.id,
+        "telegram_id": row.telegram_id,
+        "usuario_id": row.usuario_id,
+        "request_id": row.request_id,
+        "prompt_usuario": row.prompt_usuario,
+        "respuesta_bot": row.respuesta_bot,
+        "tools_invocadas": row.tools_invocadas,
+        "tokens_input": row.tokens_input,
+        "tokens_output": row.tokens_output,
+        "costo_estimado_usd": row.costo_estimado_usd,
+        "duracion_ms": row.duracion_ms,
+        "error": row.error,
+        "creado_en": row.creado_en.isoformat() if row.creado_en else None,
+    }
+
+
 async def _publicar_evento_pago(
     telegram_id: int, tipo: str, payload: dict
 ) -> None:

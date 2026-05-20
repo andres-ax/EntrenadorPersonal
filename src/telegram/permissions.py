@@ -21,6 +21,11 @@ current_session_uid: contextvars.ContextVar[int | None] = contextvars.ContextVar
     "current_session_uid", default=None
 )
 
+# Almacena la lista de ejecuciones de herramientas en el turno asíncrono actual.
+current_turn_tools: contextvars.ContextVar[list[dict] | None] = contextvars.ContextVar(
+    "current_turn_tools", default=None
+)
+
 
 class ToolIntent(Enum):
     """Clasificación de intención semántica de ejecución de una herramienta."""

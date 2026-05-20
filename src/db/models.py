@@ -235,6 +235,9 @@ class Usuario(Base):
     suscripciones = relationship(
         "Suscripcion", back_populates="usuario", cascade="all, delete-orphan"
     )
+    turnos_audit = relationship(
+        "AuditoriaTurno", back_populates="usuario", cascade="all, delete-orphan"
+    )
 
 
 class SesionEntrenamiento(Base):
@@ -851,3 +854,28 @@ class DeporteCatalogo(Base):
         Boolean, default=True, server_default=text("true"), nullable=False
     )
     creado_en = Column(DateTime, server_default=func.now())
+
+
+class AuditoriaTurno(Base):
+    """Auditoría persistente turno a turno de las interacciones con el bot."""
+
+    __tablename__ = "auditoria_turnos"
+
+    id = Column(Integer, primary_key=True)
+    telegram_id = Column(BigInteger, nullable=False, index=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    request_id = Column(String(100), nullable=True, index=True)
+    prompt_usuario = Column(Text, nullable=True)
+    respuesta_bot = Column(Text, nullable=True)
+    tools_invocadas = Column(JSON, nullable=True)
+    tokens_input = Column(Integer, default=0, nullable=False)
+    tokens_output = Column(Integer, default=0, nullable=False)
+    costo_estimado_usd = Column(Float, default=0.0, nullable=False)
+    duracion_ms = Column(Integer, default=0, nullable=False)
+    error = Column(Text, nullable=True)
+    creado_en = Column(DateTime, server_default=func.now(), index=True)
+
+    usuario = relationship("Usuario", back_populates="turnos_audit")
+

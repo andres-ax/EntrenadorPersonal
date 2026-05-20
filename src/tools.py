@@ -116,6 +116,8 @@ def _log_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(fn)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        from src.telegram.permissions import current_turn_tools
+
         safe_args = [
             _summary_arg(a) for a in args
         ]
@@ -132,22 +134,50 @@ def _log_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
         t0 = time.perf_counter()
         try:
             result = await fn(*args, **kwargs)
-        except Exception:
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            ok = _looks_ok(result)
+
+            # Registrar ejecución en el contexto asíncrono actual de la auditoría de turnos
+            tools_list = current_turn_tools.get()
+            if tools_list is not None:
+                resumen_res = str(result)[:500] if result is not None else None
+                tools_list.append({
+                    "tool_name": tool_name,
+                    "args": safe_args,
+                    "kwargs": safe_kwargs,
+                    "ok": ok,
+                    "elapsed_ms": elapsed_ms,
+                    "result_summary": resumen_res,
+                    "error_info": None if ok else str(result)[:200]
+                })
+
+            log_fn = logger.info if ok else logger.warning
+            log_fn(
+                "tool.%s done ok=%s elapsed=%.1fms",
+                tool_name,
+                ok,
+                elapsed_ms,
+            )
+            return result
+        except Exception as e:
             elapsed_ms = (time.perf_counter() - t0) * 1000
             logger.exception(
                 "tool.%s raised elapsed=%.1fms", tool_name, elapsed_ms
             )
+
+            # Registrar fallo por excepción en el contexto de auditoría de turnos
+            tools_list = current_turn_tools.get()
+            if tools_list is not None:
+                tools_list.append({
+                    "tool_name": tool_name,
+                    "args": safe_args,
+                    "kwargs": safe_kwargs,
+                    "ok": False,
+                    "elapsed_ms": elapsed_ms,
+                    "result_summary": None,
+                    "error_info": f"{type(e).__name__}: {str(e)}"
+                })
             raise
-        elapsed_ms = (time.perf_counter() - t0) * 1000
-        ok = _looks_ok(result)
-        log_fn = logger.info if ok else logger.warning
-        log_fn(
-            "tool.%s done ok=%s elapsed=%.1fms",
-            tool_name,
-            ok,
-            elapsed_ms,
-        )
-        return result
 
     return wrapper
 

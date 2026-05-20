@@ -33,6 +33,7 @@ from src.db.models import (
     MetricaSueno,
     PagoComprobante,
     LlmUsage,
+    AuditoriaTurno,
     PersonalRecord,
     PlanDefinicion,
     PlanSuscripcion,
@@ -2395,3 +2396,48 @@ async def log_llm_usage(
             await session.commit()
     except Exception:
         logger.warning("Error guardando llm_usage servicio=%s", servicio, exc_info=True)
+
+
+async def grabar_auditoria_turno(
+    telegram_id: int,
+    request_id: Optional[str] = None,
+    prompt_usuario: Optional[str] = None,
+    respuesta_bot: Optional[str] = None,
+    tools_invocadas: Optional[list[dict]] = None,
+    tokens_input: int = 0,
+    tokens_output: int = 0,
+    costo_estimado_usd: float = 0.0,
+    duracion_ms: int = 0,
+    error: Optional[str] = None,
+) -> None:
+    """Graba de forma segura un registro de auditoría de turno.
+
+    Este método captura excepciones internamente y las loguea, de modo que
+    un fallo en la auditoría nunca interrumpa el flujo del bot.
+    """
+    try:
+        async with async_session_factory() as session:
+            uid = await _get_usuario_id(session, telegram_id)
+            row = AuditoriaTurno(
+                telegram_id=telegram_id,
+                usuario_id=uid,
+                request_id=request_id,
+                prompt_usuario=prompt_usuario,
+                respuesta_bot=respuesta_bot,
+                tools_invocadas=tools_invocadas,
+                tokens_input=tokens_input,
+                tokens_output=tokens_output,
+                costo_estimado_usd=costo_estimado_usd,
+                duracion_ms=duracion_ms,
+                error=error,
+            )
+            session.add(row)
+            await session.commit()
+            logger.info("Grabada auditoría de turno para telegram_id=%s request_id=%s", telegram_id, request_id)
+    except Exception:
+        logger.exception(
+            "Error persistiendo auditoria de turno para telegram_id=%s request_id=%s",
+            telegram_id,
+            request_id,
+        )
+
