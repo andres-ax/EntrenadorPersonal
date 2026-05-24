@@ -31,7 +31,7 @@
       {# Toast de feedback post-accion #}
       {% set msg = request.query_params.get('msg', '') %}
       {% if msg %}
-        <div id="toast-msg" class="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm animate-slide-up">
+        <div id="toast-msg" class="mb-4 p-3 rounded-lg {% if '0 desaf' in msg %}bg-amber-50 border border-amber-200 text-amber-900{% else %}bg-emerald-50 border border-emerald-200 text-emerald-800{% endif %} text-sm animate-slide-up">
           {{ msg }}
         </div>
         <script>setTimeout(function(){ var t = document.getElementById('toast-msg'); if(t) t.style.display='none'; }, 4000);</script>

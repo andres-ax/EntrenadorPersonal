@@ -437,15 +437,35 @@ async def desafios_view(
 async def desafios_generar_form(
     admin: dict = Depends(get_admin_from_cookie),
     fecha: Optional[str] = Form(None),
+    solo_opt_in: Optional[str] = Form(None),
 ):
+    from urllib.parse import quote
+
     await require_super(admin)
+    filtro_opt_in = solo_opt_in == "true"
     result = await admin_api.admin_desafios_generar(
-        req=admin_api.DesafioGenerarReq(fecha=fecha or None),
+        req=admin_api.DesafioGenerarReq(fecha=fecha or None, solo_opt_in=filtro_opt_in),
         admin=admin,
     )
     n = result.get("generados", 0)
+    if n == 0:
+        if result.get("usuarios_considerados", 0) == 0:
+            if filtro_opt_in:
+                msg = (
+                    "0 desafíos: ningún usuario con opt-in activo. "
+                    "Desmarca el filtro o pide activar en /desafios."
+                )
+            else:
+                msg = "0 desafíos: no hay usuarios con onboarding completo."
+        else:
+            msg = (
+                f"0 desafíos: {result.get('cohortes_detectadas', 0)} cohortes detectadas "
+                f"pero ninguna alcanza el mínimo ({result.get('cohortes_omitidas_minimo', 0)} omitidas)."
+            )
+    else:
+        msg = f"Generados {n} desafíos en {result.get('cohortes_detectadas', n)} cohortes."
     return RedirectResponse(
-        url=f"/admin/desafios?fecha={result['fecha']}&msg=Generados+{n}+desafios.",
+        url=f"/admin/desafios?fecha={result['fecha']}&msg={quote(msg)}",
         status_code=303,
     )
 

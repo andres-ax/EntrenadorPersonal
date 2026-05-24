@@ -7,7 +7,11 @@
     <div class="text-xs uppercase text-slate-500">Usuarios con opt-in</div>
     <div class="text-3xl font-bold text-slate-800 mt-1">{{ data.opt_in_usuarios }}</div>
   </div>
-  <div class="bg-white rounded-xl shadow-sm p-5 lg:col-span-2">
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs uppercase text-slate-500">Usuarios activos (onboarding OK)</div>
+    <div class="text-3xl font-bold text-slate-800 mt-1">{{ data.usuarios_activos }}</div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5">
     <form method="get" action="/admin/desafios" class="flex flex-wrap gap-3 items-end text-sm">
       <div>
         <label class="block text-xs uppercase text-slate-500 mb-1">Fecha</label>
@@ -25,7 +29,8 @@
   <h2 class="font-semibold text-slate-800 mb-2">Generar desafíos del día</h2>
   <p class="text-sm text-slate-500 mb-3">
     Crea un desafío por cohorte (deporte/nivel/objetivo) para la fecha indicada.
-    Idempotente: no duplica si ya existen.
+    Por defecto usa <strong>todos los usuarios activos</strong> para detectar cohortes
+    (el job automático nocturno solo cuenta opt-in).
   </p>
   <form method="post" action="/admin/desafios/generar_form" class="flex flex-wrap gap-3 items-end text-sm">
     <div>
@@ -33,6 +38,10 @@
       <input type="date" name="fecha" value="{{ fecha }}"
              class="px-3 py-2 border border-slate-300 rounded-lg" />
     </div>
+    <label class="flex items-center gap-2 pb-2">
+      <input type="checkbox" name="solo_opt_in" value="true" />
+      Solo cohortes con opt-in
+    </label>
     <button type="submit"
             onclick="return confirm('Generar desafíos para esta fecha?');"
             class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg">
@@ -47,7 +56,13 @@
   </div>
   {% if not data.desafios %}
     <div class="p-8 text-center text-slate-500 text-sm">
-      No hay desafíos para esta fecha. Usa «Generar ahora» o espera al job diario (05:30 UTC).
+      No hay desafíos para esta fecha.
+      {% if data.opt_in_usuarios == 0 %}
+        <p class="mt-2">Nadie tiene opt-in aún — usa «Generar ahora» (sin marcar solo opt-in)
+        o pide a los usuarios activar en <code>/desafios</code>.</p>
+      {% else %}
+        <p class="mt-2">Usa «Generar ahora» o espera al job diario (05:30 UTC, solo opt-in).</p>
+      {% endif %}
     </div>
   {% else %}
     <div class="divide-y divide-slate-100">

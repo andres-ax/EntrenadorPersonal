@@ -937,6 +937,7 @@ async def admin_desafios(
     from src.services.comunidad import (
         contar_desafios_opt_in,
         contar_participantes_desafio,
+        contar_usuarios_activos_onboarding,
         listar_desafios_por_fecha,
         ranking_desafio,
     )
@@ -944,6 +945,7 @@ async def admin_desafios(
     target = date_cls.fromisoformat(fecha) if fecha else date_cls.today()
     desafios = await listar_desafios_por_fecha(target)
     opt_in = await contar_desafios_opt_in()
+    activos = await contar_usuarios_activos_onboarding()
     out = []
     for d in desafios:
         top = await ranking_desafio(d.slug, top=3)
@@ -964,12 +966,14 @@ async def admin_desafios(
     return {
         "fecha": target.isoformat(),
         "opt_in_usuarios": opt_in,
+        "usuarios_activos": activos,
         "desafios": out,
     }
 
 
 class DesafioGenerarReq(BaseModel):
     fecha: Optional[str] = None
+    solo_opt_in: bool = False
 
 
 @router.post("/desafios/generar")
@@ -984,14 +988,18 @@ async def admin_desafios_generar(
 
     await require_super(admin)
     target = date_cls.fromisoformat(req.fecha) if req.fecha else date_cls.today()
-    desafios = await generar_desafios_del_dia(target)
-    for des in desafios:
+    resultado = await generar_desafios_del_dia(target, solo_opt_in=req.solo_opt_in)
+    for des in resultado.desafios:
         await schedule_desafio_cierre(des.id, des.fecha_fin)
     return {
         "ok": True,
         "fecha": target.isoformat(),
-        "generados": len(desafios),
-        "slugs": [d.slug for d in desafios],
+        "generados": len(resultado.desafios),
+        "slugs": [d.slug for d in resultado.desafios],
+        "usuarios_considerados": resultado.usuarios_considerados,
+        "cohortes_detectadas": resultado.cohortes_detectadas,
+        "cohortes_omitidas_minimo": resultado.cohortes_omitidas_minimo,
+        "solo_opt_in": resultado.solo_opt_in,
     }
 
 

@@ -252,6 +252,17 @@ async def contar_desafios_activos_hoy() -> int:
         return int(result.scalar() or 0)
 
 
+async def contar_usuarios_activos_onboarding() -> int:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(func.count(Usuario.id)).where(
+                Usuario.onboarding_completo == True,  # noqa: E712
+                Usuario.bot_bloqueado == False,  # noqa: E712
+            )
+        )
+        return int(result.scalar() or 0)
+
+
 async def contar_desafios_opt_in() -> int:
     async with async_session_factory() as session:
         result = await session.execute(

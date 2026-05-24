@@ -2,18 +2,29 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
 
 from src.config import settings
 from src.db.connection import async_session_factory
-from src.db.models import Desafio, SesionEntrenamiento, Streak, TipoStreak, Usuario
+from src.db.models import Desafio, SesionEntrenamiento, Usuario
 from src.db.repository import obtener_o_crear_streak
 from src.services.desafios.cohorte import cohorte_key_usuario, cohorte_label
 from src.services.desafios.plantillas import DEFAULT_PREMIO, calcular_meta, elegir_plantilla
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ResultadoGeneracionDesafios:
+    fecha: date
+    desafios: list[Desafio]
+    usuarios_considerados: int
+    cohortes_detectadas: int
+    cohortes_omitidas_minimo: int
+    solo_opt_in: bool
 
 
 def slug_desafio_dia(fecha: date, cohorte_key: str) -> str:
@@ -90,18 +101,26 @@ async def _crear_o_actualizar_desafio(
         return des
 
 
-async def generar_desafios_del_dia(fecha: date | None = None) -> list[Desafio]:
-    """Crea un desafío por cohorte con usuarios opt-in (sin auto-inscribir)."""
-    hoy = fecha or date.today()
+async def _usuarios_para_cohortes(*, solo_opt_in: bool) -> list[Usuario]:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(
-                Usuario.desafios_opt_in == True,  # noqa: E712
-                Usuario.onboarding_completo == True,  # noqa: E712
-                Usuario.bot_bloqueado == False,  # noqa: E712
-            )
+        query = select(Usuario).where(
+            Usuario.onboarding_completo == True,  # noqa: E712
+            Usuario.bot_bloqueado == False,  # noqa: E712
         )
-        usuarios = list(result.scalars().all())
+        if solo_opt_in:
+            query = query.where(Usuario.desafios_opt_in == True)  # noqa: E712
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+
+async def generar_desafios_del_dia(
+    fecha: date | None = None,
+    *,
+    solo_opt_in: bool = True,
+) -> ResultadoGeneracionDesafios:
+    """Crea un desafío por cohorte. Por defecto solo cuenta usuarios con opt-in."""
+    hoy = fecha or date.today()
+    usuarios = await _usuarios_para_cohortes(solo_opt_in=solo_opt_in)
 
     cohortes: dict[str, list[Usuario]] = {}
     for u in usuarios:
@@ -110,8 +129,10 @@ async def generar_desafios_del_dia(fecha: date | None = None) -> list[Desafio]:
 
     creados: list[Desafio] = []
     min_part = settings.desafios_min_participantes_cohorte
+    omitidas = 0
     for cohorte_key, miembros in cohortes.items():
         if len(miembros) < min_part:
+            omitidas += 1
             continue
         rep = miembros[0]
         try:
@@ -130,8 +151,23 @@ async def generar_desafios_del_dia(fecha: date | None = None) -> list[Desafio]:
             creados.append(des)
         except Exception:
             logger.exception("Error creando desafio cohorte=%s", cohorte_key)
-    logger.info("Desafios del dia %s: %d cohortes", hoy.isoformat(), len(creados))
-    return creados
+    logger.info(
+        "Desafios del dia %s: %d cohortes (usuarios=%d, detectadas=%d, omitidas_min=%d, solo_opt_in=%s)",
+        hoy.isoformat(),
+        len(creados),
+        len(usuarios),
+        len(cohortes),
+        omitidas,
+        solo_opt_in,
+    )
+    return ResultadoGeneracionDesafios(
+        fecha=hoy,
+        desafios=creados,
+        usuarios_considerados=len(usuarios),
+        cohortes_detectadas=len(cohortes),
+        cohortes_omitidas_minimo=omitidas,
+        solo_opt_in=solo_opt_in,
+    )
 
 
 async def asegurar_desafio_cohorte_dia(telegram_id: int, fecha: date | None = None) -> Desafio | None:

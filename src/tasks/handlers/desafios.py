@@ -20,8 +20,8 @@ async def handle_generar(bot, doc: dict) -> None:
     payload = doc.get("payload") or {}
     fecha_str = payload.get("fecha")
     fecha = date.fromisoformat(fecha_str) if fecha_str else date.today()
-    desafios = await generar_desafios_del_dia(fecha)
-    for des in desafios:
+    resultado = await generar_desafios_del_dia(fecha)
+    for des in resultado.desafios:
         await schedule_desafio_cierre(des.id, des.fecha_fin)
     async with async_session_factory() as session:
         result = await session.execute(
