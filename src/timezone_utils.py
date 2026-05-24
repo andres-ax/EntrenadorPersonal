@@ -45,7 +45,8 @@ async def fecha_hoy_usuario(telegram_id: int) -> date:
     return (await ahora_usuario(telegram_id)).date()
 
 
-async def fecha_hoy_usuario_model(usuario: Usuario) -> date:
+def fecha_hoy_usuario_model(usuario: Usuario) -> date:
+    """Fecha calendario hoy según timezone del modelo Usuario (sync, sin DB)."""
     return datetime.now(zoneinfo_for(usuario.timezone)).date()
 
 
