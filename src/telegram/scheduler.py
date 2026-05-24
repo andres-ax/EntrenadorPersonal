@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from telegram.constants import ParseMode
 from telegram.ext import Application
 
+from src.config import settings
 from src.db.connection import async_session_factory
 from src.db.models import (
     Comida,
@@ -29,6 +30,7 @@ from src.db.repository import (
     marcar_recordatorio_enviado,
     reporte_semanal,
 )
+from src.timezone_utils import fecha_hoy_usuario_model
 
 logger = logging.getLogger(__name__)
 
