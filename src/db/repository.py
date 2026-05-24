@@ -441,6 +441,9 @@ async def guardar_comida(
         await session.commit()
         await session.refresh(comida)
     await _auto_streak_safe(telegram_id, "comida")
+    from src.services.desafios.scoring import actualizar_progreso_comidas
+
+    await actualizar_progreso_comidas(telegram_id)
     return comida
 
 
@@ -1883,6 +1886,9 @@ async def guardar_sesion_skill(
         await session.refresh(sesion)
     # Solo en INSERT real (no en UPDATE) incrementamos streak.
     await _auto_streak_safe(telegram_id, "entreno")
+    from src.services.desafios.scoring import actualizar_progreso_sesion
+
+    await actualizar_progreso_sesion(telegram_id, sesion)
     logger.info(
         "guardar_sesion_skill INSERT uid=%s sesion_id=%s deporte=%s duracion=%d",
         telegram_id, sesion.id, deporte, duracion_min,
@@ -1935,6 +1941,9 @@ async def cerrar_sesion_abierta(
         "cerrar_sesion_abierta uid=%s sesion_id=%s cerrada",
         telegram_id, sesion.id,
     )
+    from src.services.desafios.scoring import actualizar_progreso_sesion
+
+    await actualizar_progreso_sesion(telegram_id, sesion)
     return sesion
 
 

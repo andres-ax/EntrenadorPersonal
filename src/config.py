@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     use_redis_task_queue: bool = True
     task_dispatcher_interval_seconds: int = 30
 
+    desafios_min_participantes_cohorte: int = 1
+    desafios_hora_aviso: str = "06:00"
+
     rate_limit_per_minute: int = 10
     max_message_chars: int = 4000
     max_webhook_payload_bytes: int = 1_000_000

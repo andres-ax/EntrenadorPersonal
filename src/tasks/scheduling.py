@@ -169,6 +169,71 @@ async def schedule_deporte_skill(telegram_id: int, when: datetime | None = None)
     )
 
 
+async def schedule_desafio_generar(when: datetime | None = None) -> str | None:
+    if not settings.use_redis_task_queue:
+        return None
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(settings.default_timezone)
+    run_at = when or datetime.now(tz)
+    hoy = run_at.date()
+    idem = f"desafio_generar:{hoy.isoformat()}"
+    return await schedule_task(
+        task_type="desafio_generar",
+        telegram_id=0,
+        run_at=run_at,
+        payload={"fecha": hoy.isoformat()},
+        timezone_name=str(tz),
+        idempotency_key=idem,
+        created_by="system",
+    )
+
+
+async def schedule_desafio_aviso_usuario(
+    telegram_id: int,
+    fecha: date | None = None,
+) -> str | None:
+    if not settings.use_redis_task_queue:
+        return None
+    tz = await _tz_for(telegram_id)
+    hoy = fecha or await fecha_hoy_usuario(telegram_id)
+    parts = settings.desafios_hora_aviso.split(":")
+    hora = time(int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
+    run_at = datetime.combine(hoy, hora, tzinfo=tz)
+    now = datetime.now(tz)
+    if run_at <= now:
+        run_at = now + timedelta(seconds=30)
+    idem = f"desafio_aviso:{telegram_id}:{hoy.isoformat()}"
+    return await schedule_task(
+        task_type="desafio_aviso",
+        telegram_id=telegram_id,
+        run_at=run_at,
+        payload={"fecha": hoy.isoformat()},
+        timezone_name=str(tz),
+        idempotency_key=idem,
+        created_by="system",
+    )
+
+
+async def schedule_desafio_cierre(desafio_id: int, fecha: date) -> str | None:
+    if not settings.use_redis_task_queue:
+        return None
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(settings.default_timezone)
+    run_at = datetime.combine(fecha, time(23, 55), tzinfo=tz)
+    idem = f"desafio_cierre:{desafio_id}"
+    return await schedule_task(
+        task_type="desafio_cierre",
+        telegram_id=0,
+        run_at=run_at,
+        payload={"desafio_id": desafio_id},
+        timezone_name=str(tz),
+        idempotency_key=idem,
+        created_by="system",
+    )
+
+
 async def _tz_for(telegram_id: int) -> ZoneInfo:
     from src.timezone_utils import tz_usuario
 

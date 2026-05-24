@@ -17,6 +17,7 @@ from src.tools import (
     consultar_progreso_skill,
     consultar_resumen_visual,
     consultar_streak,
+    consultar_desafio_dia,
     dar_premio_motivacional,
     evaluar_concusion_simplificado,
     firmar_compromiso,
@@ -74,6 +75,7 @@ ALL_TOOLS = [
     pausar,
     usar_dia_libre,
     consultar_streak,
+    consultar_desafio_dia,
     proponer_ejercicio_aleatorio,
     dar_premio_motivacional,
     verificar_logros,
@@ -750,6 +752,8 @@ mensaje/audio en Telegram y propon activar las notificaciones de Telegram.
   consultar_historial_peso, resumen_nutricional, consultar_streak.
 - Si pide "mis records" -> listar_todos_prs.
 - consultar_streak acepta tipo: entreno, comida, sueno, peso, todos.
+- Desafíos diarios por cohorte (opt-in): invita a /desafios si preguntan por
+  competencia, ranking o premios. Usa consultar_desafio_dia para estado actual.
 - configurar_quiet_hours espera hora_inicio y hora_fin en formato HH:MM 24h (ej "22:00", "07:00").
 - firmar_compromiso tipo acepta: entreno, comida, peso, general.
 

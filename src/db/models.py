@@ -206,6 +206,7 @@ class Usuario(Base):
     email = Column(String(180), unique=True, nullable=True, index=True)
     email_verified_at = Column(DateTime, nullable=True)
     auth_method = Column(String(16), default="telegram", nullable=False)
+    desafios_opt_in = Column(Boolean, default=False, nullable=False, server_default=text("false"))
 
     created_at = Column(DateTime, server_default=func.now())
 
@@ -705,7 +706,7 @@ class ConsumoAgua(Base):
 
 
 class Desafio(Base):
-    """Desafios semanales/mensuales de la comunidad."""
+    """Desafios semanales/mensuales o diarios por cohorte."""
 
     __tablename__ = "desafios"
 
@@ -716,6 +717,14 @@ class Desafio(Base):
     fecha_inicio = Column(Date, nullable=False)
     fecha_fin = Column(Date, nullable=False)
     tipo = Column(String(32), default="dias")
+    duracion = Column(String(16), default="dia", nullable=False, server_default="dia")
+    metrica = Column(String(32), default="minutos_entreno", nullable=False, server_default="minutos_entreno")
+    meta_valor = Column(Float, default=0.0, nullable=False, server_default="0")
+    cohorte_key = Column(String(128), nullable=True, index=True)
+    reglas_json = Column(JSON, nullable=True)
+    auto_generado = Column(Boolean, default=False, nullable=False, server_default=text("false"))
+    estado = Column(String(16), default="activo", nullable=False, server_default="activo")
+    premio_json = Column(JSON, nullable=True)
     creado_en = Column(DateTime, server_default=func.now())
 
 
@@ -731,7 +740,24 @@ class DesafioParticipante(Base):
     )
     valor_actual = Column(Float, default=0.0, nullable=False)
     posicion = Column(Integer, nullable=True)
+    premio_otorgado = Column(String(32), nullable=True)
     inscripto_en = Column(DateTime, server_default=func.now())
+
+
+class DesafioProgresoLog(Base):
+    __tablename__ = "desafio_progreso_log"
+
+    id = Column(Integer, primary_key=True)
+    desafio_id = Column(
+        Integer, ForeignKey("desafios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    evento = Column(String(32), nullable=False)
+    delta = Column(Float, default=0.0, nullable=False)
+    valor_despues = Column(Float, default=0.0, nullable=False)
+    creado_en = Column(DateTime, server_default=func.now(), index=True)
 
 
 class Kudos(Base):

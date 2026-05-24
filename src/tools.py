@@ -1103,6 +1103,58 @@ async def consultar_streak(telegram_id: int, tipo: str = "entreno") -> str:
         return _error("no pude consultar el streak")
 
 
+@function_tool
+@_log_tool
+async def consultar_desafio_dia(telegram_id: int) -> str:
+    """Consulta desafío diario de cohorte: meta, progreso y posición.
+
+    Args:
+        telegram_id: Telegram ID del usuario
+    """
+    from src.services.comunidad import estado_desafio_usuario, usuario_tiene_opt_in
+    from src.services.desafios.cohorte import cohorte_key_usuario
+    from src.db.repository import obtener_usuario
+
+    try:
+        opt_in = await usuario_tiene_opt_in(telegram_id)
+        user = await obtener_usuario(telegram_id)
+        cohorte = cohorte_key_usuario(user) if user else "desconocido"
+        if not opt_in:
+            return json.dumps(
+                {
+                    "opt_in": False,
+                    "cohorte": cohorte,
+                    "mensaje": "Activa desafíos con /desafios",
+                }
+            )
+        estado = await estado_desafio_usuario(telegram_id)
+        if estado is None or estado.get("desafio") is None:
+            return json.dumps(
+                {
+                    "opt_in": True,
+                    "cohorte": cohorte,
+                    "desafio": None,
+                    "mensaje": "Sin desafío de cohorte hoy todavía",
+                }
+            )
+        d = estado["desafio"]
+        return json.dumps(
+            {
+                "opt_in": True,
+                "cohorte": cohorte,
+                "titulo": d.titulo,
+                "metrica": d.metrica,
+                "meta": d.meta_valor,
+                "progreso": estado.get("valor", 0),
+                "posicion": estado.get("posicion"),
+                "inscrito": estado.get("inscrito", False),
+            }
+        )
+    except Exception:
+        logger.exception("Error en consultar_desafio_dia")
+        return _error("no pude consultar el desafío del día")
+
+
 # ============================================================================
 # Engagement (Fase 5/6/7)
 # ============================================================================

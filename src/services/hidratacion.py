@@ -23,7 +23,10 @@ async def registrar_agua(telegram_id: int, ml: int) -> int:
         c = ConsumoAgua(usuario_id=user.id, ml=ml)
         session.add(c)
         await session.commit()
-        return ml
+    from src.services.desafios.scoring import actualizar_progreso_agua
+
+    await actualizar_progreso_agua(telegram_id)
+    return ml
 
 
 async def consumo_hoy_ml(telegram_id: int) -> int:

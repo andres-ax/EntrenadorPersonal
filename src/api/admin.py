@@ -925,6 +925,35 @@ async def detalle_auditoria(
     }
 
 
+@router.get("/desafios")
+async def admin_desafios(
+    fecha: str | None = None,
+    _admin=Depends(get_admin_from_token),
+) -> dict:
+    from datetime import date as date_cls
+
+    from src.services.comunidad import listar_desafios_por_fecha, ranking_desafio
+
+    target = date_cls.fromisoformat(fecha) if fecha else date_cls.today()
+    desafios = await listar_desafios_por_fecha(target)
+    out = []
+    for d in desafios:
+        top = await ranking_desafio(d.slug, top=3)
+        out.append(
+            {
+                "id": d.id,
+                "slug": d.slug,
+                "titulo": d.titulo,
+                "cohorte_key": d.cohorte_key,
+                "metrica": d.metrica,
+                "meta_valor": d.meta_valor,
+                "estado": d.estado,
+                "top3": top,
+            }
+        )
+    return {"fecha": target.isoformat(), "desafios": out}
+
+
 async def _publicar_evento_pago(
     telegram_id: int, tipo: str, payload: dict
 ) -> None:

@@ -361,7 +361,17 @@ async def health() -> dict:
     return {
         "status": "ok" if status_ok else "degraded",
         "tasks_overdue": overdue,
+        "desafios_activos_hoy": await _desafios_activos_count(),
     }
+
+
+async def _desafios_activos_count() -> int:
+    try:
+        from src.services.comunidad import contar_desafios_activos_hoy
+
+        return await contar_desafios_activos_hoy()
+    except Exception:
+        return 0
 
 
 @app.post("/webhook")

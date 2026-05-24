@@ -1559,12 +1559,45 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ok = await inscribir_en_desafio(uid, slug)
         if ok:
             await q.edit_message_text(
-                f"Inscripto en <b>{slug}</b>. Usa /ranking para ver tu posicion."
+                f"Inscripto en el desafío. Usa /ranking para ver tu posición."
             )
         else:
             await q.edit_message_text(
-                "Ya estabas inscrito o el desafio no existe."
+                "Ya estabas inscrito o el desafío no está disponible."
             )
+        return
+
+    if q.data == "desafio_opt_in":
+        from src.services.comunidad import inscribir_en_desafio_cohorte, estado_desafio_usuario
+
+        ok = await inscribir_en_desafio_cohorte(uid)
+        if ok:
+            estado = await estado_desafio_usuario(uid)
+            if estado and estado.get("desafio"):
+                d = estado["desafio"]
+                await q.edit_message_text(
+                    f"<b>Desafíos activados</b>\n\n"
+                    f"Hoy: <b>{d.titulo}</b>\n"
+                    f"Meta: {d.meta_valor:.0f} ({d.metrica.replace('_', ' ')})\n\n"
+                    f"Usa /ranking para ver tu posición."
+                )
+            else:
+                await q.edit_message_text(
+                    "Desafíos activados. Te avisamos cuando haya reto en tu cohorte."
+                )
+        else:
+            await q.edit_message_text(
+                "No pude activar desafíos. Completa onboarding con /start primero."
+            )
+        return
+
+    if q.data == "desafio_opt_out":
+        from src.services.comunidad import desactivar_desafios
+
+        await desactivar_desafios(uid)
+        await q.edit_message_text(
+            "Desafíos diarios desactivados. Puedes volver con /desafios."
+        )
         return
 
     if q.data.startswith("pagar:"):
@@ -1730,6 +1763,9 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             [
                 InlineKeyboardButton("Borrar todo", callback_data="menu_borrar"),
             ],
+            [
+                InlineKeyboardButton("Desafíos diarios", callback_data="menu_desafios_config"),
+            ],
         ]
         await q.message.reply_text(
             "<b>Configuracion</b>",
@@ -1760,6 +1796,22 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if q.data == "menu_borrar":
         # Reutiliza borrar_datos (manda confirmacion).
         await borrar_datos(_FakeUpdate(q.message, q.from_user), ctx)
+        return
+    if q.data == "menu_desafios_config":
+        from src.services.comunidad import usuario_tiene_opt_in
+
+        if await usuario_tiene_opt_in(uid):
+            kb = [[InlineKeyboardButton("Desactivar desafíos", callback_data="desafio_opt_out")]]
+            await q.message.reply_text(
+                "<b>Desafíos diarios</b>: activados.\nUsa /desafios o /ranking.",
+                reply_markup=InlineKeyboardMarkup(kb),
+            )
+        else:
+            kb = [[InlineKeyboardButton("Activar desafíos", callback_data="desafio_opt_in")]]
+            await q.message.reply_text(
+                "<b>Desafíos diarios</b>: desactivados.\nCompite con tu cohorte (deporte + nivel + objetivo).",
+                reply_markup=InlineKeyboardMarkup(kb),
+            )
         return
     if q.data == "menu_recordatorios":
         await _procesar(
@@ -2478,27 +2530,71 @@ async def cmd_calma(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_desafios(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Lista desafios activos + boton inscribirse."""
-    from src.services.comunidad import listar_desafios_activos
+    """Desafío de cohorte del día + opt-in."""
+    from src.services.comunidad import (
+        estado_desafio_usuario,
+        listar_desafios_activos,
+        usuario_tiene_opt_in,
+    )
 
-    desafios = await listar_desafios_activos()
-    if not desafios:
+    uid = update.effective_user.id
+    opt_in = await usuario_tiene_opt_in(uid)
+
+    if not opt_in:
+        kb = [[InlineKeyboardButton("Activar desafíos diarios", callback_data="desafio_opt_in")]]
         await update.message.reply_text(
-            "No hay desafios activos ahora. Vuelve a chequear pronto!"
+            "<b>Desafíos de la comunidad</b>\n\n"
+            "Compite con personas de tu mismo deporte, nivel y objetivo. "
+            "Actívalos para recibir un reto diario y premios (freezes, reconocimiento).\n\n"
+            "Requiere opt-in explícito.",
+            reply_markup=InlineKeyboardMarkup(kb),
         )
         return
-    lineas = ["<b>Desafios activos:</b>"]
-    botones = []
-    for d in desafios[:10]:
-        lineas.append(f"- <b>{d.titulo}</b> ({d.tipo}) hasta {d.fecha_fin.isoformat()}")
+
+    estado = await estado_desafio_usuario(uid)
+    botones: list[list[InlineKeyboardButton]] = []
+
+    if estado and estado.get("desafio"):
+        d = estado["desafio"]
+        part = estado.get("participante")
+        valor = estado.get("valor", 0)
+        pos = estado.get("posicion")
+        lineas = [
+            "<b>Tu desafío de hoy</b>",
+            f"{d.titulo}",
+            f"Meta: <b>{d.meta_valor:.0f}</b> ({d.metrica.replace('_', ' ')})",
+            f"Tu progreso: <b>{valor:.0f}</b>",
+        ]
+        if pos:
+            lineas.append(f"Posición: <b>#{pos}</b>")
+        if not estado.get("inscrito"):
+            botones.append([
+                InlineKeyboardButton("Inscribirme hoy", callback_data=f"desafio_inscribir:{d.slug}"),
+            ])
+    else:
+        lineas = [
+            "<b>Desafíos activados</b>",
+            "Aún no hay desafío generado para tu cohorte hoy. "
+            "Se crea automáticamente cuando hay participantes opt-in.",
+        ]
+
+    otros = await listar_desafios_activos()
+    for d in otros[:5]:
+        if estado and estado.get("desafio") and d.id == estado["desafio"].id:
+            continue
         botones.append([
             InlineKeyboardButton(
-                f"Inscribirme: {d.titulo[:30]}",
+                f"Inscribir: {d.titulo[:28]}",
                 callback_data=f"desafio_inscribir:{d.slug}",
             )
         ])
+
+    botones.append([
+        InlineKeyboardButton("Desactivar desafíos", callback_data="desafio_opt_out"),
+    ])
     await update.message.reply_text(
-        "\n".join(lineas), reply_markup=InlineKeyboardMarkup(botones)
+        "\n".join(lineas),
+        reply_markup=InlineKeyboardMarkup(botones) if botones else None,
     )
 
 
@@ -2515,8 +2611,10 @@ async def cmd_ranking(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     lineas = ["<b>Tu posicion en desafios:</b>"]
     for p in posiciones:
+        meta_txt = f" / {p['meta']:.0f}" if p.get("meta") else ""
         lineas.append(
-            f"- <b>{p['desafio']}</b>: posicion <b>#{p['posicion']}</b> con valor {p['valor']:.0f}"
+            f"- <b>{p['desafio']}</b>: posicion <b>#{p['posicion']}</b> "
+            f"({p['valor']:.0f}{meta_txt})"
         )
     await update.message.reply_text("\n".join(lineas))
 

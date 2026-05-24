@@ -359,6 +359,21 @@ async def dispatch_tick(context) -> None:
         logger.exception("Error en dispatch_tick")
 
 
+async def desafios_generar_tick(context) -> None:
+    """Genera desafíos diarios por cohorte (Redis task o inline)."""
+    try:
+        if settings.use_redis_task_queue:
+            from src.tasks.scheduling import schedule_desafio_generar
+
+            await schedule_desafio_generar()
+        else:
+            from src.services.desafios.generador import generar_desafios_del_dia
+
+            await generar_desafios_del_dia()
+    except Exception:
+        logger.exception("Error en desafios_generar_tick")
+
+
 async def reconsent_militar_mensual(context) -> None:
     """Dia 1 de cada mes: pide reconfirmacion del modo militar a quienes lo tienen."""
     from src.db.models import TonoCoach as _Tono
@@ -588,6 +603,11 @@ def registrar_jobs(app: Application) -> None:
         first=5,
         name="task_dispatcher_tick",
     )
+    jq.run_daily(
+        desafios_generar_tick,
+        time=time(5, 30),
+        name="desafios_generar",
+    )
     jq.run_repeating(
         recordatorio_hidratacion,
         interval=2 * 3600,
@@ -616,5 +636,5 @@ def registrar_jobs(app: Application) -> None:
     logger.info(
         "Jobs registrados: escalation, dispatcher_tick, quiz_nocturno, quiz_sabado, "
         "checkin, peso_lunes, resumen_domingo, hidratacion_2h, reconsent_militar, "
-        "deportes, bootstrap_recordatorios"
+        "deportes, bootstrap_recordatorios, desafios_generar"
     )
