@@ -121,6 +121,11 @@ class _FakeUpdate:
         self.effective_chat = message.chat if message else None
         self.callback_query = None
 
+    @property
+    def effective_message(self):
+        """Compat con Update de PTB y con requiere_tier desde callbacks."""
+        return self.message
+
 
 # Mapa de etiquetas del reply keyboard -> prompts que el coach recibe.
 # Usamos prompts naturales para que el coach use las tools correctas.

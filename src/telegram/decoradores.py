@@ -46,7 +46,9 @@ def requiere_tier(minimo: PlanSuscripcion) -> Callable[[HandlerFn], HandlerFn]:
                 f"Plan actual: <b>{label_actual}</b>.\n\n"
                 "Mejora tu plan con /pagar"
             )
-            target = update.effective_message
+            target = getattr(update, "effective_message", None) or getattr(
+                update, "message", None
+            )
             if target is not None:
                 try:
                     await target.reply_text(mensaje)
