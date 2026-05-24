@@ -52,6 +52,7 @@ TOOL_INTENTS: dict[str, ToolIntent] = {
     "consultar_historial_peso": ToolIntent.READ,
     "consultar_compromiso": ToolIntent.READ,
     "listar_recordatorios": ToolIntent.READ,
+    "listar_tareas_programadas": ToolIntent.READ,
     "consultar_streak": ToolIntent.READ,
     "consultar_progreso_skill": ToolIntent.READ,
     "consultar_ultima_sesion_skill": ToolIntent.READ,

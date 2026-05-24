@@ -32,6 +32,8 @@ from src.db.models import (
     Usuario,
 )
 from src.db.repository import listar_usuarios_activos
+from src.config import settings
+from src.timezone_utils import fecha_hoy_usuario_model
 
 logger = logging.getLogger(__name__)
 
@@ -63,44 +65,64 @@ async def _usuarios_por_categoria(categoria: CategoriaDeporte) -> list[Usuario]:
     return [u for u in usuarios if u.categoria_deporte == categoria]
 
 
-async def recordar_sesion_skill(ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """L-S 10:00: para usuarios urbanos, recuerda sesion si no rodaron hoy.
+async def enviar_recordar_sesion_skill(bot, telegram_id: int) -> None:
+    """Recuerda sesion skill a un usuario urbano si no registro hoy."""
+    from src.services.proactive_limit import puede_enviar_proactivo, registrar_envio_proactivo
+    from src.db.repository import obtener_usuario
 
-    Solo dispara si el usuario es URBANO y NO tiene sesion skill registrada hoy.
-    """
+    if not await puede_enviar_proactivo(telegram_id):
+        return
+    u = await obtener_usuario(telegram_id)
+    if u is None or u.categoria_deporte != CategoriaDeporte.URBANO:
+        return
+    hoy = fecha_hoy_usuario_model(u)
+    if hoy.weekday() == 6:
+        return
+    async with async_session_factory() as session:
+        hay_sesion = await session.execute(
+            select(SesionEntrenamiento.id).where(
+                SesionEntrenamiento.usuario_id == u.id,
+                SesionEntrenamiento.fecha == hoy,
+                SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
+            ).limit(1)
+        )
+        if hay_sesion.scalar_one_or_none() is not None:
+            return
+    deporte = u.deporte_principal or "tu deporte"
+    texto = (
+        f"Hey <b>{u.nombre or 'crack'}</b>! Ya rodaste hoy de {deporte}? "
+        "Aun queda tiempo. Aunque sea 30 min en el spot mas cerca. "
+        "Cuando termines, cuentame que aterrizaste."
+    )
+    await _enviar(bot, telegram_id, texto, silent=False)
+    await registrar_envio_proactivo(telegram_id)
+
+
+async def recordar_sesion_skill(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """L-S 10:00: recuerda sesion skill a usuarios urbanos."""
     hoy = date.today()
     if hoy.weekday() == 6:
+        return
+    if settings.use_redis_task_queue:
+        try:
+            usuarios = await _usuarios_por_categoria(CategoriaDeporte.URBANO)
+            from src.tasks.scheduling import schedule_deporte_skill
+
+            for u in usuarios:
+                await schedule_deporte_skill(u.telegram_id)
+        except Exception:
+            logger.exception("Error programando deporte_skill Redis")
         return
     try:
         usuarios = await _usuarios_por_categoria(CategoriaDeporte.URBANO)
     except Exception:
         logger.exception("Error listando usuarios urbanos")
         return
-
-    if not usuarios:
-        return
-
-    async with async_session_factory() as session:
-        for u in usuarios:
-            try:
-                hay_sesion = await session.execute(
-                    select(SesionEntrenamiento.id).where(
-                        SesionEntrenamiento.usuario_id == u.id,
-                        SesionEntrenamiento.fecha == hoy,
-                        SesionEntrenamiento.subtipo == SubtipoSesion.SKILL,
-                    ).limit(1)
-                )
-                if hay_sesion.scalar_one_or_none() is not None:
-                    continue
-                deporte = u.deporte_principal or "tu deporte"
-                texto = (
-                    f"Hey <b>{u.nombre or 'crack'}</b>! Ya rodaste hoy de {deporte}? "
-                    "Aun queda tiempo. Aunque sea 30 min en el spot mas cerca. "
-                    "Cuando termines, cuentame que aterrizaste."
-                )
-                await _enviar(ctx.bot, u.telegram_id, texto, silent=False)
-            except Exception:
-                logger.exception("Error recordar_sesion_skill uid=%s", u.telegram_id)
+    for u in usuarios:
+        try:
+            await enviar_recordar_sesion_skill(ctx.bot, u.telegram_id)
+        except Exception:
+            logger.exception("Error recordar_sesion_skill uid=%s", u.telegram_id)
 
 
 async def _compromiso_con_fight_date(uid: int) -> tuple[Compromiso, date] | None:

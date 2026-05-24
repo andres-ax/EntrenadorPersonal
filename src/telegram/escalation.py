@@ -35,12 +35,16 @@ from src.db.models import (
 )
 from src.db.repository import (
     avanzar_escalacion,
+    count_auditoria_reciente,
     listar_usuarios_activos,
     log_evento,
     marcar_bot_bloqueado,
     obtener_o_crear_escalacion,
     reset_escalacion,
 )
+from src.config import settings
+from src.services.proactive_limit import puede_enviar_proactivo, registrar_envio_proactivo
+from src.timezone_utils import fecha_hoy_usuario, fecha_hoy_usuario_model
 
 logger = logging.getLogger(__name__)
 
@@ -359,12 +363,24 @@ def _proximo_envio_post_quiet(usuario: Usuario) -> datetime:
 
 
 async def _esta_pausado(usuario: Usuario) -> bool:
-    return usuario.pausado_hasta is not None and usuario.pausado_hasta >= date.today()
+    hoy = fecha_hoy_usuario_model(usuario)
+    return usuario.pausado_hasta is not None and usuario.pausado_hasta >= hoy
 
 
-async def _ya_cumplio_hoy(usuario_id: int, tipo_accion: str) -> bool:
-    """Chequea si ya hay registro de hoy del tipo de accion."""
-    hoy = date.today()
+async def _ya_cumplio_hoy(
+    usuario_id: int,
+    tipo_accion: str,
+    *,
+    telegram_id: int | None = None,
+    usuario: Usuario | None = None,
+) -> bool:
+    """Chequea si ya hay registro de hoy del tipo de accion (timezone usuario)."""
+    if usuario is not None:
+        hoy = fecha_hoy_usuario_model(usuario)
+    elif telegram_id is not None:
+        hoy = await fecha_hoy_usuario(telegram_id)
+    else:
+        hoy = date.today()
     async with async_session_factory() as session:
         if tipo_accion == "entreno":
             query = select(func.count(SesionEntrenamiento.id)).where(
@@ -393,8 +409,19 @@ async def _ya_cumplio_hoy(usuario_id: int, tipo_accion: str) -> bool:
         return (result.scalar() or 0) > 0
 
 
-async def _dias_consecutivos_sin(usuario_id: int, tipo_accion: str) -> int:
-    """Aprox: distancia en dias desde el ultimo registro de ese tipo."""
+async def _dias_consecutivos_sin(
+    usuario_id: int,
+    tipo_accion: str,
+    telegram_id: int | None = None,
+    usuario: Usuario | None = None,
+) -> int:
+    """Distancia en dias desde el ultimo registro de ese tipo."""
+    if usuario is not None:
+        hoy = fecha_hoy_usuario_model(usuario)
+    elif telegram_id is not None:
+        hoy = await fecha_hoy_usuario(telegram_id)
+    else:
+        hoy = date.today()
     async with async_session_factory() as session:
         if tipo_accion == "entreno":
             query = select(func.max(SesionEntrenamiento.fecha)).where(
@@ -416,7 +443,20 @@ async def _dias_consecutivos_sin(usuario_id: int, tipo_accion: str) -> int:
         ultima = result.scalar()
         if ultima is None:
             return 999
-        return (date.today() - ultima).days
+        return (hoy - ultima).days
+
+
+async def _usuario_debe_escalarse(u: Usuario) -> bool:
+    """No escalar inactivos (0 turnos 14d) ni tipos con 30+ dias sin registro."""
+    turnos = await count_auditoria_reciente(u.telegram_id, 14)
+    if turnos == 0:
+        return False
+    return True
+
+
+async def _tipo_debe_escalarse(u: Usuario, tipo: str) -> bool:
+    dias = await _dias_consecutivos_sin(u.id, tipo, telegram_id=u.telegram_id, usuario=u)
+    return dias < 30
 
 
 _COPY_POR_LANG: dict[str, dict[str, dict[str, list[str]]]] = {
@@ -458,66 +498,113 @@ def _formatear_copy(
     return texto
 
 
-async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Callback ejecutado por JobQueue: lee state, decide level, envia y agenda siguiente."""
-    data = ctx.job.data or {}
-    uid: int = data["uid"]
-    tipo_accion: str = data.get("tipo_accion", "entreno")
+async def _construir_digest(u: Usuario) -> str | None:
+    """Un solo mensaje matutino con checklist pendiente."""
+    pendientes: list[str] = []
+    labels = {
+        "entreno": "Entreno",
+        "comida": "Comida",
+        "sueno": "Sueno",
+    }
+    for tipo, label in labels.items():
+        if not await _ya_cumplio_hoy(u.id, tipo, usuario=u):
+            pendientes.append(label)
+    if not pendientes:
+        return None
+    nombre = u.nombre or "crack"
+    checklist = "\n".join(f"- {p}: pendiente" for p in pendientes)
+    return (
+        f"Buenos dias <b>{nombre}</b>! Checklist del dia:\n{checklist}\n\n"
+        "Cuentame que llevas (entreno, comidas, horas de sueno)."
+    )
 
+
+async def enviar_digest_matutino(bot, uid: int) -> None:
+    """Envia digest unico (nivel 1) si hay pendientes y cap lo permite."""
     async with async_session_factory() as session:
         u = (
-            await session.execute(
-                select(Usuario).where(Usuario.telegram_id == uid)
-            )
+            await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
+        ).scalar_one_or_none()
+    if u is None or u.bot_bloqueado or not u.onboarding_completo:
+        return
+    if await _esta_pausado(u) or not await _usuario_debe_escalarse(u):
+        return
+    if not await puede_enviar_proactivo(uid):
+        return
+    if await _en_quiet_hours(u):
+        return
+    texto = await _construir_digest(u)
+    if not texto:
+        return
+    try:
+        await bot.send_message(chat_id=uid, text=texto, parse_mode=ParseMode.HTML, disable_notification=True)
+        await registrar_envio_proactivo(uid)
+        for tipo in ("entreno", "comida", "sueno"):
+            if not await _ya_cumplio_hoy(u.id, tipo, usuario=u):
+                await obtener_o_crear_escalacion(uid, tipo)
+                await avanzar_escalacion(uid, tipo, mensaje_id=None)
+        await log_evento(uid, "digest_matutino", {"pendientes": True})
+    except telegram.error.Forbidden:
+        await marcar_bot_bloqueado(uid, True)
+    except Exception:
+        logger.exception("Error enviando digest uid=%s", uid)
+
+
+async def ejecutar_escalacion(
+    bot,
+    uid: int,
+    tipo_accion: str,
+    *,
+    target_level: int | None = None,
+    freq: int = 3,
+    streak: int = 0,
+    job_queue=None,
+) -> None:
+    """Core escalacion: level 2+ o digest ignorado. Programa siguiente via Redis o JobQueue."""
+    async with async_session_factory() as session:
+        u = (
+            await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
         ).scalar_one_or_none()
 
     if u is None or u.bot_bloqueado or not u.onboarding_completo:
         return
-
-    if await _esta_pausado(u):
-        logger.info("uid=%s pausado, salto escalado", uid)
+    if await _esta_pausado(u) or not await _usuario_debe_escalarse(u):
+        return
+    if not await _tipo_debe_escalarse(u, tipo_accion):
         return
 
-    if await _ya_cumplio_hoy(u.id, tipo_accion):
+    if await _ya_cumplio_hoy(u.id, tipo_accion, usuario=u):
         await reset_escalacion(uid, tipo_accion)
-        logger.info("uid=%s ya cumplio %s, reset escalado", uid, tipo_accion)
         return
 
     estado = await obtener_o_crear_escalacion(uid, tipo_accion)
+    next_level = target_level if target_level is not None else min(estado.level + 1, MAX_LEVEL)
 
-    if estado.mensajes_enviados_hoy >= MAX_MENSAJES_DIA:
-        logger.info("uid=%s techo diario %s alcanzado", uid, tipo_accion)
+    if next_level <= 1:
         return
 
-    next_level = min(estado.level + 1, MAX_LEVEL)
+    if not await puede_enviar_proactivo(uid):
+        return
+
+    if estado.mensajes_enviados_hoy >= MAX_MENSAJES_DIA:
+        return
 
     if estado.ultimo_envio is not None and next_level >= 3:
         delta = datetime.utcnow() - estado.ultimo_envio
         if delta < timedelta(hours=COOLDOWN_HARD_HOURS):
             faltan = timedelta(hours=COOLDOWN_HARD_HOURS) - delta
-            ctx.job_queue.run_once(
-                recordatorio_escalado,
-                when=faltan,
-                data=data,
-                name=f"escalado_{uid}_{tipo_accion}_{next_level}",
-            )
+            await _reprogramar_escalacion(uid, tipo_accion, next_level, faltan, freq, streak, job_queue)
             return
 
     if await _en_quiet_hours(u):
         proximo = _proximo_envio_post_quiet(u)
-        ctx.job_queue.run_once(
-            recordatorio_escalado,
-            when=proximo,
-            data=data,
-            name=f"escalado_{uid}_{tipo_accion}_{next_level}",
-        )
+        when = proximo - datetime.now(ZoneInfo(u.timezone or "America/Bogota"))
+        await _reprogramar_escalacion(uid, tipo_accion, next_level, when, freq, streak, job_queue)
         return
 
     tono = u.tono.value if u.tono else TonoCoach.FIRME.value
-    dias = await _dias_consecutivos_sin(u.id, tipo_accion)
-    streak = data.get("streak", 0)
+    dias = await _dias_consecutivos_sin(u.id, tipo_accion, telegram_id=uid, usuario=u)
     objetivo = u.objetivo or "tu objetivo"
-    freq = data.get("freq", u.dias_entreno or 3)
 
     texto = _formatear_copy(
         nombre=u.nombre,
@@ -534,52 +621,38 @@ async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     silent = next_level <= 1
     try:
+        mensaje_id = None
         if next_level >= 3 and tono in ("firme", "militar"):
             from src.db.repository import es_usuario_pro
             from src.services.tts import enviar_voz
 
             es_pro = await es_usuario_pro(uid)
-            voz_ok = False
-            if es_pro:
-                voz_ok = await enviar_voz(
-                    ctx.bot, uid, texto.replace("<b>", "").replace("</b>", "")
-                                       .replace("<i>", "").replace("</i>", ""),
-                    tono=tono,
-                )
-            if not voz_ok:
-                msg = await ctx.bot.send_message(
-                    chat_id=uid,
-                    text=texto,
-                    parse_mode=ParseMode.HTML,
-                    disable_notification=silent,
+            if es_pro and await enviar_voz(
+                bot, uid, texto.replace("<b>", "").replace("</b>", "")
+                                   .replace("<i>", "").replace("</i>", ""),
+                tono=tono,
+            ):
+                mensaje_id = None
+            else:
+                msg = await bot.send_message(
+                    chat_id=uid, text=texto, parse_mode=ParseMode.HTML, disable_notification=silent,
                 )
                 mensaje_id = msg.message_id
-            else:
-                mensaje_id = None
         else:
-            msg = await ctx.bot.send_message(
-                chat_id=uid,
-                text=texto,
-                parse_mode=ParseMode.HTML,
-                disable_notification=silent,
+            msg = await bot.send_message(
+                chat_id=uid, text=texto, parse_mode=ParseMode.HTML, disable_notification=silent,
             )
             mensaje_id = msg.message_id
         await avanzar_escalacion(uid, tipo_accion, mensaje_id=mensaje_id)
-        await log_evento(
-            uid,
-            f"escalado_{tipo_accion}",
-            {"level": next_level, "tono": tono, "dias": dias},
-        )
+        await registrar_envio_proactivo(uid)
+        await log_evento(uid, f"escalado_{tipo_accion}", {"level": next_level, "tono": tono, "dias": dias})
     except telegram.error.Forbidden:
         await marcar_bot_bloqueado(uid, True)
-        logger.info("Bot bloqueado por %s, marcado en DB", uid)
         return
     except telegram.error.RetryAfter as e:
-        ctx.job_queue.run_once(
-            recordatorio_escalado,
-            when=timedelta(seconds=e.retry_after + 1),
-            data=data,
-            name=f"escalado_{uid}_{tipo_accion}_{next_level}_retry",
+        await _reprogramar_escalacion(
+            uid, tipo_accion, next_level,
+            timedelta(seconds=e.retry_after + 1), freq, streak, job_queue,
         )
         return
     except Exception:
@@ -588,19 +661,77 @@ async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if next_level < MAX_LEVEL:
         offset_h = OFFSET_POR_LEVEL.get(next_level, 4)
-        ctx.job_queue.run_once(
-            recordatorio_escalado,
-            when=timedelta(hours=offset_h),
-            data=data,
-            name=f"escalado_{uid}_{tipo_accion}_{next_level + 1}",
+        await _reprogramar_escalacion(
+            uid, tipo_accion, next_level + 1,
+            timedelta(hours=offset_h), freq, streak, job_queue,
         )
 
 
-async def disparar_escalado_inicial(ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Job 8am: para cada usuario activo, arranca cadena nivel 1 si toca.
+async def _reprogramar_escalacion(
+    uid: int,
+    tipo_accion: str,
+    level: int,
+    when: timedelta,
+    freq: int,
+    streak: int,
+    job_queue,
+) -> None:
+    if settings.use_redis_task_queue:
+        from src.tasks.queue import schedule_task
+        from src.timezone_utils import fecha_hoy_usuario, tz_usuario
 
-    Llamado desde scheduler.recordatorio_entreno como reemplazo del envio directo.
-    """
+        tz = await tz_usuario(uid)
+        run_at = datetime.now(tz) + when
+        hoy = await fecha_hoy_usuario(uid)
+        idem = f"escalacion:{uid}:{tipo_accion}:{hoy.isoformat()}:L{level}"
+        await schedule_task(
+            task_type="escalacion",
+            telegram_id=uid,
+            run_at=run_at,
+            payload={
+                "tipo_accion": tipo_accion,
+                "level": level,
+                "freq": freq,
+                "streak": streak,
+            },
+            timezone_name=str(tz),
+            idempotency_key=idem,
+            created_by="system",
+        )
+    elif job_queue is not None:
+        job_queue.run_once(
+            recordatorio_escalado,
+            when=when,
+            data={
+                "uid": uid,
+                "tipo_accion": tipo_accion,
+                "freq": freq,
+                "streak": streak,
+                "level": level,
+            },
+            name=f"escalado_{uid}_{tipo_accion}_{level}",
+        )
+
+
+async def recordatorio_escalado(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Callback JobQueue legacy: delega a ejecutar_escalacion."""
+    data = ctx.job.data or {}
+    uid: int = data["uid"]
+    tipo_accion: str = data.get("tipo_accion", "entreno")
+    level = data.get("level")
+    await ejecutar_escalacion(
+        ctx.bot,
+        uid,
+        tipo_accion,
+        target_level=level,
+        freq=data.get("freq", 3),
+        streak=data.get("streak", 0),
+        job_queue=ctx.job_queue,
+    )
+
+
+async def disparar_escalado_inicial(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Job 8am: digest matutino unico por usuario (no fan-out x3)."""
     try:
         usuarios = await listar_usuarios_activos()
     except Exception:
@@ -608,47 +739,41 @@ async def disparar_escalado_inicial(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     for u in usuarios:
-        for tipo in ("entreno", "comida", "sueno"):
-            if await _ya_cumplio_hoy(u.id, tipo):
-                continue
-            existing_name = f"escalado_{u.telegram_id}_{tipo}_1"
-            for job in ctx.job_queue.get_jobs_by_name(existing_name):
-                job.schedule_removal()
-            ctx.job_queue.run_once(
-                recordatorio_escalado,
-                when=timedelta(seconds=1),
-                data={"uid": u.telegram_id, "tipo_accion": tipo, "freq": u.dias_entreno or 3},
-                name=f"escalado_{u.telegram_id}_{tipo}_1",
-            )
+        if not await _usuario_debe_escalarse(u):
+            continue
+        if settings.use_redis_task_queue:
+            from src.tasks.scheduling import schedule_digest_matutino
+            from src.timezone_utils import tz_usuario
+
+            tz = await tz_usuario(u.telegram_id)
+            when = datetime.now(tz) + timedelta(seconds=2)
+            await schedule_digest_matutino(u.telegram_id, when=when)
+        else:
+            await enviar_digest_matutino(ctx.bot, u.telegram_id)
 
 
 async def cancelar_escalado_hoy(
     uid: int, ctx: ContextTypes.DEFAULT_TYPE, tipo_accion: Optional[str] = None
 ) -> int:
-    """Cancela todos los jobs de escalation de hoy para el usuario.
-
-    Llamado desde el handler cuando el usuario confirma una accion.
-
-    Args:
-        uid: telegram_id del usuario.
-        ctx: contexto con ctx.job_queue.
-        tipo_accion: si None, cancela todos los tipos.
-
-    Returns:
-        Numero de jobs cancelados.
-    """
+    """Cancela jobs/tareas de escalation de hoy para el usuario."""
     cancelados = 0
+    if settings.use_redis_task_queue:
+        from src.tasks.queue import cancel_tasks
+
+        cancelados += await cancel_tasks(uid, task_type="digest_matutino")
+        cancelados += await cancel_tasks(uid, task_type="escalacion")
     tipos = [tipo_accion] if tipo_accion else ["entreno", "comida", "sueno", "peso"]
-    for tipo in tipos:
-        for level in range(1, MAX_LEVEL + 1):
-            nombre = f"escalado_{uid}_{tipo}_{level}"
-            for job in ctx.job_queue.get_jobs_by_name(nombre):
-                job.schedule_removal()
-                cancelados += 1
+    if ctx is not None and ctx.job_queue is not None:
+        for tipo in tipos:
+            for level in range(1, MAX_LEVEL + 1):
+                nombre = f"escalado_{uid}_{tipo}_{level}"
+                for job in ctx.job_queue.get_jobs_by_name(nombre):
+                    job.schedule_removal()
+                    cancelados += 1
     if cancelados:
         await reset_escalacion(uid, tipo_accion)
         logger.info(
-            "Cancelados %s jobs de escalado para uid=%s tipo=%s",
+            "Cancelados %s escalaciones para uid=%s tipo=%s",
             cancelados,
             uid,
             tipo_accion or "all",

@@ -166,7 +166,8 @@ async def marcar_bot_bloqueado(telegram_id: int, bloqueado: bool = True) -> None
 
 async def listar_usuarios_activos() -> list[Usuario]:
     """Usuarios con onboarding completo y bot no bloqueado y no pausados hoy."""
-    hoy = date.today()
+    from src.timezone_utils import fecha_hoy_usuario_model
+
     async with async_session_factory() as session:
         result = await session.execute(
             select(Usuario).where(
@@ -175,7 +176,12 @@ async def listar_usuarios_activos() -> list[Usuario]:
             )
         )
         usuarios = list(result.scalars().all())
-        return [u for u in usuarios if u.pausado_hasta is None or u.pausado_hasta < hoy]
+        return [
+            u
+            for u in usuarios
+            if u.pausado_hasta is None
+            or u.pausado_hasta < fecha_hoy_usuario_model(u)
+        ]
 
 
 # --- Sesiones de Entrenamiento ---
@@ -825,7 +831,9 @@ async def incrementar_citado_compromiso(compromiso_id: int) -> None:
 async def obtener_o_crear_escalacion(
     telegram_id: int, tipo_accion: str = "entreno"
 ) -> EscalacionState:
-    hoy = date.today()
+    from src.timezone_utils import fecha_hoy_usuario
+
+    hoy = await fecha_hoy_usuario(telegram_id)
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -856,7 +864,9 @@ async def avanzar_escalacion(
     telegram_id: int, tipo_accion: str, mensaje_id: Optional[int] = None
 ) -> EscalacionState:
     """Sube level +1, incrementa contador, persiste timestamp."""
-    hoy = date.today()
+    from src.timezone_utils import fecha_hoy_usuario
+
+    hoy = await fecha_hoy_usuario(telegram_id)
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -893,7 +903,9 @@ async def avanzar_escalacion(
 
 async def reset_escalacion(telegram_id: int, tipo_accion: Optional[str] = None) -> int:
     """Reset al level 0 (despues de que el user cumple). Devuelve N filas afectadas."""
-    hoy = date.today()
+    from src.timezone_utils import fecha_hoy_usuario
+
+    hoy = await fecha_hoy_usuario(telegram_id)
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -2271,7 +2283,7 @@ async def crear_recordatorio(
     fecha_unica: Optional[date] = None,
     tz: Optional[str] = None,
 ) -> Optional[Recordatorio]:
-    """Crea un recordatorio one-shot o recurrente. Devuelve el modelo persistido."""
+    """Crea o reactiva recordatorio one-shot/recurrente (dedup activos)."""
     async with async_session_factory() as session:
         result = await session.execute(
             select(Usuario).where(Usuario.telegram_id == telegram_id)
@@ -2279,10 +2291,27 @@ async def crear_recordatorio(
         usuario = result.scalar_one_or_none()
         if usuario is None:
             return None
+        msg_norm = mensaje[:500].strip()
+        existente = await session.execute(
+            select(Recordatorio).where(
+                Recordatorio.usuario_id == usuario.id,
+                Recordatorio.hora == hora,
+                Recordatorio.mensaje == msg_norm,
+                Recordatorio.activo.is_(True),
+            )
+        )
+        prev = existente.scalar_one_or_none()
+        if prev is not None:
+            prev.dias_semana = (dias_semana or "").strip()
+            prev.fecha_unica = fecha_unica
+            prev.tz = tz or usuario.timezone or "America/Bogota"
+            await session.commit()
+            await session.refresh(prev)
+            return prev
         rec = Recordatorio(
             usuario_id=usuario.id,
             telegram_id=telegram_id,
-            mensaje=mensaje[:500],
+            mensaje=msg_norm,
             hora=hora,
             dias_semana=(dias_semana or "").strip(),
             fecha_unica=fecha_unica,
@@ -2293,6 +2322,21 @@ async def crear_recordatorio(
         await session.commit()
         await session.refresh(rec)
         return rec
+
+
+async def count_auditoria_reciente(telegram_id: int, dias: int = 14) -> int:
+    """Turnos de auditoría en los últimos N días (actividad conversacional)."""
+    from src.db.models import AuditoriaTurno
+
+    desde = datetime.utcnow() - timedelta(days=dias)
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(func.count(AuditoriaTurno.id)).where(
+                AuditoriaTurno.telegram_id == telegram_id,
+                AuditoriaTurno.creado_en >= desde,
+            )
+        )
+        return int(result.scalar() or 0)
 
 
 async def listar_recordatorios(
@@ -2334,19 +2378,21 @@ async def desactivar_recordatorio(recordatorio_id: int, telegram_id: int) -> boo
         return True
 
 
-async def marcar_recordatorio_enviado(recordatorio_id: int) -> None:
-    """Actualiza `ultimo_envio` y, si es one-shot, lo desactiva."""
+async def marcar_recordatorio_enviado(recordatorio_id: int) -> Recordatorio | None:
+    """Actualiza `ultimo_envio` y, si es one-shot, lo desactiva. Devuelve el modelo."""
     async with async_session_factory() as session:
         result = await session.execute(
             select(Recordatorio).where(Recordatorio.id == recordatorio_id)
         )
         rec = result.scalar_one_or_none()
         if rec is None:
-            return
+            return None
         rec.ultimo_envio = datetime.utcnow()
         if rec.fecha_unica is not None and not rec.dias_semana:
             rec.activo = False
         await session.commit()
+        await session.refresh(rec)
+        return rec
 
 
 # ============================================================================

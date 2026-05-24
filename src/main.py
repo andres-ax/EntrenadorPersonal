@@ -346,12 +346,21 @@ app.include_router(landing_router)
 
 @app.get("/health")
 async def health() -> dict:
+    from src.tasks.queue import count_overdue
+
     bot_ok = telegram_app is not None and telegram_app.running
     db_ok = await ping_db()
     redis_ok = await ping_redis()
+    overdue = 0
+    if redis_ok and settings.use_redis_task_queue:
+        try:
+            overdue = await count_overdue()
+        except Exception:
+            pass
     status_ok = bot_ok and db_ok and redis_ok
     return {
         "status": "ok" if status_ok else "degraded",
+        "tasks_overdue": overdue,
     }
 
 

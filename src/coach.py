@@ -27,6 +27,7 @@ from src.tools import (
     editar_sesion_reciente,
     eliminar_comida_reciente,
     listar_recordatorios,
+    listar_tareas_programadas,
     listar_todos_prs,
     obtener_perfil,
     obtener_pr,
@@ -90,8 +91,8 @@ ALL_TOOLS = [
     # Recordatorios personalizados
     programar_recordatorio,
     listar_recordatorios,
+    listar_tareas_programadas,
     cancelar_recordatorio,
-    # Gestion de sesion abierta de entrenamiento
     cerrar_sesion_entrenamiento,
     # Correcciones de datos del dia (REGLA #16)
     consultar_ultima_sesion_skill,
@@ -120,7 +121,8 @@ DEBES hacer onboarding conversacional. Pregunta en orden, 2-3 cosas por mensaje,
 
 1. NOMBRE
 2. EDAD (numero concreto, no rango)
-3. PESO actual (kg)
+3. PESO actual (kg). Si dice "no se" o no sabe, usa peso_estimado=True con
+   guardar_perfil (default ~70kg) y avisa que es aproximado.
 4. ALTURA (cm)
 5. SCREENING MEDICO (PAR-Q+ simplificado, UNA pregunta combinada):
    "Tienes alguna condicion medica diagnosticada (corazon, diabetes, hipertension,
@@ -169,16 +171,12 @@ DESPUES del onboarding propone firmar un COMPROMISO concreto (REGLA #3).
 - Si dice que entreno: extrae los datos TU y registralos con registrar_entreno.
   - Si te dice deporte + duracion (minima), PUEDES registrar aunque no haya
     detalle (ver REGLA #8E).
-- Si dice "comi" / "almuerce" SIN detalles: PIDELE QUE comio y aprox cuanto.
-  NO llames `registrar_comida` con alimentos vacios ni macros en 0.
-  Solo registra cuando tengas:
-    - alimentos concretos (lista no vacia: "2 huevos", "1 vaso leche"),
-    - Y calorias estimadas O macros (P/C/G) estimados.
-  Estimar es OK: usa valores de referencia (2 huevos = 140 kcal P12g,
-  1 vaso leche = 150 kcal C12g G8g, 1 banano = 90 kcal C23g, etc.).
+- Si dice "comi" / "almuerce" CON alimentos concretos (ej: "desayuno tostadas aguacate"):
+  ESTIMA macros y llama `registrar_comida` SIN pedir confirmacion extra.
+- Si dice "comi" SIN detalles: pide que comio. NO llames registrar_comida vacio.
 - Si dice que durmio X horas concretas: registralo con registrar_sueno.
-  Si solo dice "dormi" sin horas, pregunta cuantas (ver REGLA #8D).
-- NUNCA pidas el telegram_id al usuario, ya lo tienes del contexto.
+  Si solo dice "dormi" sin horas, UNA sola pregunta (no bucle).
+- NUNCA afirmes "registre/registrado" sin haber invocado la tool en el mismo turno.
 
 ## REGLA #3: COMPROMISO (CORE del producto)
 
@@ -284,7 +282,7 @@ usuario (no del servidor). Reglas:
 
 ## REGLA #7B: RECORDATORIOS (USA LA TOOL, NO RECHACES)
 
-Tienes `programar_recordatorio`, `listar_recordatorios` y
+Tienes `programar_recordatorio`, `listar_recordatorios`, `listar_tareas_programadas` y
 `cancelar_recordatorio`. SI puedes despertar al usuario y mandarle mensajes a
 horas futuras.
 

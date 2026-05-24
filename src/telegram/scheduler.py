@@ -90,7 +90,8 @@ async def _broadcast(
     return len(pares)
 
 
-async def _dias_sin_entrenar(usuario_id: int) -> int:
+async def _dias_sin_entrenar(usuario_id: int, u: Usuario | None = None) -> int:
+    hoy = fecha_hoy_usuario_model(u) if u else date.today()
     async with async_session_factory() as session:
         result = await session.execute(
             select(func.max(SesionEntrenamiento.fecha)).where(
@@ -100,10 +101,11 @@ async def _dias_sin_entrenar(usuario_id: int) -> int:
         ultima_fecha = result.scalar()
         if ultima_fecha is None:
             return 999
-        return (date.today() - ultima_fecha).days
+        return (hoy - ultima_fecha).days
 
 
-async def _dias_sin_pesarse(usuario_id: int) -> int:
+async def _dias_sin_pesarse(usuario_id: int, u: Usuario | None = None) -> int:
+    hoy = fecha_hoy_usuario_model(u) if u else date.today()
     async with async_session_factory() as session:
         result = await session.execute(
             select(func.max(MetricaCorporal.fecha)).where(
@@ -113,39 +115,43 @@ async def _dias_sin_pesarse(usuario_id: int) -> int:
         ultima_fecha = result.scalar()
         if ultima_fecha is None:
             return 999
-        return (date.today() - ultima_fecha).days
+        return (hoy - ultima_fecha).days
 
 
-async def _registro_sueno_hoy(usuario_id: int) -> bool:
+async def _registro_sueno_hoy(usuario_id: int, u: Usuario | None = None) -> bool:
+    hoy = fecha_hoy_usuario_model(u) if u else date.today()
     async with async_session_factory() as session:
         result = await session.execute(
             select(func.count(MetricaSueno.id)).where(
                 MetricaSueno.usuario_id == usuario_id,
-                MetricaSueno.fecha == date.today(),
+                MetricaSueno.fecha == hoy,
             )
         )
         return (result.scalar() or 0) > 0
 
 
-async def _registro_comida_hoy(usuario_id: int, tipo_comida: str = "almuerzo") -> bool:
-    """Verifica si registro un TIPO especifico de comida hoy (fix del bug previo)."""
+async def _registro_comida_hoy(
+    usuario_id: int, tipo_comida: str = "almuerzo", u: Usuario | None = None
+) -> bool:
+    hoy = fecha_hoy_usuario_model(u) if u else date.today()
     async with async_session_factory() as session:
         result = await session.execute(
             select(func.count(Comida.id)).where(
                 Comida.usuario_id == usuario_id,
-                Comida.fecha == date.today(),
+                Comida.fecha == hoy,
                 Comida.tipo == TipoComida(tipo_comida),
             )
         )
         return (result.scalar() or 0) > 0
 
 
-async def _entreno_hoy(usuario_id: int) -> bool:
+async def _entreno_hoy(usuario_id: int, u: Usuario | None = None) -> bool:
+    hoy = fecha_hoy_usuario_model(u) if u else date.today()
     async with async_session_factory() as session:
         result = await session.execute(
             select(func.count(SesionEntrenamiento.id)).where(
                 SesionEntrenamiento.usuario_id == usuario_id,
-                SesionEntrenamiento.fecha == date.today(),
+                SesionEntrenamiento.fecha == hoy,
             )
         )
         return (result.scalar() or 0) > 0
@@ -166,7 +172,7 @@ async def recordatorio_peso(context) -> None:
     """Semanal lunes: avisa si llevan 7+ dias sin pesarse."""
 
     async def _build(u: Usuario) -> str | None:
-        dias = await _dias_sin_pesarse(u.id)
+        dias = await _dias_sin_pesarse(u.id, u)
         if dias < 7:
             return None
         return (
@@ -216,7 +222,7 @@ async def recordatorio_sueno(context) -> None:
     """Diario 9am: pregunta como durmio si no registro sueno."""
 
     async def _build(u: Usuario) -> str | None:
-        if await _registro_sueno_hoy(u.id):
+        if await _registro_sueno_hoy(u.id, u):
             return None
         return (
             f"Buenos dias <b>{u.nombre or 'crack'}</b>! Como dormiste anoche? "
@@ -234,7 +240,7 @@ async def recordatorio_comida(context) -> None:
     """Diario 2pm: pregunta que almorzo si no registro."""
 
     async def _build(u: Usuario) -> str | None:
-        if await _registro_comida_hoy(u.id, "almuerzo"):
+        if await _registro_comida_hoy(u.id, "almuerzo", u):
             return None
         return (
             f"Hey <b>{u.nombre or 'crack'}</b>! Que almorzaste hoy? "
@@ -253,9 +259,9 @@ async def checkin_nocturno(context) -> None:
 
     async def _build(u: Usuario) -> str | None:
         partes = []
-        if not await _entreno_hoy(u.id):
+        if not await _entreno_hoy(u.id, u):
             partes.append("no registraste entreno hoy")
-        if not await _registro_comida_hoy(u.id, "cena"):
+        if not await _registro_comida_hoy(u.id, "cena", u):
             partes.append("tampoco cena")
 
         if partes:
@@ -277,36 +283,78 @@ async def checkin_nocturno(context) -> None:
         logger.exception("Error en checkin_nocturno")
 
 
-async def recordatorio_hidratacion(context) -> None:
-    """Cada 2h en horas activas: avisa si va atras del objetivo."""
+async def enviar_recordatorio_hidratacion_usuario(bot, telegram_id: int) -> None:
+    """Envia recordatorio de agua a un usuario si aplica (cap + dedup + objetivo)."""
     from src.services.hidratacion import consumo_hoy_ml, objetivo_ml
+    from src.services.proactive_limit import (
+        hidratacion_enviada_reciente,
+        marcar_hidratacion_enviada,
+        puede_enviar_proactivo,
+        registrar_envio_proactivo,
+    )
+    from src.db.repository import obtener_usuario
 
-    async def _build(u: Usuario) -> str | None:
-        consumido = await consumo_hoy_ml(u.telegram_id)
-        objetivo = await objetivo_ml(u.telegram_id)
-        if objetivo <= 0:
-            return None
-        pct = consumido / objetivo
-        from datetime import datetime as _dt
-        from zoneinfo import ZoneInfo as _ZI
+    u = await obtener_usuario(telegram_id)
+    if u is None:
+        return
+    if not await puede_enviar_proactivo(telegram_id):
+        return
+    if await hidratacion_enviada_reciente(telegram_id):
+        return
+    consumido = await consumo_hoy_ml(telegram_id)
+    objetivo = await objetivo_ml(telegram_id)
+    if objetivo <= 0 or consumido >= objetivo * 0.85:
+        return
+    ahora = datetime.now(ZoneInfo(u.timezone or "America/Bogota"))
+    if ahora.hour < 8 or ahora.hour >= 21:
+        return
+    horas_dia = max(1, ahora.hour - 7)
+    pct = consumido / objetivo
+    pct_esperado = horas_dia / 13
+    if pct >= pct_esperado * 0.85:
+        return
+    texto = (
+        f"<b>{u.nombre or 'Crack'}</b>, vas en {consumido}ml de "
+        f"{objetivo}ml. Tomate <b>500ml</b> de agua."
+    )
+    await _enviar_safe(bot, telegram_id, texto, silent=True)
+    await registrar_envio_proactivo(telegram_id)
+    await marcar_hidratacion_enviada(telegram_id)
 
-        ahora = _dt.now(_ZI(u.timezone or "America/Bogota"))
-        if ahora.hour < 8 or ahora.hour >= 21:
-            return None
-        horas_dia = max(1, ahora.hour - 7)
-        pct_esperado = horas_dia / 13
-        if pct >= pct_esperado * 0.85:
-            return None
-        return (
-            f"<b>{u.nombre or 'Crack'}</b>, vas en {consumido}ml de "
-            f"{objetivo}ml. Tomate <b>500ml</b> de agua."
-        )
+
+async def recordatorio_hidratacion(context) -> None:
+    """Cada 2h: programa tareas Redis o envia inline segun flag."""
+    if settings.use_redis_task_queue:
+        try:
+            usuarios = await listar_usuarios_activos()
+            from src.tasks.scheduling import schedule_hidratacion
+
+            for u in usuarios:
+                await schedule_hidratacion(u.telegram_id, offset_minutes=1)
+        except Exception:
+            logger.exception("Error programando hidratacion Redis")
+        return
 
     try:
         usuarios = await listar_usuarios_activos()
-        await _broadcast(context.bot, usuarios, _build, silent=True)
+        for u in usuarios:
+            await enviar_recordatorio_hidratacion_usuario(context.bot, u.telegram_id)
     except Exception:
         logger.exception("Error en recordatorio_hidratacion")
+
+
+async def dispatch_tick(context) -> None:
+    """Tick cada 30s: dispatcher Redis."""
+    if not settings.use_redis_task_queue:
+        return
+    try:
+        from src.tasks.dispatcher import dispatch_due_tasks
+
+        n = await dispatch_due_tasks(context.bot)
+        if n:
+            logger.debug("Dispatcher procesó %d tareas", n)
+    except Exception:
+        logger.exception("Error en dispatch_tick")
 
 
 async def reconsent_militar_mensual(context) -> None:
@@ -459,7 +507,11 @@ def cancelar_recordatorio_jobs(app: Application, recordatorio_id: int) -> int:
 
 
 async def _cargar_recordatorios_db(app: Application) -> int:
-    """Lee todos los recordatorios activos y los registra en el JobQueue."""
+    """Lee recordatorios activos y los registra en Redis o JobQueue."""
+    if settings.use_redis_task_queue:
+        from src.tasks.rehydrate import rehydrate_tasks_from_db
+
+        return await rehydrate_tasks_from_db()
     try:
         recordatorios = await listar_recordatorios_activos_global()
     except Exception:
@@ -529,6 +581,12 @@ def registrar_jobs(app: Application) -> None:
         name="resumen_semanal",
     )
     jq.run_repeating(
+        dispatch_tick,
+        interval=settings.task_dispatcher_interval_seconds,
+        first=5,
+        name="task_dispatcher_tick",
+    )
+    jq.run_repeating(
         recordatorio_hidratacion,
         interval=2 * 3600,
         first=time(10, 0),
@@ -554,8 +612,7 @@ def registrar_jobs(app: Application) -> None:
         logger.exception("Error programando bootstrap de recordatorios personalizados")
 
     logger.info(
-        "13 jobs registrados: escalation, quiz_nocturno, quiz_sabado, checkin, "
-        "peso_lunes, resumen_domingo, hidratacion_2h, reconsent_militar, "
-        "recordar_sesion_skill, peso_diario_camp, recovery_post_sparring, "
-        "taper_alert, weekly_load_endurance, bootstrap_recordatorios_personalizados"
+        "Jobs registrados: escalation, dispatcher_tick, quiz_nocturno, quiz_sabado, "
+        "checkin, peso_lunes, resumen_domingo, hidratacion_2h, reconsent_militar, "
+        "deportes, bootstrap_recordatorios"
     )

@@ -816,6 +816,83 @@ async def listar_auditoria(
     }
 
 
+@router.get("/tasks/audit")
+async def listar_task_audit(
+    admin: dict = Depends(get_admin_from_token),
+    telegram_id: Optional[int] = Query(None),
+    task_type: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = 0,
+) -> dict:
+    from src.db.models import TaskAuditLog
+
+    async with async_session_factory() as session:
+        query = select(TaskAuditLog)
+        if telegram_id is not None:
+            query = query.where(TaskAuditLog.telegram_id == telegram_id)
+        if task_type:
+            query = query.where(TaskAuditLog.task_type == task_type)
+        if action:
+            query = query.where(TaskAuditLog.action == action)
+        total_q = await session.execute(
+            select(func.count()).select_from(query.subquery())
+        )
+        total = total_q.scalar() or 0
+        result = await session.execute(
+            query.order_by(TaskAuditLog.creado_en.desc()).offset(offset).limit(limit)
+        )
+        items = list(result.scalars().all())
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": r.id,
+                "task_id": r.task_id,
+                "telegram_id": r.telegram_id,
+                "task_type": r.task_type,
+                "action": r.action,
+                "payload_snapshot": r.payload_snapshot,
+                "error": r.error,
+                "creado_en": r.creado_en.isoformat() if r.creado_en else None,
+            }
+            for r in items
+        ],
+    }
+
+
+@router.get("/metrics/proactivos")
+async def metricas_proactivos(
+    admin: dict = Depends(get_admin_from_token),
+    dias: int = Query(7, ge=1, le=30),
+) -> dict:
+    from datetime import datetime, timedelta
+
+    from src.db.models import TaskAuditLog
+
+    desde = datetime.utcnow() - timedelta(days=dias)
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(
+                TaskAuditLog.telegram_id,
+                func.count(TaskAuditLog.id),
+            )
+            .where(
+                TaskAuditLog.action == "sent",
+                TaskAuditLog.creado_en >= desde,
+            )
+            .group_by(TaskAuditLog.telegram_id)
+        )
+        rows = list(result.all())
+    return {
+        "dias": dias,
+        "usuarios": [
+            {"telegram_id": uid, "mensajes_proactivos": int(cnt)}
+            for uid, cnt in rows
+        ],
+    }
+
+
 @router.get("/auditoria/{request_id}")
 async def detalle_auditoria(
     request_id: str,

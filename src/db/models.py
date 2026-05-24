@@ -175,6 +175,7 @@ class Usuario(Base):
     dias_entreno = Column(Integer)
     deporte_principal = Column(String(100))
     onboarding_completo = Column(Boolean, default=False)
+    peso_estimado = Column(Boolean, default=False, nullable=False, server_default=text("false"))
 
     timezone = Column(String(64), default="America/Bogota", nullable=False)
     tono = Column(Enum(TonoCoach), default=TonoCoach.FIRME, nullable=False)
@@ -878,4 +879,19 @@ class AuditoriaTurno(Base):
     creado_en = Column(DateTime, server_default=func.now(), index=True)
 
     usuario = relationship("Usuario", back_populates="turnos_audit")
+
+
+class TaskAuditLog(Base):
+    """Auditoría append-only de tareas programadas/ejecutadas (cola Redis)."""
+
+    __tablename__ = "task_audit_log"
+
+    id = Column(Integer, primary_key=True)
+    task_id = Column(String(64), nullable=False, index=True)
+    telegram_id = Column(BigInteger, nullable=False, index=True)
+    task_type = Column(String(32), nullable=False, index=True)
+    action = Column(String(32), nullable=False, index=True)
+    payload_snapshot = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+    creado_en = Column(DateTime, server_default=func.now(), index=True)
 

@@ -39,8 +39,12 @@ class Settings(BaseSettings):
     comprobante_model: str = "gpt-4o-mini"
     transcription_model: str = "gpt-4o-mini-transcribe"
 
-    session_limit: int = 120
+    session_limit: int = 50
     session_ttl_seconds: int = 60 * 60 * 24 * 30
+
+    max_proactive_msgs_per_day: int = 4
+    use_redis_task_queue: bool = True
+    task_dispatcher_interval_seconds: int = 30
 
     rate_limit_per_minute: int = 10
     max_message_chars: int = 4000

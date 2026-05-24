@@ -72,8 +72,9 @@ from src.telegram.scheduler import (
     programar_recordatorio_en_jobqueue,
 )
 
-logger = logging.getLogger(__name__)
+from src.config import settings
 
+logger = logging.getLogger(__name__)
 
 _SENSITIVE_ARG_NAMES = {"password", "token", "secret", "comprobante_url"}
 
@@ -334,6 +335,7 @@ async def guardar_perfil(
     timezone: str = "",
     pais: str = "",
     onboarding_completo: bool = False,
+    peso_estimado: bool = False,
 ) -> str:
     """Actualiza perfil. Solo envia campos con datos concretos.
 
@@ -362,6 +364,9 @@ async def guardar_perfil(
             kwargs["edad"] = edad
         if peso_kg > 0:
             kwargs["peso_kg"] = peso_kg
+        elif peso_estimado:
+            kwargs["peso_kg"] = 70.0
+            kwargs["peso_estimado"] = True
         if altura_cm > 0:
             kwargs["altura_cm"] = altura_cm
         if objetivo:
@@ -389,6 +394,8 @@ async def guardar_perfil(
             kwargs["pais"] = pais.upper()[:8]
         if onboarding_completo:
             kwargs["onboarding_completo"] = True
+        if peso_estimado:
+            kwargs["peso_estimado"] = True
 
         if not kwargs:
             return _error("No se proporcionaron campos para actualizar")
@@ -1849,15 +1856,20 @@ async def programar_recordatorio(
         if rec is None:
             return _error("no encontre tu usuario; manda /start primero")
 
-        try:
-            app = obtener_application()
-            if app is not None and app.job_queue is not None:
-                programar_recordatorio_en_jobqueue(app, rec)
-        except Exception:
-            logger.exception(
-                "Recordatorio %s creado en DB pero no se pudo programar en JobQueue",
-                rec.id,
-            )
+        if settings.use_redis_task_queue:
+            from src.tasks.scheduling import schedule_recordatorio_task
+
+            await schedule_recordatorio_task(rec)
+        else:
+            try:
+                app = obtener_application()
+                if app is not None and app.job_queue is not None:
+                    programar_recordatorio_en_jobqueue(app, rec)
+            except Exception:
+                logger.exception(
+                    "Recordatorio %s creado en DB pero no se pudo programar en JobQueue",
+                    rec.id,
+                )
 
         await log_evento(
             telegram_id,
@@ -1923,15 +1935,20 @@ async def cancelar_recordatorio(telegram_id: int, recordatorio_id: int) -> str:
         if not ok:
             return _error("no existe ese recordatorio o no es tuyo")
 
-        try:
-            app = obtener_application()
-            if app is not None and app.job_queue is not None:
-                cancelar_recordatorio_jobs(app, recordatorio_id)
-        except Exception:
-            logger.exception(
-                "Recordatorio %s desactivado en DB pero quedo el job activo",
-                recordatorio_id,
-            )
+        if settings.use_redis_task_queue:
+            from src.tasks.queue import cancel_tasks
+
+            await cancel_tasks(telegram_id, task_type="recordatorio")
+        else:
+            try:
+                app = obtener_application()
+                if app is not None and app.job_queue is not None:
+                    cancelar_recordatorio_jobs(app, recordatorio_id)
+            except Exception:
+                logger.exception(
+                    "Recordatorio %s desactivado en DB pero quedo el job activo",
+                    recordatorio_id,
+                )
 
         await log_evento(
             telegram_id,
@@ -1942,6 +1959,49 @@ async def cancelar_recordatorio(telegram_id: int, recordatorio_id: int) -> str:
     except Exception:
         logger.exception("Error en cancelar_recordatorio")
         return _error("no pude cancelar el recordatorio")
+
+
+@function_tool
+@_log_tool
+async def listar_tareas_programadas(telegram_id: int) -> str:
+    """Lista tareas pendientes en la cola (recordatorios, escalacion, hidratacion).
+
+    Args:
+        telegram_id: Telegram ID
+    """
+    try:
+        if not settings.use_redis_task_queue:
+            recs = await repo_listar_recordatorios(telegram_id, solo_activos=True)
+            return _ok({
+                "fuente": "postgres_recordatorios",
+                "total": len(recs),
+                "tareas": [
+                    {
+                        "type": "recordatorio",
+                        "mensaje": r.mensaje,
+                        "hora": r.hora.strftime("%H:%M") if r.hora else "",
+                        "id": r.id,
+                    }
+                    for r in recs
+                ],
+            })
+        from src.tasks.queue import list_tasks
+
+        tasks = await list_tasks(telegram_id)
+        items = []
+        for t in tasks:
+            run_at = t.get("run_at", 0)
+            items.append({
+                "id": t.get("id"),
+                "type": t.get("type"),
+                "status": t.get("status"),
+                "run_at_unix": run_at,
+                "payload": t.get("payload"),
+            })
+        return _ok({"fuente": "redis", "total": len(items), "tareas": items})
+    except Exception:
+        logger.exception("Error en listar_tareas_programadas")
+        return _error("no pude listar tus tareas programadas")
 
 
 @function_tool

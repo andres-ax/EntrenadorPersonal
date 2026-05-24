@@ -34,17 +34,16 @@ async def consumo_hoy_ml(telegram_id: int) -> int:
         user = user_q.scalar_one_or_none()
         if user is None:
             return 0
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo(user.timezone or "America/Bogota")
-        hoy_user = datetime.now(tz).date()
-        hoy_inicio_local = datetime.combine(hoy_user, datetime.min.time(), tzinfo=tz)
-        # Convertir a datetime naive en el servidor
-        hoy_inicio_servidor = hoy_inicio_local.astimezone().replace(tzinfo=None)
+        from src.timezone_utils import fecha_hoy_usuario_model, rango_dia_usuario
+
+        hoy_user = fecha_hoy_usuario_model(user)
+        inicio, fin = rango_dia_usuario(hoy_user, user.timezone)
 
         result = await session.execute(
             select(func.sum(ConsumoAgua.ml)).where(
                 ConsumoAgua.usuario_id == user.id,
-                ConsumoAgua.registrado_en >= hoy_inicio_servidor,
+                ConsumoAgua.registrado_en >= inicio,
+                ConsumoAgua.registrado_en <= fin,
             )
         )
         return int(result.scalar() or 0)
@@ -59,9 +58,9 @@ async def objetivo_ml(telegram_id: int) -> int:
         user = user_q.scalar_one_or_none()
         if user is None:
             return 2500
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo(user.timezone or "America/Bogota")
-        hoy_user = datetime.now(tz).date()
+        from src.timezone_utils import fecha_hoy_usuario_model
+
+        hoy_user = fecha_hoy_usuario_model(user)
 
         base = int((user.peso_kg or 70) * 35)
         entrenos_q = await session.execute(

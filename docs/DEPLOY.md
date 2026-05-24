@@ -144,6 +144,36 @@ curl https://entrenadorax.axsoftware.codes/webhook-info   -H "X-Admin-Token: $AD
 - `/ws/realtime` -> WebSocket de voz
 - `/health` -> healthcheck
 
+## Cola de tareas Redis (operaciones)
+
+Variables relevantes:
+
+```env
+USE_REDIS_TASK_QUEUE=true
+TASK_DISPATCHER_INTERVAL_SECONDS=30
+MAX_PROACTIVE_MSGS_PER_DAY=4
+```
+
+**Réplicas Railway:** mantener **una réplica** del servicio bot hasta verificar el lock
+`entrenadorax:dispatcher:lock`. Escalar horizontalmente solo con lock probado.
+
+**Runbook:**
+
+| Problema | Acción |
+|---------|--------|
+| Spam proactivo a un usuario | `cancel_tasks(telegram_id)` vía admin o Redis CLI; revisar `task_audit_log` |
+| Recordatorios duplicados | Verificar índice `uq_recordatorios_activos_dedup`; desactivar duplicados en Postgres |
+| Tareas perdidas tras restart | Boot ejecuta `rehydrate_tasks_from_db()` en <60s |
+| Sesión Redis corrupta | `/reset` o limpiar `agents:session:{uid}:*` |
+| Cap diario | Key Redis `proactive_count:{uid}:{fecha}` TTL 48h |
+
+Endpoints admin:
+
+- `GET /admin/tasks/audit` — auditoría de tareas
+- `GET /admin/metrics/proactivos?dias=7` — mensajes proactivos por usuario
+
+Healthcheck incluye `tasks_overdue` (tareas vencidas en ZSET).
+
 ## Health checks
 
 ```bash

@@ -186,6 +186,24 @@ def _sanitize_telegram_html(text: str) -> str:
     return "".join(parts)
 
 
+def _afirma_registro_sin_tool(output: str, tools: list | None) -> bool:
+    """True si el bot afirma haber registrado algo sin invocar tools en el turno."""
+    if not output or tools:
+        return False
+    lower = output.lower()
+    frases = (
+        "registré",
+        "registre",
+        "quedó registrado",
+        "quedo registrado",
+        "ya registré",
+        "ya registre",
+        "listo, registrado",
+        "quedó anotado",
+    )
+    return any(f in lower for f in frases)
+
+
 async def _build_prompt(texto: str, uid: int) -> str:
     """Construye el prompt con perfil + tono + compromiso + streak inyectados.
 
@@ -338,6 +356,18 @@ async def _procesar(
                     await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
 
                 respuesta_bot = output
+                if _afirma_registro_sin_tool(output, current_turn_tools.get()):
+                    logger.warning(
+                        "Guardrail registro sin tool uid=%s output=%r",
+                        uid,
+                        output[:120],
+                    )
+                    output = (
+                        "Para registrar eso necesito usar mis herramientas. "
+                        "Cuentame de nuevo que quieres registrar y lo hago ahora."
+                    )
+                    respuesta_bot = output
+                    await log_evento(uid, "guardrail_registro_sin_tool", {})
                 output_sanitized = _sanitize_telegram_html(output)
                 chunks = [output_sanitized[i : i + 4000] for i in range(0, len(output_sanitized), 4000)] or [""]
                 for i, chunk in enumerate(chunks):
@@ -440,6 +470,18 @@ async def _procesar(
                     await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
 
                 respuesta_bot = output
+                if _afirma_registro_sin_tool(output, current_turn_tools.get()):
+                    logger.warning(
+                        "Guardrail registro sin tool uid=%s output=%r",
+                        uid,
+                        output[:120],
+                    )
+                    output = (
+                        "Para registrar eso necesito usar mis herramientas. "
+                        "Cuentame de nuevo que quieres registrar y lo hago ahora."
+                    )
+                    respuesta_bot = output
+                    await log_evento(uid, "guardrail_registro_sin_tool", {})
                 output_sanitized = _sanitize_telegram_html(output)
                 chunks = [output_sanitized[i : i + 4000] for i in range(0, len(output_sanitized), 4000)] or [""]
                 for i, chunk in enumerate(chunks):
@@ -494,7 +536,7 @@ async def _autocancelar_escalation_si_cumplio(
         if user is None:
             return
         for tipo in ("entreno", "comida", "sueno", "peso"):
-            if await _ya_cumplio_hoy(user.id, tipo):
+            if await _ya_cumplio_hoy(user.id, tipo, telegram_id=uid, usuario=user):
                 await cancelar_escalado_hoy(uid, ctx, tipo)
     except Exception:
         logger.exception("Error cancelando escalation uid=%s", uid)
