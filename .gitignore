@@ -1,10 +1,17 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
 build/
-.env
 .venv/
 venv/
+
+# Entorno y secretos
+.env
 *.db
+
+# Herramientas
 .ruff_cache/
+.pytest_cache/
+.mypy_cache/

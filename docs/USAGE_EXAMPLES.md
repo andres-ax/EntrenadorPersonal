@@ -4,13 +4,14 @@ Este archivo documenta ejemplos completos del uso de la aplicación, tanto en in
 
 ## Documentación relacionada
 
-- [README.md](README.md)
+- [README.md](../README.md)
+- [Índice de documentación](README.md)
 - [ADMIN_GUIDE.md](ADMIN_GUIDE.md)
 - [ENDPOINTS.md](ENDPOINTS.md)
 - [DEPLOY.md](DEPLOY.md)
 - [PRICING_STRATEGY.md](PRICING_STRATEGY.md)
 - [INTERNAL_ARCHITECTURE.md](INTERNAL_ARCHITECTURE.md)
-- [docs/diagrama_flujo.md](docs/diagrama_flujo.md)
+- [diagrama_flujo.md](diagrama_flujo.md)
 
 ## Flujo de uso principal
 

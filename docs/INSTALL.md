@@ -22,7 +22,7 @@ graph TD
 ## Pasos de instalación
 1. Abre una terminal en la raíz del proyecto:
    ```bash
-   cd /home/jhonpuli/Documentos/AndresZuliaga/EntrenadorPersonal
+   cd ruta/al/clon/EntrenadorPersonal
    ```
 
 2. Crea un entorno virtual:

@@ -13,7 +13,25 @@ La aplicación actual corre como un único servicio FastAPI que incluye:
 
 ## Estructura principal
 
-- `run_bot.py` — arranca el bot en modo polling para desarrollo local.
+### Raíz del repositorio
+
+| Archivo / carpeta | Propósito |
+|-------------------|-----------|
+| `run_bot.py` | Bot en modo polling (desarrollo local) |
+| `start.sh` | Entrypoint de producción (migraciones + uvicorn) |
+| `.env.example` | Plantilla de variables de entorno |
+| `requirements.txt` / `requirements-dev.txt` | Dependencias de runtime y desarrollo |
+| `pyproject.toml` | Metadatos del paquete Python |
+| `alembic.ini` | Configuración de migraciones de base de datos |
+| `Dockerfile` / `railway.toml` | Contenedor y despliegue en Railway |
+| `docs/` | Documentación detallada del proyecto |
+| `src/` | Código fuente de la aplicación |
+| `frontend/` | Templates Jinja2 y assets estáticos |
+| `tests/` | Suite de pruebas |
+| `scripts/` | Utilidades operativas |
+
+### Código fuente
+
 - `src/main.py` — arranca la app FastAPI con webhook, páginas HTML, APIs y realtime.
 - `src/config.py` — carga todas las variables de entorno y valida la configuración.
 - `src/coach.py` — define al agente `EntrenadorAX` y sus instrucciones.
@@ -221,9 +239,14 @@ Si `MINIAPP_URL` está configurado, el bot publica un botón de menú que abre l
 
 ## Documentación adicional
 
-- [ADMIN_GUIDE.md](ADMIN_GUIDE.md) — guía de administración y operación.
-- [ENDPOINTS.md](ENDPOINTS.md) — referencia de webhook y API HTTP.
-- [DEPLOY.md](DEPLOY.md) — guía de deploy en Railway.
-- [PRICING_STRATEGY.md](PRICING_STRATEGY.md) — estrategia de precios y promociones.
-- [INTERNAL_ARCHITECTURE.md](INTERNAL_ARCHITECTURE.md) — arquitectura interna y flujo del bot.
-- [docs/diagrama_flujo.md](docs/diagrama_flujo.md) — diagrama de flujo del proceso.
+Toda la documentación detallada está en [`docs/`](docs/README.md):
+
+- [Instalación](docs/INSTALL.md)
+- [Ejemplos de uso](docs/USAGE_EXAMPLES.md)
+- [Arquitectura interna](docs/INTERNAL_ARCHITECTURE.md)
+- [Diagrama de flujo](docs/diagrama_flujo.md)
+- [Endpoints HTTP](docs/ENDPOINTS.md)
+- [Infraestructura](docs/INFRAESTRUCTURA.md)
+- [Guía de administración](docs/ADMIN_GUIDE.md)
+- [Deploy en Railway](docs/DEPLOY.md)
+- [Estrategia de precios](docs/PRICING_STRATEGY.md)
