@@ -697,6 +697,7 @@ class BroadcastReq(BaseModel):
     plan_minimo: Optional[str] = None
     pais: Optional[str] = None
     silent: bool = True
+    gm_nombre: Optional[str] = None
 
 
 @router.post("/broadcast")
@@ -712,6 +713,7 @@ async def broadcast(
         "pais": req.pais,
         "silent": req.silent,
         "por": admin["email"],
+        "gm_nombre": req.gm_nombre,
     }
     try:
         client = await get_redis()
@@ -932,13 +934,20 @@ async def admin_desafios(
 ) -> dict:
     from datetime import date as date_cls
 
-    from src.services.comunidad import listar_desafios_por_fecha, ranking_desafio
+    from src.services.comunidad import (
+        contar_desafios_opt_in,
+        contar_participantes_desafio,
+        listar_desafios_por_fecha,
+        ranking_desafio,
+    )
 
     target = date_cls.fromisoformat(fecha) if fecha else date_cls.today()
     desafios = await listar_desafios_por_fecha(target)
+    opt_in = await contar_desafios_opt_in()
     out = []
     for d in desafios:
         top = await ranking_desafio(d.slug, top=3)
+        participantes = await contar_participantes_desafio(d.id)
         out.append(
             {
                 "id": d.id,
@@ -948,10 +957,59 @@ async def admin_desafios(
                 "metrica": d.metrica,
                 "meta_valor": d.meta_valor,
                 "estado": d.estado,
+                "participantes": participantes,
                 "top3": top,
             }
         )
-    return {"fecha": target.isoformat(), "desafios": out}
+    return {
+        "fecha": target.isoformat(),
+        "opt_in_usuarios": opt_in,
+        "desafios": out,
+    }
+
+
+class DesafioGenerarReq(BaseModel):
+    fecha: Optional[str] = None
+
+
+@router.post("/desafios/generar")
+async def admin_desafios_generar(
+    req: DesafioGenerarReq,
+    admin: dict = Depends(get_admin_from_token),
+) -> dict:
+    from datetime import date as date_cls
+
+    from src.services.desafios.generador import generar_desafios_del_dia
+    from src.tasks.scheduling import schedule_desafio_cierre
+
+    await require_super(admin)
+    target = date_cls.fromisoformat(req.fecha) if req.fecha else date_cls.today()
+    desafios = await generar_desafios_del_dia(target)
+    for des in desafios:
+        await schedule_desafio_cierre(des.id, des.fecha_fin)
+    return {
+        "ok": True,
+        "fecha": target.isoformat(),
+        "generados": len(desafios),
+        "slugs": [d.slug for d in desafios],
+    }
+
+
+@router.post("/desafios/{desafio_id}/cerrar")
+async def admin_desafios_cerrar(
+    desafio_id: int,
+    admin: dict = Depends(get_admin_from_token),
+) -> dict:
+    from src.tasks.scheduling import schedule_desafio_cierre_ahora
+
+    await require_super(admin)
+    task_id = await schedule_desafio_cierre_ahora(desafio_id)
+    if task_id is None:
+        from src.services.desafios.premios import cerrar_desafio_y_premiar
+
+        resumen = await cerrar_desafio_y_premiar(desafio_id)
+        return {"ok": True, "modo": "directo", "premios": len(resumen.get("premios", []))}
+    return {"ok": True, "modo": "cola", "task_id": task_id}
 
 
 async def _publicar_evento_pago(

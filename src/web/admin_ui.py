@@ -388,6 +388,7 @@ async def broadcast_form(
     plan_minimo: Optional[str] = Form(None),
     pais: Optional[str] = Form(None),
     silent: bool = Form(True),
+    gm_nombre: Optional[str] = Form(None),
 ):
     await require_super(admin)
     result = await admin_api.broadcast(
@@ -396,6 +397,7 @@ async def broadcast_form(
             plan_minimo=plan_minimo or None,
             pais=pais or None,
             silent=silent,
+            gm_nombre=gm_nombre or None,
         ),
         admin=admin,
     )
@@ -403,6 +405,64 @@ async def broadcast_form(
         request,
         "admin/operaciones.html",
         {"admin": admin, "active": "operaciones", "result": result},
+    )
+
+
+# -----------------------------------------------------------------------------
+# Desafíos diarios
+# -----------------------------------------------------------------------------
+
+
+@router.get("/desafios", response_class=HTMLResponse)
+async def desafios_view(
+    request: Request,
+    admin: dict = Depends(get_admin_from_cookie),
+    fecha: Optional[str] = Query(None),
+):
+    await require_super(admin)
+    data = await admin_api.admin_desafios(fecha=fecha, _admin=admin)
+    return render(
+        request,
+        "admin/desafios.html",
+        {
+            "admin": admin,
+            "active": "desafios",
+            "data": data,
+            "fecha": data["fecha"],
+        },
+    )
+
+
+@router.post("/desafios/generar_form")
+async def desafios_generar_form(
+    admin: dict = Depends(get_admin_from_cookie),
+    fecha: Optional[str] = Form(None),
+):
+    await require_super(admin)
+    result = await admin_api.admin_desafios_generar(
+        req=admin_api.DesafioGenerarReq(fecha=fecha or None),
+        admin=admin,
+    )
+    n = result.get("generados", 0)
+    return RedirectResponse(
+        url=f"/admin/desafios?fecha={result['fecha']}&msg=Generados+{n}+desafios.",
+        status_code=303,
+    )
+
+
+@router.post("/desafios/{desafio_id}/cerrar_form")
+async def desafios_cerrar_form(
+    desafio_id: int,
+    admin: dict = Depends(get_admin_from_cookie),
+    fecha: Optional[str] = Form(None),
+):
+    await require_super(admin)
+    await admin_api.admin_desafios_cerrar(desafio_id=desafio_id, admin=admin)
+    q = f"fecha={fecha}" if fecha else ""
+    sep = "&" if q else ""
+    return RedirectResponse(
+        url=f"/admin/desafios?{q}{sep}msg=Desafio+%23{desafio_id}+en+cierre.",
+        status_code=303,
     )
 
 

@@ -1,0 +1,102 @@
+{% extends "admin/_layout.html" %}
+{% set page_title = "Desafíos" %}
+
+{% block admin_content %}
+<div class="grid gap-4 lg:grid-cols-3 mb-4">
+  <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="text-xs uppercase text-slate-500">Usuarios con opt-in</div>
+    <div class="text-3xl font-bold text-slate-800 mt-1">{{ data.opt_in_usuarios }}</div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5 lg:col-span-2">
+    <form method="get" action="/admin/desafios" class="flex flex-wrap gap-3 items-end text-sm">
+      <div>
+        <label class="block text-xs uppercase text-slate-500 mb-1">Fecha</label>
+        <input type="date" name="fecha" value="{{ fecha }}"
+               class="px-3 py-2 border border-slate-300 rounded-lg" />
+      </div>
+      <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg">
+        Ver
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm p-5 mb-4 max-w-xl">
+  <h2 class="font-semibold text-slate-800 mb-2">Generar desafíos del día</h2>
+  <p class="text-sm text-slate-500 mb-3">
+    Crea un desafío por cohorte (deporte/nivel/objetivo) para la fecha indicada.
+    Idempotente: no duplica si ya existen.
+  </p>
+  <form method="post" action="/admin/desafios/generar_form" class="flex flex-wrap gap-3 items-end text-sm">
+    <div>
+      <label class="block text-xs uppercase text-slate-500 mb-1">Fecha</label>
+      <input type="date" name="fecha" value="{{ fecha }}"
+             class="px-3 py-2 border border-slate-300 rounded-lg" />
+    </div>
+    <button type="submit"
+            onclick="return confirm('Generar desafíos para esta fecha?');"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg">
+      Generar ahora
+    </button>
+  </form>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+  <div class="px-5 py-3 border-b border-slate-100 text-sm flex justify-between items-center">
+    <span><strong>{{ data.desafios|length }}</strong> desafíos · {{ fecha }}</span>
+  </div>
+  {% if not data.desafios %}
+    <div class="p-8 text-center text-slate-500 text-sm">
+      No hay desafíos para esta fecha. Usa «Generar ahora» o espera al job diario (05:30 UTC).
+    </div>
+  {% else %}
+    <div class="divide-y divide-slate-100">
+      {% for d in data.desafios %}
+        <div class="p-5">
+          <div class="flex flex-wrap justify-between gap-3 mb-2">
+            <div>
+              <div class="font-semibold text-slate-800">{{ d.titulo }}</div>
+              <div class="text-xs text-slate-500 mt-1">
+                {{ d.cohorte_key }} · meta {{ d.meta_valor|int }} {{ d.metrica }}
+              </div>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="px-2 py-0.5 rounded-full text-xs
+                {% if d.estado == 'activo' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ d.estado }}
+              </span>
+              <span class="text-slate-500">{{ d.participantes }} inscritos</span>
+              {% if d.estado == 'activo' %}
+                <form method="post" action="/admin/desafios/{{ d.id }}/cerrar_form" class="inline">
+                  <input type="hidden" name="fecha" value="{{ fecha }}" />
+                  <button type="submit"
+                          onclick="return confirm('Cerrar desafío #{{ d.id }} y premiar top 3?');"
+                          class="text-rose-600 hover:text-rose-800 text-xs font-semibold">
+                    Cerrar y premiar
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+          {% if d.top3 %}
+            <div class="text-xs text-slate-600 bg-slate-50 rounded-lg p-3">
+              <div class="uppercase text-slate-400 mb-1">Top 3</div>
+              <ol class="list-decimal list-inside space-y-0.5">
+                {% for r in d.top3 %}
+                  <li>
+                    #{{ r.posicion }} — uid {{ r.telegram_id }}
+                    · {{ r.valor|int }} pts
+                    {% if r.nombre %}({{ r.nombre }}){% endif %}
+                  </li>
+                {% endfor %}
+              </ol>
+            </div>
+          {% else %}
+            <div class="text-xs text-slate-400">Sin participantes con puntaje aún.</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

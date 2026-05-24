@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from src.cache import get_redis
 from src.db.connection import async_session_factory
-from src.db.models import Desafio, DesafioParticipante
+from src.db.models import Desafio, DesafioParticipante, Streak
 from src.db.repository import log_evento, obtener_o_crear_streak
 from src.services.comunidad import ranking_desafio
 

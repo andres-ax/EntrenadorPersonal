@@ -234,6 +234,26 @@ async def schedule_desafio_cierre(desafio_id: int, fecha: date) -> str | None:
     )
 
 
+async def schedule_desafio_cierre_ahora(desafio_id: int) -> str | None:
+    """Encola cierre inmediato (premios + notificaciones via worker)."""
+    if not settings.use_redis_task_queue:
+        return None
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(settings.default_timezone)
+    run_at = datetime.now(tz) + timedelta(seconds=5)
+    idem = f"desafio_cierre_manual:{desafio_id}:{int(run_at.timestamp())}"
+    return await schedule_task(
+        task_type="desafio_cierre",
+        telegram_id=0,
+        run_at=run_at,
+        payload={"desafio_id": desafio_id},
+        timezone_name=str(tz),
+        idempotency_key=idem,
+        created_by="admin",
+    )
+
+
 async def _tz_for(telegram_id: int) -> ZoneInfo:
     from src.timezone_utils import tz_usuario
 

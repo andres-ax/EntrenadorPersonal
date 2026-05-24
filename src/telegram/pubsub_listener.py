@@ -17,7 +17,8 @@ from telegram.ext import Application
 from src.cache import get_redis
 from src.db.connection import async_session_factory
 from src.db.models import PlanSuscripcion, Usuario
-from src.db.repository import PLAN_RANKING, marcar_bot_bloqueado
+from src.db.repository import PLAN_RANKING, log_evento, marcar_bot_bloqueado
+from src.telegram.broadcast_gm import formatear_broadcast_gm
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +85,14 @@ async def _procesar_broadcast(app: Application, raw: str) -> None:
         data = json.loads(raw)
     except json.JSONDecodeError:
         return
-    mensaje = data.get("mensaje", "")
-    if not mensaje:
+    mensaje_raw = data.get("mensaje", "")
+    if not mensaje_raw:
         return
+    mensaje = formatear_broadcast_gm(
+        mensaje_raw,
+        admin_email=data.get("por"),
+        gm_nombre=data.get("gm_nombre"),
+    )
     plan_minimo_str = data.get("plan_minimo")
     pais = data.get("pais")
     silent = bool(data.get("silent", True))
@@ -121,11 +127,16 @@ async def _procesar_broadcast(app: Application, raw: str) -> None:
                 parse_mode=ParseMode.HTML,
                 disable_notification=silent,
             )
+            await log_evento(
+                u.telegram_id,
+                "admin_broadcast",
+                {"por": data.get("por"), "gm_nombre": data.get("gm_nombre")},
+            )
             enviados += 1
             await asyncio.sleep(0.05)
         except Exception:
             logger.exception("Error en broadcast uid=%s", u.telegram_id)
-    logger.info("Broadcast enviado a %s usuarios", enviados)
+    logger.info("Broadcast GM enviado a %s usuarios", enviados)
 
 
 async def _procesar_pr_canal(app: Application, raw: str) -> None:

@@ -252,6 +252,27 @@ async def contar_desafios_activos_hoy() -> int:
         return int(result.scalar() or 0)
 
 
+async def contar_desafios_opt_in() -> int:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(func.count(Usuario.id)).where(
+                Usuario.desafios_opt_in == True,  # noqa: E712
+                Usuario.onboarding_completo == True,  # noqa: E712
+            )
+        )
+        return int(result.scalar() or 0)
+
+
+async def contar_participantes_desafio(desafio_id: int) -> int:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(func.count(DesafioParticipante.id)).where(
+                DesafioParticipante.desafio_id == desafio_id
+            )
+        )
+        return int(result.scalar() or 0)
+
+
 async def listar_desafios_por_fecha(fecha: date) -> list[Desafio]:
     async with async_session_factory() as session:
         result = await session.execute(

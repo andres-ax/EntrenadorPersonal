@@ -5,8 +5,8 @@
 <div class="bg-white rounded-xl shadow-sm p-6 max-w-2xl">
   <h2 class="font-semibold text-slate-800 mb-2">Broadcast a usuarios</h2>
   <p class="text-sm text-slate-500 mb-4">
-    Envia un mensaje masivo. El bot publica via Redis pubsub y filtra por plan/pais
-    si se especifican. Solo rol super.
+    Envia un mensaje masivo con formato <strong>GM</strong> (distinto al coach IA).
+    El bot publica via Redis pubsub y filtra por plan/pais si se especifican. Solo rol super.
   </p>
   {% if result %}
     <div class="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
@@ -18,6 +18,11 @@
       <label class="block text-xs uppercase text-slate-500 mb-1">Mensaje</label>
       <textarea name="mensaje" rows="4" required maxlength="4000"
                 class="w-full px-3 py-2 border border-slate-300 rounded-lg"></textarea>
+    </div>
+    <div>
+      <label class="block text-xs uppercase text-slate-500 mb-1">Tu nombre (aparece como GM)</label>
+      <input name="gm_nombre" maxlength="40" placeholder="Andrés"
+             class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
     </div>
     <div class="grid grid-cols-2 gap-3">
       <div>
