@@ -576,3 +576,196 @@ async def get_telegram_pair_token(uid: int = Depends(get_uid_from_token)) -> dic
     await redis_client.set(f"telegram:pair:{pair_token}", str(uid), ex=600)
 
     return {"pair_token": pair_token}
+
+
+class CompleteProfileRequest(BaseModel):
+    telefono: str
+    email: str
+
+
+class CompleteProfileConfirm(BaseModel):
+    telefono: str
+    codigo: str
+
+
+@router.get("/cuenta")
+async def get_cuenta(uid: int = Depends(get_uid_from_token)) -> dict:
+    from src.db.repository import obtener_usuario
+    u = await obtener_usuario(uid)
+    if u is None:
+        raise HTTPException(404, "Usuario no encontrado")
+    
+    # telegram_linked is True if u.telegram_id is positive (and not None)
+    telegram_linked = u.telegram_id is not None and u.telegram_id > 0
+    profile_complete = bool(u.telefono and u.email and u.phone_verified_at)
+
+    return {
+        "telefono": u.telefono,
+        "email": u.email,
+        "phone_verified": u.phone_verified_at is not None,
+        "telegram_linked": telegram_linked,
+        "auth_method": u.auth_method,
+        "plan_actual": u.plan_actual.value if u.plan_actual else "free",
+        "profile_complete": profile_complete,
+    }
+
+
+@router.post("/cuenta/solicitar-otp")
+async def cuenta_solicitar_otp(
+    req: CompleteProfileRequest, uid: int = Depends(get_uid_from_token)
+) -> dict:
+    from src.db.repository import obtener_usuario
+    from src.db.connection import async_session_factory
+    from src.db.models import Usuario
+    from sqlalchemy import select
+    from src.services.identity import normalize_phone
+
+    u = await obtener_usuario(uid)
+    if u is None:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    telefono_raw = req.telefono.strip()
+    email = req.email.strip().lower()
+
+    if not telefono_raw or not email:
+        raise HTTPException(400, "Teléfono y email son requeridos")
+
+    telefono = normalize_phone(telefono_raw)
+
+    # Validar que ningún otro usuario tenga este teléfono
+    async with async_session_factory() as session:
+        dup_tel_q = await session.execute(
+            select(Usuario).where(Usuario.telefono == telefono, Usuario.id != u.id)
+        )
+        if dup_tel_q.scalar_one_or_none():
+            raise HTTPException(
+                400,
+                detail={
+                    "message": "Este número de teléfono ya está registrado con otra cuenta.",
+                    "code": "DUPLICATE_PHONE"
+                }
+            )
+
+        # Validar que ningún otro usuario tenga este email
+        dup_email_q = await session.execute(
+            select(Usuario).where(Usuario.email == email, Usuario.id != u.id)
+        )
+        if dup_email_q.scalar_one_or_none():
+            raise HTTPException(
+                400,
+                detail={
+                    "message": "Este correo electrónico ya está registrado con otra cuenta.",
+                    "code": "DUPLICATE_EMAIL"
+                }
+            )
+
+    # Generar OTP de 6 dígitos
+    import random
+    codigo = f"{random.randint(100000, 999995)}"
+
+    # Guardar en Redis
+    from src.cache import get_redis
+    redis_client = await get_redis()
+    
+    # otp para completar perfil: guardamos codigo -> (telefono, email)
+    await redis_client.set(f"otp:complete:{uid}", codigo, ex=300)
+    await redis_client.set(f"otp:complete:data:{uid}", f"{telefono}:{email}", ex=300)
+
+    # Enviar correo vía Resend
+    from src.config import settings
+    if settings.resend_api_key:
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {settings.resend_api_key.get_secret_value()}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": "EntrenadorAX <entrenadorax@axsoftware.codes>",
+                        "to": [email],
+                        "subject": f"Tu código de confirmación: {codigo}",
+                        "html": (
+                            f"<p>Hola,</p>"
+                            f"<p>Tu código de confirmación para completar tu perfil en la aplicación de EntrenadorAX es:</p>"
+                            f"<h2 style='font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #1e3a8a;'>{codigo}</h2>"
+                            f"<p>Este código expira en 5 minutos.</p>"
+                        ),
+                    },
+                )
+            logger.info("OTP de completado enviado exitosamente a %s", email)
+        except Exception:
+            logger.exception("Error enviando OTP de completado via Resend")
+    else:
+        logger.info("OTP de completado generado para %s (%s): %s (Resend no configurado)", telefono, email, codigo)
+
+    return {"ok": True, "message": "Código de confirmación enviado a tu correo."}
+
+
+@router.post("/cuenta/confirmar-otp")
+async def cuenta_confirmar_otp(
+    req: CompleteProfileConfirm, uid: int = Depends(get_uid_from_token)
+) -> dict:
+    from src.db.connection import async_session_factory
+    from src.db.models import Usuario
+    from sqlalchemy import select
+    from datetime import datetime
+    from src.services.identity import normalize_phone
+
+    telefono_raw = req.telefono.strip()
+    codigo = req.codigo.strip()
+
+    if not telefono_raw or not codigo:
+        raise HTTPException(400, "Teléfono y código son requeridos")
+
+    telefono = normalize_phone(telefono_raw)
+
+    from src.cache import get_redis
+    redis_client = await get_redis()
+
+    codigo_guardado = await redis_client.get(f"otp:complete:{uid}")
+    if not codigo_guardado or codigo_guardado != codigo:
+        raise HTTPException(
+            401,
+            detail={
+                "message": "Código inválido o expirado",
+                "code": "INVALID_OTP"
+            }
+        )
+
+    pending_data = await redis_client.get(f"otp:complete:data:{uid}")
+    if not pending_data or not pending_data.startswith(telefono + ":"):
+        raise HTTPException(
+            400,
+            detail={
+                "message": "Los datos de verificación no coinciden o han expirado.",
+                "code": "REGISTRATION_EXPIRED"
+            }
+        )
+
+    _, email = pending_data.split(":", 1)
+
+    await redis_client.delete(f"otp:complete:{uid}")
+    await redis_client.delete(f"otp:complete:data:{uid}")
+
+    async with async_session_factory() as session:
+        # Aquí uid es el telegram_id actual del usuario
+        user_q = await session.execute(
+            select(Usuario).where(Usuario.telegram_id == uid)
+        )
+        user = user_q.scalar_one_or_none()
+        if not user:
+            raise HTTPException(404, "Usuario no encontrado")
+
+        user.telefono = telefono
+        user.email = email
+        user.phone_verified_at = datetime.utcnow()
+        if user.auth_method == "telegram":
+            user.auth_method = "both"
+
+        session.add(user)
+        await session.commit()
+
+    return {"ok": True, "message": "Perfil completado exitosamente."}

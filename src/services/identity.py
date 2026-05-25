@@ -7,15 +7,23 @@ from src.db.models import Usuario
 
 logger = logging.getLogger(__name__)
 
+def normalize_phone(phone: str) -> str:
+    """Normaliza un número de teléfono al formato E.164 (ej: +573001234567)."""
+    digits = "".join(c for c in phone if c.isdigit() or c == "+")
+    if digits.startswith("+"):
+        return digits
+    return f"+57{digits}"
+
 async def resolve_user_by_phone(phone: str) -> Usuario | None:
     """Busca un usuario por su número de teléfono.
 
     Args:
         phone: número de teléfono (ej: +573001234567)
     """
+    normalized = normalize_phone(phone)
     async with async_session_factory() as session:
         result = await session.execute(
-            select(Usuario).where(Usuario.telefono == phone)
+            select(Usuario).where(Usuario.telefono == normalized)
         )
         return result.scalar_one_or_none()
 

@@ -1000,13 +1000,13 @@ async def cmd_codigo_web(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         else "https://entrenadorax.axsoftware.codes"
     )
     await update.message.reply_text(
-        f"<b>Tu codigo de acceso web</b>\n\n"
+        f"<b>Tu codigo de acceso temporal</b>\n\n"
         f"<code>{codigo}</code>\n\n"
-        f"1) Abre <a href=\"{landing_url}/login\">{landing_url}/login</a>\n"
-        f"2) Tab 'Deportista' -> pega el codigo\n"
-        f"3) Listo, entras a tu panel.\n\n"
-        f"El codigo vence en {minutos} minutos y solo sirve una vez. "
-        f"Si te lo pierdes, manda /codigo_web otra vez.",
+        f"Puedes usar este código para ingresar de dos formas:\n"
+        f"• <b>En la aplicación móvil:</b> Selecciona \"Ingresar con código Telegram\" y pégalo.\n"
+        f"• <b>En la web:</b> Abre <a href=\"{landing_url}/login\">{landing_url}/login</a> y pega el código.\n\n"
+        f"El código vence en {minutos} minutos y solo sirve una vez. "
+        f"Si se vence, vuelve a enviar /codigo_web.",
         disable_web_page_preview=True,
     )
     logger.info("cmd_codigo_web enviado uid=%s", uid)

@@ -285,6 +285,21 @@ async def request_id_and_access_log(request: Request, call_next):
             pass
 
 
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    headers = getattr(exc, "headers", None)
+    if isinstance(exc.detail, dict):
+        content = {
+            "detail": exc.detail.get("message", "Error"),
+            "code": exc.detail.get("code")
+        }
+    else:
+        content = {"detail": exc.detail}
+        if exc.status_code == 429:
+            content["code"] = "RATE_LIMITED"
+    return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     """Handler global para 500s no controlados.
