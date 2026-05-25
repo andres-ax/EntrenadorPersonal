@@ -321,35 +321,21 @@ async def request_phone_otp(req: PhoneOtpRequest, request: Request) -> dict:
     if not user:
         await redis_client.set(f"otp:phone:email:{telefono}", email, ex=300)
 
-    # Enviar correo vía Resend
-    if settings.resend_api_key:
-        import httpx
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(
-                    "https://api.resend.com/emails",
-                    headers={
-                        "Authorization": f"Bearer {settings.resend_api_key.get_secret_value()}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "from": "EntrenadorAX <entrenadorax@axsoftware.codes>",
-                        "to": [email],
-                        "subject": f"Tu código de acceso: {codigo}",
-                        "html": (
-                            f"<p>Hola,</p>"
-                            f"<p>Tu código de acceso temporal para iniciar sesión en la aplicación de EntrenadorAX es:</p>"
-                            f"<h2 style='font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #1e3a8a;'>{codigo}</h2>"
-                            f"<p>Este código es de un solo uso y expira en 5 minutos.</p>"
-                            f"<p>Si no solicitaste este código, puedes ignorar este mensaje.</p>"
-                        ),
-                    },
-                )
-            logger.info("OTP enviado exitosamente a %s", email)
-        except Exception:
-            logger.exception("Error enviando OTP via Resend")
-    else:
-        logger.info("OTP generado para %s (%s): %s (Resend no configurado)", telefono, email, codigo)
+    # Enviar correo
+    from src.services.email import otp_login_html, send_email
+
+    sent = await send_email(
+        email,
+        f"Tu código de acceso: {codigo}",
+        otp_login_html(codigo),
+    )
+    if not sent:
+        logger.info(
+            "OTP generado para %s (%s): %s (email no enviado — SMTP/Resend no configurado)",
+            telefono,
+            email,
+            codigo,
+        )
 
     def mask_email(e: str) -> str:
         if "@" not in e:
@@ -505,35 +491,25 @@ async def crear_magic_link(req: MagicLinkReq, request: Request) -> MagicLinkResp
     landing_url = str(settings.landing_url or settings.miniapp_url or "").rstrip("/")
     verify_url = f"{landing_url}/auth/verify?token={token}" if landing_url else None
 
-    if settings.resend_api_key and verify_url:
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(
-                    "https://api.resend.com/emails",
-                    headers={
-                        "Authorization": f"Bearer {settings.resend_api_key.get_secret_value()}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "from": "EntrenadorAX <entrenadorax@axsoftware.codes>",
-                        "to": [email],
-                        "subject": "Tu link de acceso a EntrenadorAX",
-                        "html": (
-                            f"<p>Hola,</p>"
-                            f"<p>Aqui esta tu link para entrar a EntrenadorAX:</p>"
-                            f"<p><a href='{verify_url}'>Entrar</a></p>"
-                            f"<p>Expira en 15 minutos.</p>"
-                            f"<p>Si no fuiste tu, ignora este email.</p>"
-                        ),
-                    },
-                )
-        except Exception:
-            logger.exception("Error enviando magic link via Resend")
+    if verify_url:
+        from src.services.email import magic_link_html, send_email
+
+        sent = await send_email(
+            email,
+            "Tu link de acceso a EntrenadorAX",
+            magic_link_html(verify_url),
+        )
+        if not sent:
+            token_prefix = (token or "")[:8]
+            logger.info(
+                "Magic link generado email=%s token_prefix=%s... (email no enviado)",
+                email,
+                token_prefix,
+            )
     else:
         token_prefix = (token or "")[:8]
         logger.info(
-            "Magic link generado email=%s token_prefix=%s... "
-            "(Resend no configurado; ver DB para detalle)",
+            "Magic link generado email=%s token_prefix=%s... (sin landing_url)",
             email,
             token_prefix,
         )

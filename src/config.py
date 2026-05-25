@@ -75,6 +75,14 @@ class Settings(BaseSettings):
 
     fernet_key: SecretStr | None = None
     resend_api_key: SecretStr | None = None
+
+    # SMTP (Namecheap Private Email u otro proveedor)
+    smtp_host: str | None = None
+    smtp_port: int = 465
+    smtp_user: str | None = None
+    smtp_pass: SecretStr | None = None
+    smtp_from: str | None = None
+    smtp_secure: bool = True
     sentry_dsn: SecretStr | None = None
     plausible_domain: str | None = None
 

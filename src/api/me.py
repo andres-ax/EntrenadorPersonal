@@ -671,35 +671,21 @@ async def cuenta_solicitar_otp(
     await redis_client.set(f"otp:complete:{uid}", codigo, ex=300)
     await redis_client.set(f"otp:complete:data:{uid}", f"{telefono}:{email}", ex=300)
 
-    # Enviar correo vía Resend
-    from src.config import settings
-    if settings.resend_api_key:
-        import httpx
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                await client.post(
-                    "https://api.resend.com/emails",
-                    headers={
-                        "Authorization": f"Bearer {settings.resend_api_key.get_secret_value()}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "from": "EntrenadorAX <entrenadorax@axsoftware.codes>",
-                        "to": [email],
-                        "subject": f"Tu código de confirmación: {codigo}",
-                        "html": (
-                            f"<p>Hola,</p>"
-                            f"<p>Tu código de confirmación para completar tu perfil en la aplicación de EntrenadorAX es:</p>"
-                            f"<h2 style='font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #1e3a8a;'>{codigo}</h2>"
-                            f"<p>Este código expira en 5 minutos.</p>"
-                        ),
-                    },
-                )
-            logger.info("OTP de completado enviado exitosamente a %s", email)
-        except Exception:
-            logger.exception("Error enviando OTP de completado via Resend")
-    else:
-        logger.info("OTP de completado generado para %s (%s): %s (Resend no configurado)", telefono, email, codigo)
+    # Enviar correo
+    from src.services.email import otp_complete_profile_html, send_email
+
+    sent = await send_email(
+        email,
+        f"Tu código de confirmación: {codigo}",
+        otp_complete_profile_html(codigo),
+    )
+    if not sent:
+        logger.info(
+            "OTP de completado generado para %s (%s): %s (email no enviado)",
+            telefono,
+            email,
+            codigo,
+        )
 
     return {"ok": True, "message": "Código de confirmación enviado a tu correo."}
 
