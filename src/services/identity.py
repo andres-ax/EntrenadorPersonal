@@ -8,11 +8,29 @@ from src.db.models import Usuario
 logger = logging.getLogger(__name__)
 
 def normalize_phone(phone: str) -> str:
-    """Normaliza un número de teléfono al formato E.164 (ej: +573001234567)."""
-    digits = "".join(c for c in phone if c.isdigit() or c == "+")
-    if digits.startswith("+"):
-        return digits
-    return f"+57{digits}"
+    """Normaliza un número al formato E.164 colombiano (+57 + 10 dígitos móvil).
+
+    Acepta entradas con o sin '+', con o sin código de país duplicado
+    (ej. 573044093197 o +57573044093197 → +573044093197).
+    """
+    digits = "".join(c for c in phone if c.isdigit())
+    if not digits:
+        return phone.strip()
+
+    # Quitar 57 repetido: +57573044093197 → 573044093197
+    while len(digits) > 12 and digits.startswith("57"):
+        digits = digits[2:]
+
+    if digits.startswith("57") and len(digits) == 12:
+        return f"+{digits}"
+
+    if len(digits) == 10 and digits[0] == "3":
+        return f"+57{digits}"
+
+    if not digits.startswith("57"):
+        return f"+57{digits}"
+
+    return f"+{digits}"
 
 async def resolve_user_by_phone(phone: str) -> Usuario | None:
     """Busca un usuario por su número de teléfono.
