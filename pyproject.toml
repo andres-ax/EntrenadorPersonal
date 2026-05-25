@@ -34,7 +34,13 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 include = ["src*"]
 
+[tool.black]
+target-version = ["py313"]
+line-length = 100
+
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "W", "C90", "D", "S", "T", "I"]
-ignore = ["E501"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "S", "T", "I"]
+ignore = ["E501", "C901", "S110", "S101"]

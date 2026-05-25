@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -10,7 +11,7 @@ from src.services.tts import generar_voz
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path("/tmp/entrenadorax_mindfulness")
+CACHE_DIR = Path(tempfile.gettempdir()) / "entrenadorax_mindfulness"
 CACHE_DIR.mkdir(exist_ok=True)
 
 

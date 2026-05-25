@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
-import random
+import secrets
 
-from src.db.repository import (guardar_checkin_nocturno,
-                               listar_usuarios_activos, log_evento)
-from telegram import Poll, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, ContextTypes, PollAnswerHandler
+
+from src.db.repository import (
+    guardar_checkin_nocturno,
+    listar_usuarios_activos,
+    log_evento,
+)
+from telegram import Poll, Update
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +84,7 @@ async def quiz_educativo_semanal(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Job sabado 10am: envia 1 quiz educativo random."""
     try:
         usuarios = await listar_usuarios_activos()
-        q = random.choice(QUIZ_EDUCATIVO)
+        q = secrets.choice(QUIZ_EDUCATIVO)
         for u in usuarios:
             try:
                 await context.bot.send_poll(
@@ -114,9 +118,7 @@ async def manejar_poll_answer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             2: "Algo es algo. Manana subimos.",
             3: "Dia rough. Manana reseteamos. Aqui estoy.",
         }.get(opcion, "Anotado.")
-        await ctx.bot.send_message(
-            chat_id=uid, text=feedback, parse_mode=ParseMode.HTML
-        )
+        await ctx.bot.send_message(chat_id=uid, text=feedback, parse_mode=ParseMode.HTML)
     except Exception:
         logger.exception("Error procesando poll answer uid=%s", uid)
 

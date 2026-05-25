@@ -10,60 +10,64 @@ from __future__ import annotations
 import functools
 import json
 import logging
-import random
+import secrets
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import time as dtime
-from datetime import timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from agents import function_tool
 
-from src.db.repository import aceptar_modo_militar
-from src.db.repository import \
-    actualizar_sesion_skill_set as repo_actualizar_sesion_skill_set
-from src.db.repository import actualizar_usuario
-from src.db.repository import \
-    buscar_comida_similar as repo_buscar_comida_similar
+from src.db.repository import (
+    aceptar_modo_militar,
+    actualizar_usuario,
+    crear_compromiso,
+    guardar_metrica_corporal,
+    incrementar_citado_compromiso,
+    incrementar_streak,
+    listar_prs,
+    log_evento,
+    obtener_compromiso_activo,
+    obtener_o_crear_streak,
+    obtener_o_crear_usuario,
+    obtener_pr_ejercicio,
+    pausar_recordatorios,
+    reporte_semanal,
+    resumen_nutricional_dia,
+    set_quiet_hours,
+    usar_freeze_streak,
+)
+from src.db.repository import (
+    actualizar_sesion_skill_set as repo_actualizar_sesion_skill_set,
+)
+from src.db.repository import buscar_comida_similar as repo_buscar_comida_similar
 from src.db.repository import cambiar_tono as repo_cambiar_tono
-from src.db.repository import \
-    cerrar_sesion_abierta as repo_cerrar_sesion_abierta
-from src.db.repository import crear_compromiso
+from src.db.repository import cerrar_sesion_abierta as repo_cerrar_sesion_abierta
 from src.db.repository import crear_recordatorio as repo_crear_recordatorio
-from src.db.repository import \
-    desactivar_recordatorio as repo_desactivar_recordatorio
+from src.db.repository import desactivar_recordatorio as repo_desactivar_recordatorio
 from src.db.repository import eliminar_comida as repo_eliminar_comida
 from src.db.repository import guardar_comida as repo_guardar_comida
-from src.db.repository import guardar_metrica_corporal
 from src.db.repository import guardar_pr as repo_guardar_pr
 from src.db.repository import guardar_pr_truco as repo_guardar_pr_truco
 from src.db.repository import guardar_pr_via_escalada as repo_guardar_pr_via
 from src.db.repository import guardar_sesion as repo_guardar_sesion
 from src.db.repository import guardar_sesion_skill as repo_guardar_sesion_skill
-from src.db.repository import \
-    guardar_sesion_sparring as repo_guardar_sesion_sparring
+from src.db.repository import guardar_sesion_sparring as repo_guardar_sesion_sparring
 from src.db.repository import guardar_sueno as repo_guardar_sueno
 from src.db.repository import historial_peso as repo_historial_peso
-from src.db.repository import (incrementar_citado_compromiso,
-                               incrementar_streak, listar_prs)
 from src.db.repository import listar_recordatorios as repo_listar_recordatorios
-from src.db.repository import \
-    listar_sesiones_skill as repo_listar_sesiones_skill
+from src.db.repository import listar_sesiones_skill as repo_listar_sesiones_skill
 from src.db.repository import listar_trucos_aterrizados as repo_listar_trucos
-from src.db.repository import (log_evento, obtener_compromiso_activo,
-                               obtener_o_crear_streak, obtener_o_crear_usuario,
-                               obtener_pr_ejercicio)
-from src.db.repository import \
-    obtener_ultima_sesion_skill as repo_obtener_ultima_sesion_skill
-from src.db.repository import (pausar_recordatorios, reporte_semanal,
-                               resumen_nutricional_dia, set_quiet_hours,
-                               usar_freeze_streak)
-from src.services.hidratacion import (consumo_hoy_ml, objetivo_ml,
-                                      registrar_agua)
+from src.db.repository import (
+    obtener_ultima_sesion_skill as repo_obtener_ultima_sesion_skill,
+)
+from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
 from src.telegram.bot_setup import obtener_application
-from src.telegram.scheduler import (cancelar_recordatorio_jobs,
-                                    programar_recordatorio_en_jobqueue)
+from src.telegram.scheduler import (
+    cancelar_recordatorio_jobs,
+    programar_recordatorio_en_jobqueue,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +115,7 @@ def _log_tool(fn: Callable[..., Any]) -> Callable[..., Any]:
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         safe_args = [_summary_arg(a) for a in args]
         safe_kwargs = {
-            k: ("***" if k in _SENSITIVE_ARG_NAMES else _summary_arg(v))
-            for k, v in kwargs.items()
+            k: ("***" if k in _SENSITIVE_ARG_NAMES else _summary_arg(v)) for k, v in kwargs.items()
         }
         logger.info(
             "tool.%s call args=%s kwargs=%s",
@@ -395,9 +398,7 @@ async def guardar_perfil(
             from src.db.repository import get_categoria_deporte
 
             try:
-                kwargs["categoria_deporte"] = CategoriaDeporte(
-                    get_categoria_deporte(slug)
-                )
+                kwargs["categoria_deporte"] = CategoriaDeporte(get_categoria_deporte(slug))
             except ValueError:
                 kwargs["categoria_deporte"] = CategoriaDeporte.INDOOR_FUERZA
         if timezone:
@@ -450,9 +451,7 @@ async def registrar_entreno(
         fecha = _validar_fecha(fecha)
         tipo = tipo.lower().strip()
         if tipo not in TIPOS_ENTRENO_VALIDOS:
-            return _error(
-                f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_ENTRENO_VALIDOS)}"
-            )
+            return _error(f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_ENTRENO_VALIDOS)}")
 
         ejercicios = _safe_json_loads(ejercicios_json, [])
         sesion = await repo_guardar_sesion(
@@ -529,14 +528,10 @@ async def guardar_pr(
     try:
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_obj = (
-            date.fromisoformat(fecha_norm)
-            if fecha_norm
-            else await _hoy_usuario(telegram_id)
+            date.fromisoformat(fecha_norm) if fecha_norm else await _hoy_usuario(telegram_id)
         )
         pr = await repo_guardar_pr(telegram_id, ejercicio, peso_kg, reps, fecha_obj)
-        await log_evento(
-            telegram_id, "nuevo_pr", {"ejercicio": ejercicio, "peso": peso_kg}
-        )
+        await log_evento(telegram_id, "nuevo_pr", {"ejercicio": ejercicio, "peso": peso_kg})
         try:
             import json as _json
 
@@ -581,10 +576,7 @@ async def listar_todos_prs(telegram_id: int) -> str:
         if not prs:
             return json.dumps({"mensaje": "Aun no tienes PRs registrados"})
         return json.dumps(
-            [
-                {"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps}
-                for p in prs
-            ]
+            [{"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps} for p in prs]
         )
     except Exception:
         logger.exception("Error en listar_todos_prs")
@@ -628,9 +620,7 @@ async def registrar_comida(
     try:
         tipo = tipo.lower().strip()
         if tipo not in TIPOS_COMIDA_VALIDOS:
-            return _error(
-                f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}"
-            )
+            return _error(f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}")
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_use = fecha_norm or (await _hoy_usuario(telegram_id)).isoformat()
 
@@ -660,9 +650,7 @@ async def registrar_comida(
         # Deteccion de duplicado: mismo (telegram_id, fecha, tipo) y alimentos
         # solapados >= 50%. Evita el patron foto+texto del mismo plato (un
         # registro y luego el usuario lo describe en texto).
-        dup_id = await repo_buscar_comida_similar(
-            telegram_id, fecha_use, tipo, alimentos
-        )
+        dup_id = await repo_buscar_comida_similar(telegram_id, fecha_use, tipo, alimentos)
         if dup_id is not None:
             logger.info(
                 "registrar_comida duplicado detectado uid=%s tipo=%s "
@@ -751,9 +739,7 @@ async def consultar_hidratacion_hoy(telegram_id: int) -> str:
                 "consumo_hoy_ml": consumo,
                 "objetivo_diario_ml": objetivo,
                 "faltante_ml": max(0, objetivo - consumo),
-                "porcentaje": (
-                    round((consumo / objetivo * 100), 1) if objetivo > 0 else 0
-                ),
+                "porcentaje": (round((consumo / objetivo * 100), 1) if objetivo > 0 else 0),
             }
         )
     except Exception:
@@ -775,9 +761,7 @@ async def resumen_nutricional(telegram_id: int, fecha: str = "") -> str:
     try:
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_obj = (
-            date.fromisoformat(fecha_norm)
-            if fecha_norm
-            else await _hoy_usuario(telegram_id)
+            date.fromisoformat(fecha_norm) if fecha_norm else await _hoy_usuario(telegram_id)
         )
         return json.dumps(await resumen_nutricional_dia(telegram_id, fecha_obj))
     except Exception:
@@ -817,9 +801,7 @@ async def registrar_sueno(
                 "antes de llamar esta tool."
             )
         if horas > 16:
-            return _error(
-                "horas fuera de rango (max 16). Verifica el dato con el usuario."
-            )
+            return _error("horas fuera de rango (max 16). Verifica el dato con el usuario.")
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_use = fecha_norm or (await _hoy_usuario(telegram_id)).isoformat()
         calidad = max(1, min(5, calidad))
@@ -1080,9 +1062,7 @@ async def confirmar_modo_militar(telegram_id: int) -> str:
 
 @function_tool
 @_log_tool
-async def configurar_quiet_hours(
-    telegram_id: int, hora_inicio: str, hora_fin: str
-) -> str:
+async def configurar_quiet_hours(telegram_id: int, hora_inicio: str, hora_fin: str) -> str:
     """Configura horas de silencio (sin notificaciones).
 
     Args:
@@ -1094,9 +1074,7 @@ async def configurar_quiet_hours(
     """
     try:
         await set_quiet_hours(telegram_id, hora_inicio, hora_fin)
-        await log_evento(
-            telegram_id, "quiet_hours", {"inicio": hora_inicio, "fin": hora_fin}
-        )
+        await log_evento(telegram_id, "quiet_hours", {"inicio": hora_inicio, "fin": hora_fin})
         return _ok({"inicio": hora_inicio, "fin": hora_fin})
     except Exception:
         logger.exception("Error en configurar_quiet_hours")
@@ -1195,7 +1173,7 @@ async def proponer_ejercicio_aleatorio(telegram_id: int) -> str:
         "movilidad activa",
         "descanso activo",
     ]
-    eleccion = random.choice(opciones)
+    eleccion = secrets.choice(opciones)
     await log_evento(telegram_id, "rueda_ejercicio", {"eleccion": eleccion})
     return _ok({"foco_propuesto": eleccion, "mensaje": f"Hoy toca: {eleccion}"})
 
@@ -1219,7 +1197,7 @@ async def dar_premio_motivacional(telegram_id: int) -> str:
         "Eres mas fuerte que tu peor dia.",
     ]
     await log_evento(telegram_id, "premio_motivacional", {})
-    return _ok({"mensaje": random.choice(mensajes)})
+    return _ok({"mensaje": secrets.choice(mensajes)})
 
 
 def _detectar_logro_streak(dias: int) -> str | None:
@@ -1243,9 +1221,7 @@ async def verificar_logros(telegram_id: int) -> str:
         logro = _detectar_logro_streak(s.dias_actuales)
         if logro:
             await log_evento(telegram_id, "logro_alcanzado", {"logro": logro})
-            return _ok(
-                {"logro": logro, "dias": s.dias_actuales, "mensaje": f"Hito {logro}!"}
-            )
+            return _ok({"logro": logro, "dias": s.dias_actuales, "mensaje": f"Hito {logro}!"})
         return _ok({"logro": None, "dias": s.dias_actuales})
     except Exception:
         logger.exception("Error en verificar_logros")
@@ -1326,9 +1302,7 @@ async def registrar_truco_aterrizado(
             return _error("nombre_truco requerido (max 80 chars)")
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_obj = (
-            date.fromisoformat(fecha_norm)
-            if fecha_norm
-            else await _hoy_usuario(telegram_id)
+            date.fromisoformat(fecha_norm) if fecha_norm else await _hoy_usuario(telegram_id)
         )
         if es_primer_aterrizaje:
             pr = await repo_guardar_pr_truco(
@@ -1339,9 +1313,7 @@ async def registrar_truco_aterrizado(
                 video_url=video_url,
                 fecha=fecha_obj,
             )
-            await log_evento(
-                telegram_id, "truco_PR", {"deporte": deporte, "truco": nombre_truco}
-            )
+            await log_evento(telegram_id, "truco_PR", {"deporte": deporte, "truco": nombre_truco})
             return _ok(
                 {
                     "pr_id": pr.id,
@@ -1405,9 +1377,7 @@ async def registrar_sesion_skill(
             return _error("sensacion debe ser 1-5")
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_obj = (
-            date.fromisoformat(fecha_norm)
-            if fecha_norm
-            else await _hoy_usuario(telegram_id)
+            date.fromisoformat(fecha_norm) if fecha_norm else await _hoy_usuario(telegram_id)
         )
         sesion = await repo_guardar_sesion_skill(
             telegram_id,
@@ -1483,9 +1453,7 @@ async def registrar_via_escalada(
             return _error(f"grado invalido: {grado}. Usa 5.10a, V4 o 6c+")
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_obj = (
-            date.fromisoformat(fecha_norm)
-            if fecha_norm
-            else await _hoy_usuario(telegram_id)
+            date.fromisoformat(fecha_norm) if fecha_norm else await _hoy_usuario(telegram_id)
         )
         pr = await repo_guardar_pr_via(
             telegram_id,
@@ -1553,8 +1521,7 @@ async def consultar_progreso_skill(
                 "horas_totales": round(horas_totales, 1),
                 "spots_frecuentados": spots[:5],
                 "trucos_PR_nuevos": [
-                    {"truco": t.ejercicio, "fecha": str(t.fecha)}
-                    for t in trucos_recientes[:10]
+                    {"truco": t.ejercicio, "fecha": str(t.fecha)} for t in trucos_recientes[:10]
                 ],
                 "total_caidas": caidas_total,
             }
@@ -1613,18 +1580,14 @@ async def registrar_sparring(
     try:
         estilo = estilo.lower().strip().replace(" ", "_")
         if estilo not in ESTILOS_COMBATE:
-            return _error(
-                f"estilo invalido: {estilo}. Validos: {sorted(ESTILOS_COMBATE)}"
-            )
+            return _error(f"estilo invalido: {estilo}. Validos: {sorted(ESTILOS_COMBATE)}")
         if not (1 <= intensidad_1_10 <= 10):
             return _error("intensidad debe ser 1-10")
         if rounds < 1 or rounds > 30:
             return _error("rounds fuera de rango (1-30)")
         fecha_norm = _validar_fecha(fecha) if fecha else ""
         fecha_obj = (
-            date.fromisoformat(fecha_norm)
-            if fecha_norm
-            else await _hoy_usuario(telegram_id)
+            date.fromisoformat(fecha_norm) if fecha_norm else await _hoy_usuario(telegram_id)
         )
         sesion = await repo_guardar_sesion_sparring(
             telegram_id,
@@ -2252,9 +2215,7 @@ async def consultar_ultima_sesion_skill(telegram_id: int, deporte: str = "") -> 
                 "spot": sesion.spot,
                 "notas": sesion.notas,
                 "cerrada": sesion.cerrada,
-                "updated_at": (
-                    sesion.updated_at.isoformat() if sesion.updated_at else None
-                ),
+                "updated_at": (sesion.updated_at.isoformat() if sesion.updated_at else None),
             }
         )
     except Exception:
@@ -2349,9 +2310,7 @@ async def editar_sesion_reciente(
 
 @function_tool
 @_log_tool
-async def eliminar_comida_reciente(
-    telegram_id: int, comida_id: int = 0, tipo: str = ""
-) -> str:
+async def eliminar_comida_reciente(telegram_id: int, comida_id: int = 0, tipo: str = "") -> str:
     """Borra una comida de HOY. Requiere comida_id o tipo.
 
     Args:
@@ -2367,9 +2326,7 @@ async def eliminar_comida_reciente(
         if cid is None and tipo_norm is None:
             return _error("necesito comida_id o tipo (desayuno/almuerzo/cena/snack)")
         if tipo_norm and tipo_norm not in TIPOS_COMIDA_VALIDOS:
-            return _error(
-                f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}"
-            )
+            return _error(f"tipo invalido: {tipo}. Validos: {sorted(TIPOS_COMIDA_VALIDOS)}")
         borrado_id = await repo_eliminar_comida(
             telegram_id=telegram_id,
             comida_id=cid,

@@ -49,9 +49,7 @@ def _validar_init_data(init_data: str) -> dict | None:
         settings.telegram_token.get_secret_value().encode(),
         hashlib.sha256,
     ).digest()
-    computed = hmac.new(
-        secret_key, data_check_string.encode(), hashlib.sha256
-    ).hexdigest()
+    computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(computed, received_hash):
         return None
     try:
@@ -127,9 +125,7 @@ class CodigoWebReq(BaseModel):
 
 
 @router.post("/codigo", response_model=TokenResp)
-async def validar_codigo_web(
-    req: CodigoWebReq, request: Request, response: Response
-) -> TokenResp:
+async def validar_codigo_web(req: CodigoWebReq, request: Request, response: Response) -> TokenResp:
     """Login web del deportista via codigo de 6 digitos generado por el bot.
 
     Flujo:
@@ -227,7 +223,7 @@ async def get_uid_from_token(
 
 import secrets as _secrets  # noqa: E402
 from datetime import datetime as _dt  # noqa: E402
-from datetime import timedelta as _td
+from datetime import timedelta as _td  # noqa: E402
 
 import httpx  # noqa: E402
 from sqlalchemy import select as _select  # noqa: E402
@@ -316,9 +312,7 @@ async def verificar_magic_link(token: str, response: Response) -> TokenResp:
         if ml.expires_at < _dt.utcnow():
             raise HTTPException(401, "magic link expirado")
 
-        user_q = await session.execute(
-            _select(Usuario).where(Usuario.email == ml.email)
-        )
+        user_q = await session.execute(_select(Usuario).where(Usuario.email == ml.email))
         user = user_q.scalar_one_or_none()
         if user is None:
             user = Usuario(

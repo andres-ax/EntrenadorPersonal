@@ -5,20 +5,21 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import tempfile
 from io import BytesIO
 from pathlib import Path
 
 import openai
-from openai import AsyncOpenAI
-
 import telegram.error
+from openai import AsyncOpenAI
+from telegram.constants import ChatAction, ParseMode
+
 from src.config import settings
 from src.db.repository import log_llm_usage
-from telegram.constants import ChatAction, ParseMode
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path("/tmp/entrenadorax_tts")
+CACHE_DIR = Path(tempfile.gettempdir()) / "entrenadorax_tts"
 CACHE_DIR.mkdir(exist_ok=True)
 
 _client: AsyncOpenAI | None = None
@@ -81,9 +82,7 @@ async def transcribir_audio(
                 try:
                     await log_llm_usage(None, "whisper", model, 0, 0)
                 except Exception:
-                    logger.exception(
-                        "Error loggeando uso LLM en transcripcion (no critico)"
-                    )
+                    logger.exception("Error loggeando uso LLM en transcripcion (no critico)")
                 return text
             except (openai.RateLimitError, openai.APITimeoutError) as e:
                 if i == intentos - 1:
@@ -130,8 +129,8 @@ async def generar_voz(texto: str, voice: str = "alloy") -> BytesIO | None:
         cache_path.write_bytes(audio_bytes)
         try:
             await log_llm_usage(None, "tts", "tts-1", len(texto), 0)
-            except Exception:
-                logger.exception("Error loggeando uso LLM en tts (no critico)")
+        except Exception:
+            logger.exception("Error loggeando uso LLM en tts (no critico)")
         return BytesIO(audio_bytes)
     except Exception:
         logger.exception("Error generando TTS")
@@ -162,11 +161,9 @@ async def enviar_voz(
     if audio is None:
         if fallback_text:
             try:
-                await bot.send_message(
-                    chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML
-                )
+                await bot.send_message(chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML)
             except Exception:
-                    logger.exception("Fallback texto tambien fallo uid=%s", chat_id)
+                logger.exception("Fallback texto tambien fallo uid=%s", chat_id)
         return False
 
     try:
@@ -182,12 +179,10 @@ async def enviar_voz(
         logger.info("Bot bloqueado por %s", chat_id)
         return False
     except Exception:
-            logger.exception("Error enviando voz uid=%s", chat_id)
+        logger.exception("Error enviando voz uid=%s", chat_id)
         if fallback_text:
             try:
-                await bot.send_message(
-                    chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML
-                )
+                await bot.send_message(chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML)
             except Exception:
-                    logger.exception("Error fallback texto tras fallo voz uid=%s", chat_id)
+                logger.exception("Error fallback texto tras fallo voz uid=%s", chat_id)
         return False

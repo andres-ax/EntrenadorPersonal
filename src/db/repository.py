@@ -10,25 +10,47 @@ from typing import Any, Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-logger = logging.getLogger(__name__)
-
 from src.db.connection import async_session_factory
-from src.db.models import (CheckinNocturno, Comida, Compromiso, CrisisLog,
-                           DeporteCatalogo, DuracionPago, EjercicioRealizado,
-                           EscalacionState, EstadoPago, EventoBot,
-                           FeedbackComida, LlmUsage, MetodoPago,
-                           MetricaCorporal, MetricaSueno, PagoComprobante,
-                           PersonalRecord, PlanSuscripcion, Recordatorio,
-                           SesionEntrenamiento, Streak, SubtipoSesion,
-                           Suscripcion, TipoAccionEscalacion, TipoComida,
-                           TipoCompromiso, TipoEjercicio, TipoPR, TipoStreak,
-                           TonoCoach, Usuario, UsuarioBloqueado)
+from src.db.models import (
+    CheckinNocturno,
+    Comida,
+    Compromiso,
+    CrisisLog,
+    DeporteCatalogo,
+    DuracionPago,
+    EjercicioRealizado,
+    EscalacionState,
+    EstadoPago,
+    EventoBot,
+    FeedbackComida,
+    LlmUsage,
+    MetodoPago,
+    MetricaCorporal,
+    MetricaSueno,
+    PagoComprobante,
+    PersonalRecord,
+    PlanSuscripcion,
+    Recordatorio,
+    SesionEntrenamiento,
+    Streak,
+    SubtipoSesion,
+    Suscripcion,
+    TipoAccionEscalacion,
+    TipoComida,
+    TipoCompromiso,
+    TipoEjercicio,
+    TipoPR,
+    TipoStreak,
+    TonoCoach,
+    Usuario,
+    UsuarioBloqueado,
+)
+
+logger = logging.getLogger(__name__)
 
 
 async def _get_usuario_id(session, telegram_id: int) -> Optional[int]:
-    result = await session.execute(
-        select(Usuario.id).where(Usuario.telegram_id == telegram_id)
-    )
+    result = await session.execute(select(Usuario.id).where(Usuario.telegram_id == telegram_id))
     return result.scalar_one_or_none()
 
 
@@ -37,9 +59,7 @@ async def _get_usuario_id(session, telegram_id: int) -> Optional[int]:
 
 async def obtener_o_crear_usuario(telegram_id: int, nombre: str = "") -> Usuario:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             usuario = Usuario(telegram_id=telegram_id, nombre=nombre)
@@ -55,9 +75,7 @@ async def obtener_o_crear_usuario(telegram_id: int, nombre: str = "") -> Usuario
 
 async def obtener_usuario(telegram_id: int) -> Optional[Usuario]:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         return result.scalar_one_or_none()
 
 
@@ -67,9 +85,7 @@ async def eliminar_usuario(telegram_id: int) -> bool:
     Retorna True si existia y se borro, False si no existia.
     """
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             logger.info(
@@ -99,9 +115,7 @@ async def eliminar_usuario(telegram_id: int) -> bool:
 
 async def actualizar_usuario(telegram_id: int, **kwargs) -> Optional[Usuario]:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             return None
@@ -127,9 +141,7 @@ async def actualizar_usuario(telegram_id: int, **kwargs) -> Optional[Usuario]:
 async def marcar_bot_bloqueado(telegram_id: int, bloqueado: bool = True) -> None:
     """Se llama cuando el bot recibe Forbidden de Telegram (user lo bloqueo)."""
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is not None:
             usuario.bot_bloqueado = bloqueado
@@ -250,9 +262,7 @@ async def guardar_sesion(
     return sesion_entreno
 
 
-async def obtener_ultimas_sesiones(
-    telegram_id: int, limite: int = 10
-) -> list[SesionEntrenamiento]:
+async def obtener_ultimas_sesiones(telegram_id: int, limite: int = 10) -> list[SesionEntrenamiento]:
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -270,9 +280,7 @@ async def obtener_ultimas_sesiones(
 # --- Personal Records ---
 
 
-async def obtener_pr_ejercicio(
-    telegram_id: int, ejercicio: str
-) -> Optional[PersonalRecord]:
+async def obtener_pr_ejercicio(telegram_id: int, ejercicio: str) -> Optional[PersonalRecord]:
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -432,9 +440,7 @@ def _alimentos_set(raw: Any) -> set[str]:
             if s:
                 out.add(s)
         elif isinstance(item, dict):
-            nombre = (
-                item.get("nombre") or item.get("name") or item.get("alimento") or ""
-            )
+            nombre = item.get("nombre") or item.get("name") or item.get("alimento") or ""
             if isinstance(nombre, str) and nombre.strip():
                 out.add(nombre.strip().lower())
     return out
@@ -488,9 +494,7 @@ async def buscar_comida_similar(
         return None
 
 
-async def resumen_nutricional_dia(
-    telegram_id: int, fecha: Optional[date] = None
-) -> dict:
+async def resumen_nutricional_dia(telegram_id: int, fecha: Optional[date] = None) -> dict:
     """Resumen nutricional del dia filtrando comidas placeholder (kcal=0).
 
     Devuelve:
@@ -580,12 +584,8 @@ async def _resumen_sueno_semanal_internal(session, uid: int) -> dict:
     if not registros:
         return {"promedio_horas": 0, "promedio_calidad": 0, "dias_registrados": 0}
     return {
-        "promedio_horas": round(
-            sum(r.horas or 0 for r in registros) / len(registros), 1
-        ),
-        "promedio_calidad": round(
-            sum(r.calidad or 0 for r in registros) / len(registros), 1
-        ),
+        "promedio_horas": round(sum(r.horas or 0 for r in registros) / len(registros), 1),
+        "promedio_calidad": round(sum(r.calidad or 0 for r in registros) / len(registros), 1),
         "dias_registrados": len(registros),
     }
 
@@ -701,8 +701,7 @@ async def reporte_semanal(telegram_id: int) -> dict:
             "volumen_total_kg": volumen,
             "total_ejercicios": total_ejercicios,
             "nuevos_prs": [
-                {"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps}
-                for p in nuevos_prs
+                {"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps} for p in nuevos_prs
             ],
             "sueno": sueno_data,
             "nutricion_hoy": nutricion_hoy,
@@ -794,9 +793,7 @@ async def obtener_compromiso_activo(telegram_id: int) -> Optional[Compromiso]:
 
 async def incrementar_citado_compromiso(compromiso_id: int) -> None:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Compromiso).where(Compromiso.id == compromiso_id)
-        )
+        result = await session.execute(select(Compromiso).where(Compromiso.id == compromiso_id))
         c = result.scalar_one_or_none()
         if c:
             c.citado_veces = (c.citado_veces or 0) + 1
@@ -887,9 +884,7 @@ async def reset_escalacion(telegram_id: int, tipo_accion: Optional[str] = None) 
             EscalacionState.fecha == hoy,
         )
         if tipo_accion:
-            query = query.where(
-                EscalacionState.tipo_accion == TipoAccionEscalacion(tipo_accion)
-            )
+            query = query.where(EscalacionState.tipo_accion == TipoAccionEscalacion(tipo_accion))
         result = await session.execute(query)
         estados = list(result.scalars().all())
         for e in estados:
@@ -901,9 +896,7 @@ async def reset_escalacion(telegram_id: int, tipo_accion: Optional[str] = None) 
 # --- Streaks ---
 
 
-async def obtener_o_crear_streak(
-    telegram_id: int, tipo_streak: str = "entreno"
-) -> Streak:
+async def obtener_o_crear_streak(telegram_id: int, tipo_streak: str = "entreno") -> Streak:
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
@@ -993,9 +986,7 @@ async def guardar_checkin_nocturno(
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
             raise ValueError(f"Usuario {telegram_id} no existe")
-        checkin = CheckinNocturno(
-            usuario_id=uid, opcion_id=opcion_id, respondido_via=via
-        )
+        checkin = CheckinNocturno(usuario_id=uid, opcion_id=opcion_id, respondido_via=via)
         session.add(checkin)
         await session.commit()
         await session.refresh(checkin)
@@ -1155,9 +1146,7 @@ async def obtener_plan_actual(telegram_id: int) -> PlanSuscripcion:
     """Devuelve el plan vigente. Si esta bloqueado o expirado -> FREE."""
     ahora = datetime.utcnow()
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             return PlanSuscripcion.FREE
@@ -1212,9 +1201,7 @@ async def activar_plan(
     """Crea/extiende suscripcion + actualiza plan_actual + plan_expira_en."""
     dias_real = dias if dias is not None else _dias_por_duracion(plan, duracion)
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             raise ValueError(f"Usuario {telegram_id} no existe")
@@ -1223,9 +1210,7 @@ async def activar_plan(
         if base < ahora:
             base = ahora
         nueva_expira = (
-            None
-            if plan == PlanSuscripcion.LIFETIME
-            else base + timedelta(days=dias_real)
+            None if plan == PlanSuscripcion.LIFETIME else base + timedelta(days=dias_real)
         )
         usuario.plan_actual = plan
         usuario.plan_expira_en = nueva_expira
@@ -1248,9 +1233,7 @@ async def activar_plan(
 async def desactivar_plan(telegram_id: int) -> bool:
     """Revoca el plan actual (downgrade a FREE)."""
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             return False
@@ -1278,9 +1261,7 @@ async def activar_suscripcion_pro(
         uid = await _get_usuario_id(session, telegram_id)
         if uid is None:
             raise ValueError(f"Usuario {telegram_id} no existe")
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one()
         ahora = datetime.utcnow()
         base = usuario.plan_expira_en or ahora
@@ -1327,9 +1308,7 @@ async def guardar_comprobante(
             raise ValueError(f"Usuario {telegram_id} no existe")
         monto_cop = int(vision_payload.get("monto_cop") or 0)
         tolerancia = 500
-        monto_match = (
-            monto_cop > 0 and abs(monto_cop - monto_esperado_cop) <= tolerancia
-        )
+        monto_match = monto_cop > 0 and abs(monto_cop - monto_esperado_cop) <= tolerancia
         metodo_str = (vision_payload.get("metodo") or "otro").lower()
         try:
             metodo_enum = MetodoPago(metodo_str)
@@ -1364,9 +1343,7 @@ async def guardar_comprobante(
 
 async def marcar_comprobante_duplicado(comp_id: int, razon: str) -> None:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(PagoComprobante).where(PagoComprobante.id == comp_id)
-        )
+        result = await session.execute(select(PagoComprobante).where(PagoComprobante.id == comp_id))
         comp = result.scalar_one_or_none()
         if comp:
             comp.estado = EstadoPago.DUPLICADO
@@ -1377,9 +1354,7 @@ async def marcar_comprobante_duplicado(comp_id: int, razon: str) -> None:
 
 async def obtener_comprobante(comp_id: int) -> Optional[PagoComprobante]:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(PagoComprobante).where(PagoComprobante.id == comp_id)
-        )
+        result = await session.execute(select(PagoComprobante).where(PagoComprobante.id == comp_id))
         return result.scalar_one_or_none()
 
 
@@ -1388,9 +1363,7 @@ async def aprobar_comprobante(
 ) -> Optional[PagoComprobante]:
     """Aprueba un comprobante y activa el plan asociado."""
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(PagoComprobante).where(PagoComprobante.id == comp_id)
-        )
+        result = await session.execute(select(PagoComprobante).where(PagoComprobante.id == comp_id))
         comp = result.scalar_one_or_none()
         if comp is None or comp.estado == EstadoPago.APROBADO:
             return None
@@ -1399,9 +1372,7 @@ async def aprobar_comprobante(
         comp.revisado_en = datetime.utcnow()
         if notas:
             comp.notas_admin = notas
-        usuario_result = await session.execute(
-            select(Usuario).where(Usuario.id == comp.usuario_id)
-        )
+        usuario_result = await session.execute(select(Usuario).where(Usuario.id == comp.usuario_id))
         usuario = usuario_result.scalar_one()
         await session.commit()
         await session.refresh(comp)
@@ -1430,9 +1401,7 @@ async def rechazar_comprobante(
 ) -> Optional[PagoComprobante]:
     """Rechaza un comprobante, revoca activacion provisional, opcionalmente bloquea usuario."""
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(PagoComprobante).where(PagoComprobante.id == comp_id)
-        )
+        result = await session.execute(select(PagoComprobante).where(PagoComprobante.id == comp_id))
         comp = result.scalar_one_or_none()
         if comp is None:
             return None
@@ -1440,9 +1409,7 @@ async def rechazar_comprobante(
         comp.motivo_rechazo = motivo
         comp.revisado_por = admin_email
         comp.revisado_en = datetime.utcnow()
-        usuario_result = await session.execute(
-            select(Usuario).where(Usuario.id == comp.usuario_id)
-        )
+        usuario_result = await session.execute(select(Usuario).where(Usuario.id == comp.usuario_id))
         usuario = usuario_result.scalar_one()
         await session.commit()
         await session.refresh(comp)
@@ -1471,9 +1438,7 @@ async def listar_comprobantes_activos(telegram_id: int) -> list[PagoComprobante]
         result = await session.execute(
             select(PagoComprobante).where(
                 PagoComprobante.usuario_id == uid,
-                PagoComprobante.estado.in_(
-                    [EstadoPago.PENDIENTE_HUMANO, EstadoPago.APROBADO]
-                ),
+                PagoComprobante.estado.in_([EstadoPago.PENDIENTE_HUMANO, EstadoPago.APROBADO]),
             )
         )
         return list(result.scalars().all())
@@ -1488,9 +1453,7 @@ async def listar_comprobantes_admin(
         query = select(PagoComprobante)
         if estado:
             query = query.where(PagoComprobante.estado == estado)
-        query = (
-            query.order_by(PagoComprobante.creado_en.desc()).limit(limit).offset(offset)
-        )
+        query = query.order_by(PagoComprobante.creado_en.desc()).limit(limit).offset(offset)
         result = await session.execute(query)
         return list(result.scalars().all())
 
@@ -1549,9 +1512,7 @@ async def cambiar_tono(telegram_id: int, tono: str) -> Optional[Usuario]:
 
 
 async def aceptar_modo_militar(telegram_id: int) -> Optional[Usuario]:
-    return await actualizar_usuario(
-        telegram_id, modo_militar_aceptado_en=datetime.utcnow()
-    )
+    return await actualizar_usuario(telegram_id, modo_militar_aceptado_en=datetime.utcnow())
 
 
 async def pausar_recordatorios(telegram_id: int, dias: int) -> Optional[Usuario]:
@@ -1559,9 +1520,7 @@ async def pausar_recordatorios(telegram_id: int, dias: int) -> Optional[Usuario]
     return await actualizar_usuario(telegram_id, pausado_hasta=hasta)
 
 
-async def set_quiet_hours(
-    telegram_id: int, inicio_hhmm: str, fin_hhmm: str
-) -> Optional[Usuario]:
+async def set_quiet_hours(telegram_id: int, inicio_hhmm: str, fin_hhmm: str) -> Optional[Usuario]:
     from datetime import time as time_t
 
     h_inicio, m_inicio = map(int, inicio_hhmm.split(":"))
@@ -1800,12 +1759,8 @@ async def guardar_sesion_skill(
             # tratar 3 mensajes del mismo entreno como 3*duracion); usamos
             # max() para tomar el valor mas alto reportado.
             existente.duracion_min = max(existente.duracion_min or 0, duracion_min)
-            existente.trucos_intentados = (
-                existente.trucos_intentados or 0
-            ) + trucos_intentados
-            existente.trucos_aterrizados = (
-                existente.trucos_aterrizados or 0
-            ) + trucos_aterrizados
+            existente.trucos_intentados = (existente.trucos_intentados or 0) + trucos_intentados
+            existente.trucos_aterrizados = (existente.trucos_aterrizados or 0) + trucos_aterrizados
             existente.num_caidas = (existente.num_caidas or 0) + num_caidas
             existente.sensacion_1_5 = sensacion_norm
             if foco_sesion:
@@ -2019,8 +1974,7 @@ async def actualizar_sesion_skill_set(
         # Restriccion: solo hoy. Para historico, requeriria flag explicito.
         if sesion.fecha != date.today():
             logger.warning(
-                "actualizar_sesion_skill_set uid=%s sesion_id=%s rechazada "
-                "(fecha=%s != hoy)",
+                "actualizar_sesion_skill_set uid=%s sesion_id=%s rechazada " "(fecha=%s != hoy)",
                 telegram_id,
                 sesion.id,
                 sesion.fecha,
@@ -2059,9 +2013,7 @@ async def actualizar_sesion_skill_set(
     return sesion
 
 
-async def obtener_comidas_dia(
-    telegram_id: int, fecha: Optional[date] = None
-) -> list[Comida]:
+async def obtener_comidas_dia(telegram_id: int, fecha: Optional[date] = None) -> list[Comida]:
     """Lista las Comida de un usuario en una fecha (hoy default)."""
     fecha_use = fecha or date.today()
     async with async_session_factory() as session:
@@ -2177,9 +2129,7 @@ async def guardar_sesion_sparring(
     duracion_total = max(1, rounds * duracion_round_min)
     notas_finales = notas
     if golpe_cabeza_fuerte:
-        notas_finales = (
-            f"[GOLPE_CABEZA_FUERTE] {notas}" if notas else "[GOLPE_CABEZA_FUERTE]"
-        )
+        notas_finales = f"[GOLPE_CABEZA_FUERTE] {notas}" if notas else "[GOLPE_CABEZA_FUERTE]"
 
     async with async_session_factory() as session:
         uid = await _get_usuario_id(session, telegram_id)
@@ -2247,9 +2197,7 @@ async def listar_trucos_aterrizados(
         return list(result.scalars().all())
 
 
-async def listar_sparring_reciente(
-    telegram_id: int, dias: int = 14
-) -> list[SesionEntrenamiento]:
+async def listar_sparring_reciente(telegram_id: int, dias: int = 14) -> list[SesionEntrenamiento]:
     """Sesiones sparring recientes (para detectar trauma craneal acumulado)."""
     desde = date.today() - timedelta(days=dias)
     async with async_session_factory() as session:
@@ -2281,9 +2229,7 @@ async def crear_recordatorio(
 ) -> Optional[Recordatorio]:
     """Crea un recordatorio one-shot o recurrente. Devuelve el modelo persistido."""
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             return None
@@ -2303,9 +2249,7 @@ async def crear_recordatorio(
         return rec
 
 
-async def listar_recordatorios(
-    telegram_id: int, solo_activos: bool = True
-) -> list[Recordatorio]:
+async def listar_recordatorios(telegram_id: int, solo_activos: bool = True) -> list[Recordatorio]:
     """Lista recordatorios del usuario (activos por defecto)."""
     async with async_session_factory() as session:
         query = select(Recordatorio).where(Recordatorio.telegram_id == telegram_id)
@@ -2319,9 +2263,7 @@ async def listar_recordatorios(
 async def listar_recordatorios_activos_global() -> list[Recordatorio]:
     """Todos los recordatorios activos del sistema. Uso: scheduler loader al boot."""
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Recordatorio).where(Recordatorio.activo.is_(True))
-        )
+        result = await session.execute(select(Recordatorio).where(Recordatorio.activo.is_(True)))
         return list(result.scalars().all())
 
 
@@ -2372,9 +2314,7 @@ PRECIOS_POR_MILLON: dict[str, tuple[float, float]] = {
 
 def _estimar_costo(modelo: str, input_tokens: int, output_tokens: int) -> float:
     precio_in, precio_out = PRECIOS_POR_MILLON.get(modelo, (0.40, 1.60))
-    return (input_tokens / 1_000_000) * precio_in + (
-        output_tokens / 1_000_000
-    ) * precio_out
+    return (input_tokens / 1_000_000) * precio_in + (output_tokens / 1_000_000) * precio_out
 
 
 async def log_llm_usage(
