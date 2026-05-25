@@ -474,11 +474,11 @@ async def sync_health_connect(
     return {"ok": True, "sincronizados": sincronizados}
 
 
-@router.get("/novedades")
+@router.get("/novedades", response_model=None)
 async def novedades(
     request: Request,
     uid: int = Depends(get_uid_from_token),
-) -> Response | dict:
+):
     """Devuelve las novedades de la comunidad.
 
     Dual: si se solicita application/json retorna datos estructurados,
