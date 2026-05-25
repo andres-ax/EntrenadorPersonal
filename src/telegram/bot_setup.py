@@ -60,6 +60,7 @@ COMANDOS_CORE = [
     "pagar",
     "llamar",
     "codigo_web",
+    "vincular",
 ]
 
 # Set extendido solo para ES (locale principal). Estos solo aparecen en

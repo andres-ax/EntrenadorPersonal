@@ -553,6 +553,38 @@ async def _autocancelar_escalation_si_cumplio(
         logger.exception("Error cancelando escalation uid=%s", uid)
 
 
+async def _responder_vinculacion_ok(
+    update: Update, nombre: str, user_id: int, telegram_id: int
+) -> None:
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    keyboard = [
+        [InlineKeyboardButton("Volver a la App", url="entrenadorax://app/pair?status=success")]
+    ]
+    await update.message.reply_text(
+        f"¡Hola {nombre}! 🎉 Tu Telegram quedó vinculado con EntrenadorAX.\n\n"
+        f"Regresa a la app móvil; debería detectarlo en unos segundos.\n"
+        f"Si no, toca «Comprobar vinculación» en la pantalla de Telegram.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+    await log_evento(telegram_id, "telegram_paired", {"user_id": user_id})
+
+
+async def _intentar_vincular_desde_app(
+    update: Update, pair_ref: str
+) -> bool:
+    """Ejecuta vinculacion si el token/codigo es valido. Retorna True si OK."""
+    from src.services.telegram_pair import ejecutar_vinculacion
+
+    telegram_id = update.effective_user.id
+    nombre = update.effective_user.first_name or "deportista"
+    linked = await ejecutar_vinculacion(pair_ref.strip(), telegram_id)
+    if linked is None:
+        return False
+    await _responder_vinculacion_ok(update, nombre, linked.id, telegram_id)
+    return True
+
+
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
     nombre = update.effective_user.first_name
@@ -562,47 +594,18 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # Verificar si hay un argumento de vinculación
+    # Verificar si hay un argumento de vinculación (deep link pair_xxx)
     pair_token = ctx.args[0] if ctx.args else None
     if pair_token and pair_token.startswith("pair_"):
         await update.message.chat.send_action(ChatAction.TYPING)
-        from src.cache import get_redis
-        redis_client = await get_redis()
-        
-        paired_uid_str = await redis_client.get(f"telegram:pair:{pair_token}")
-        if paired_uid_str:
-            paired_uid = int(paired_uid_str)
-            await redis_client.delete(f"telegram:pair:{pair_token}")
-            
-            from src.services.identity import link_telegram_to_user, resolve_user_by_telegram
-            
-            user_db = await resolve_user_by_telegram(paired_uid)
-            if user_db:
-                await link_telegram_to_user(user_db.id, uid)
-                
-                from telegram import InlineKeyboardMarkup
-                keyboard = [
-                    [InlineKeyboardButton("Volver a la App", url="entrenadorax://app/pair?status=success")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await update.message.reply_text(
-                    f"¡Hola {nombre}! 🎉 Tu cuenta de Telegram ha sido vinculada exitosamente con tu aplicación móvil de EntrenadorAX.\n\n"
-                    "Ya puedes regresar a la aplicación para continuar con tu seguimiento.",
-                    reply_markup=reply_markup
-                )
-                await log_evento(uid, "telegram_paired", {"user_id": user_db.id})
-                return
-            else:
-                await update.message.reply_text(
-                    "No encontramos una solicitud de vinculación activa o el usuario móvil no es válido."
-                )
-                return
-        else:
-            await update.message.reply_text(
-                "El código de vinculación es inválido o ya ha expirado. Por favor, solicita uno nuevo desde la aplicación."
-            )
+        if await _intentar_vincular_desde_app(update, pair_token):
             return
+        await update.message.reply_text(
+            "El código de vinculación es inválido o ya expiró.\n"
+            "Genera uno nuevo en la app y envía `/vincular <código>` al bot.",
+            parse_mode="Markdown",
+        )
+        return
 
     user = await obtener_o_crear_usuario(uid, nombre)
     await log_evento(uid, "start", {"nombre": nombre})
@@ -1012,6 +1015,42 @@ async def cmd_codigo_web(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     logger.info("cmd_codigo_web enviado uid=%s", uid)
 
 
+async def cmd_vincular(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Vincula la app movil con esta cuenta Telegram via codigo de 6 digitos."""
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text(
+            "Tranquilo, dame un segundo. Estoy procesando lo anterior."
+        )
+        return
+
+    if not ctx.args:
+        await update.message.reply_text(
+            "<b>Vincular app móvil</b>\n\n"
+            "1. En la app EntrenadorAX abre <b>Vincular Telegram</b>.\n"
+            "2. Copia el código de 6 dígitos.\n"
+            "3. Envíame: <code>/vincular 123456</code>\n\n"
+            "También puedes pulsar «Abrir Telegram» en la app (Start automático).",
+            parse_mode="HTML",
+        )
+        return
+
+    codigo = ctx.args[0].strip()
+    if not codigo.isdigit() or len(codigo) != 6:
+        await update.message.reply_text(
+            "El código debe ser de <b>6 dígitos</b>. Ejemplo: <code>/vincular 482910</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    await update.message.chat.send_action(ChatAction.TYPING)
+    if await _intentar_vincular_desde_app(update, codigo):
+        return
+    await update.message.reply_text(
+        "Código inválido o expirado. Genera uno nuevo en la app (válido 10 minutos)."
+    )
+
+
 async def cmd_presumir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Compartir ultimo PR a un grupo del usuario."""
     keyboard = [
@@ -1390,6 +1429,7 @@ async def cmd_ayuda(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "   /upgrade - activar via Telegram Stars\n"
         "   /llamar - llamada de voz con el coach\n"
         "   /codigo_web - codigo para entrar al panel web\n"
+        "   /vincular - vincular la app movil con este Telegram\n"
         "   /desafios - desafios de la comunidad\n"
         "   /ranking - top de la semana\n"
         "   /kudos - dar/recibir kudos\n"
@@ -2740,6 +2780,7 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("dia_libre", cmd_dia_libre))
     app.add_handler(CommandHandler("feedback", cmd_feedback))
     app.add_handler(CommandHandler("codigo_web", cmd_codigo_web))
+    app.add_handler(CommandHandler("vincular", cmd_vincular))
     app.add_handler(CommandHandler("presumir", cmd_presumir))
     app.add_handler(CommandHandler("hoy", cmd_hoy))
     app.add_handler(CommandHandler("pr", cmd_pr))

@@ -92,6 +92,7 @@ async def api_client(mock_redis, monkeypatch):
         return mock_redis
 
     monkeypatch.setattr("src.cache.get_redis", get_mock_redis)
+    monkeypatch.setattr("src.services.telegram_pair.get_redis", get_mock_redis)
 
     from src.main import app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

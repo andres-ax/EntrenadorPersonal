@@ -564,18 +564,78 @@ async def novedades(
 
 @router.post("/telegram/pair-token")
 async def get_telegram_pair_token(uid: int = Depends(get_uid_from_token)) -> dict:
-    """Genera un token temporal para vinculación automatizada de Telegram.
+    """Genera codigo /vincular + deep link temporal para asociar Telegram."""
+    from src.db.repository import obtener_usuario
+    from src.services.telegram_pair import crear_solicitud_vinculacion
 
-    Se guarda en Redis con un TTL de 10 minutos mapeado al uid del usuario.
-    """
-    import secrets
-    pair_token = f"pair_{secrets.token_hex(8)}"
+    user = await obtener_usuario(uid)
+    if user is None:
+        raise HTTPException(404, "Usuario no encontrado")
 
-    from src.cache import get_redis
-    redis_client = await get_redis()
-    await redis_client.set(f"telegram:pair:{pair_token}", str(uid), ex=600)
+    data = await crear_solicitud_vinculacion(user.id, uid)
+    bot_username = "EntrenadorAX_bot"
+    pair_token = data["pair_token"]
+    return {
+        **data,
+        "bot_username": bot_username,
+        "telegram_url": f"https://t.me/{bot_username}?start={pair_token}",
+        "vincular_command": f"/vincular {data['pair_code']}",
+    }
 
-    return {"pair_token": pair_token}
+
+@router.post("/telegram/finish-pair")
+async def finish_telegram_pair(
+    response: Response,
+    uid: int = Depends(get_uid_from_token),
+) -> dict:
+    """Tras vincular en el bot, refresca JWT si el subject cambio (app -> Telegram real)."""
+    from src.api.jwt_app import token_resp_app
+    from src.db.repository import obtener_usuario
+    from src.services.telegram_pair import consumir_refresh_jwt
+
+    new_uid = await consumir_refresh_jwt(uid)
+    if new_uid is not None:
+        user = await obtener_usuario(new_uid)
+        profile_complete = None
+        if user is not None:
+            profile_complete = bool(user.telefono and user.email and user.phone_verified_at)
+        token = token_resp_app(new_uid, response, profile_complete=profile_complete)
+        return {
+            "ok": True,
+            "telegram_linked": True,
+            "jwt": token.jwt,
+            "uid": token.uid,
+            "expira_en": token.expira_en,
+            "profile_complete": token.profile_complete,
+        }
+
+    user = await obtener_usuario(uid)
+    if user is None:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    telegram_linked = user.telegram_id is not None and user.telegram_id > 0
+    if telegram_linked and uid != user.telegram_id:
+        profile_complete = bool(user.telefono and user.email and user.phone_verified_at)
+        token = token_resp_app(user.telegram_id, response, profile_complete=profile_complete)
+        return {
+            "ok": True,
+            "telegram_linked": True,
+            "jwt": token.jwt,
+            "uid": token.uid,
+            "expira_en": token.expira_en,
+            "profile_complete": token.profile_complete,
+        }
+
+    if telegram_linked:
+        return {"ok": True, "telegram_linked": True, "already_synced": True}
+
+    raise HTTPException(
+        400,
+        detail={
+            "message": "Aún no vinculaste Telegram. Abre el bot y envía /vincular con tu código.",
+            "code": "TELEGRAM_NOT_LINKED",
+        },
+    )
 
 
 class CompleteProfileRequest(BaseModel):

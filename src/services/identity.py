@@ -98,7 +98,9 @@ async def link_telegram_to_user(user_id: int, telegram_id: int) -> Usuario:
             raise ValueError(f"Usuario con ID {user_id} no encontrado")
 
         user.telegram_id = telegram_id
-        if user.auth_method == "phone_email":
+        if user.telefono and user.email and user.phone_verified_at:
+            user.auth_method = "both"
+        elif user.auth_method == "phone_email":
             user.auth_method = "both"
 
         session.add(user)
