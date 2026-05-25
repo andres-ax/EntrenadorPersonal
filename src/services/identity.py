@@ -88,6 +88,8 @@ async def link_telegram_to_user(user_id: int, telegram_id: int) -> Usuario:
             elif existing_owner.auth_method == "telegram":
                 existing_owner.auth_method = "phone_email"
             session.add(existing_owner)
+            # Liberar la clave única antes de asignar al nuevo usuario.
+            await session.flush()
 
         # 2. Vincular al nuevo usuario
         user_q = await session.execute(

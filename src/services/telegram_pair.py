@@ -26,6 +26,7 @@ PAIR_TTL_SECONDS = 600
 PAIR_TOKEN_PREFIX = "telegram:pair:"
 PAIR_CODE_PREFIX = "telegram:pair:code:"
 JWT_REFRESH_PREFIX = "telegram:pair:refresh:"
+JWT_SUB_USER_PREFIX = "telegram:pair:jwt_sub_user:"
 
 
 async def _obtener_usuario_por_id(user_id: int) -> Usuario | None:
@@ -56,6 +57,7 @@ async def crear_solicitud_vinculacion(user_id: int, jwt_sub: int) -> dict:
     )
     await client.setex(f"{PAIR_TOKEN_PREFIX}{pair_token}", PAIR_TTL_SECONDS, payload)
     await client.setex(f"{PAIR_CODE_PREFIX}{pair_code}", PAIR_TTL_SECONDS, payload)
+    await client.setex(f"{JWT_SUB_USER_PREFIX}{jwt_sub}", PAIR_TTL_SECONDS, str(user_id))
 
     return {
         "pair_token": pair_token,
@@ -113,6 +115,11 @@ async def ejecutar_vinculacion(pair_ref: str, telegram_id: int) -> Usuario | Non
         PAIR_TTL_SECONDS,
         str(telegram_id),
     )
+    await client.setex(
+        f"{JWT_REFRESH_PREFIX}user:{user_id}",
+        PAIR_TTL_SECONDS,
+        str(telegram_id),
+    )
     await _limpiar_solicitud(payload)
 
     logger.info(
@@ -131,6 +138,38 @@ async def consumir_refresh_jwt(jwt_sub: int) -> int | None:
     if not raw:
         return None
     await client.delete(f"{JWT_REFRESH_PREFIX}{jwt_sub}")
+    await client.delete(f"{JWT_SUB_USER_PREFIX}{jwt_sub}")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+async def consumir_refresh_jwt_por_user_id(user_id: int) -> int | None:
+    """Fallback cuando el JWT aún tiene subject virtual pero la fila ya cambió."""
+    client = await get_redis()
+    key = f"{JWT_REFRESH_PREFIX}user:{user_id}"
+    raw = await client.get(key)
+    if not raw:
+        return None
+    await client.delete(key)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+async def limpiar_jwt_sub_user(jwt_sub: int) -> None:
+    client = await get_redis()
+    await client.delete(f"{JWT_SUB_USER_PREFIX}{jwt_sub}")
+
+
+async def resolver_user_id_desde_jwt_sub(jwt_sub: int) -> int | None:
+    """Mapeo temporal jwt_sub (virtual) -> user.id interno."""
+    client = await get_redis()
+    raw = await client.get(f"{JWT_SUB_USER_PREFIX}{jwt_sub}")
+    if not raw:
+        return None
     try:
         return int(raw)
     except (TypeError, ValueError):

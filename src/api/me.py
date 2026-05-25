@@ -591,10 +591,23 @@ async def finish_telegram_pair(
     """Tras vincular en el bot, refresca JWT si el subject cambio (app -> Telegram real)."""
     from src.api.jwt_app import token_resp_app
     from src.db.repository import obtener_usuario
-    from src.services.telegram_pair import consumir_refresh_jwt
+    from src.services.telegram_pair import (
+        consumir_refresh_jwt,
+        consumir_refresh_jwt_por_user_id,
+        limpiar_jwt_sub_user,
+        resolver_user_id_desde_jwt_sub,
+    )
 
     new_uid = await consumir_refresh_jwt(uid)
+    used_fallback = False
+    if new_uid is None:
+        user_id = await resolver_user_id_desde_jwt_sub(uid)
+        if user_id is not None:
+            new_uid = await consumir_refresh_jwt_por_user_id(user_id)
+            used_fallback = new_uid is not None
     if new_uid is not None:
+        if used_fallback:
+            await limpiar_jwt_sub_user(uid)
         user = await obtener_usuario(new_uid)
         profile_complete = None
         if user is not None:

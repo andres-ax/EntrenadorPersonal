@@ -556,16 +556,10 @@ async def _autocancelar_escalation_si_cumplio(
 async def _responder_vinculacion_ok(
     update: Update, nombre: str, user_id: int, telegram_id: int
 ) -> None:
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-    keyboard = [
-        [InlineKeyboardButton("Volver a la App", url="entrenadorax://app/pair?status=success")]
-    ]
     await update.message.reply_text(
         f"¡Hola {nombre}! 🎉 Tu Telegram quedó vinculado con EntrenadorAX.\n\n"
         f"Regresa a la app móvil; debería detectarlo en unos segundos.\n"
         f"Si no, toca «Comprobar vinculación» en la pantalla de Telegram.",
-        reply_markup=InlineKeyboardMarkup(keyboard),
     )
     await log_evento(telegram_id, "telegram_paired", {"user_id": user_id})
 
