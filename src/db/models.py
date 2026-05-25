@@ -165,7 +165,9 @@ class Usuario(Base):
     __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True)
-    telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=True, index=True)
+    telefono = Column(String(20), unique=True, nullable=True)
+    phone_verified_at = Column(DateTime, nullable=True)
     nombre = Column(String(100))
     edad = Column(Integer)
     peso_kg = Column(Float)

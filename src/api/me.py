@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
@@ -386,3 +386,193 @@ async def sync_wearable(
 
     n = await sync_proveedor(uid, proveedor)
     return {"ok": True, "items_sincronizados": n}
+
+
+class HealthConnectRecord(BaseModel):
+    tipo: str  # "pasos", "sueno", "ritmo_cardiaco", etc.
+    external_id: str
+    fecha: str  # YYYY-MM-DD
+    payload: dict
+
+
+class HealthConnectSyncReq(BaseModel):
+    records: list[HealthConnectRecord]
+
+
+@router.post("/wearables/health-connect/sync")
+async def sync_health_connect(
+    req: HealthConnectSyncReq,
+    uid: int = Depends(get_uid_from_token)
+) -> dict:
+    """Recibe lotes de datos biométricos desde Android (Health Connect) y los sincroniza.
+
+    Crea una integración para 'health_connect' si no existe y guarda los registros.
+    """
+    from src.db.connection import async_session_factory
+    from src.db.models import Usuario, IntegracionWearable, DatosWearableRaw
+    from datetime import date, datetime
+    from sqlalchemy import select
+
+    async with async_session_factory() as session:
+        # 1. Obtener usuario
+        user_q = await session.execute(
+            select(Usuario).where(Usuario.telegram_id == uid)
+        )
+        user = user_q.scalar_one_or_none()
+        if not user:
+            raise HTTPException(404, "Usuario no encontrado")
+
+        # 2. Buscar o crear IntegracionWearable para "health_connect"
+        integracion_q = await session.execute(
+            select(IntegracionWearable).where(
+                IntegracionWearable.usuario_id == user.id,
+                IntegracionWearable.proveedor == "health_connect"
+            )
+        )
+        integracion = integracion_q.scalar_one_or_none()
+        if not integracion:
+            integracion = IntegracionWearable(
+                usuario_id=user.id,
+                proveedor="health_connect",
+                sync_status="activo"
+            )
+            session.add(integracion)
+            await session.commit()
+            await session.refresh(integracion)
+
+        # 3. Guardar lotes de datos
+        sincronizados = 0
+        for record in req.records:
+            # Validar si ya existe el external_id para esta integración
+            dup_q = await session.execute(
+                select(DatosWearableRaw).where(
+                    DatosWearableRaw.integracion_id == integracion.id,
+                    DatosWearableRaw.external_id == record.external_id
+                )
+            )
+            dup = dup_q.scalar_one_or_none()
+            if dup:
+                dup.payload = record.payload
+                dup.fecha = date.fromisoformat(record.fecha)
+                session.add(dup)
+            else:
+                nuevo_dato = DatosWearableRaw(
+                    integracion_id=integracion.id,
+                    tipo=record.tipo[:32],
+                    external_id=record.external_id[:120],
+                    fecha=date.fromisoformat(record.fecha),
+                    payload=record.payload,
+                    procesado=False
+                )
+                session.add(nuevo_dato)
+                sincronizados += 1
+
+        integracion.last_sync_at = datetime.utcnow()
+        session.add(integracion)
+        await session.commit()
+
+    return {"ok": True, "sincronizados": sincronizados}
+
+
+@router.get("/novedades")
+async def novedades(
+    request: Request,
+    uid: int = Depends(get_uid_from_token),
+) -> Response | dict:
+    """Devuelve las novedades de la comunidad.
+
+    Dual: si se solicita application/json retorna datos estructurados,
+    de lo contrario renderiza la plantilla HTML para WebView.
+    """
+    noticias = [
+        {
+            "id": 1,
+            "titulo": "Soporte para Wearables & Health Connect",
+            "contenido": "¡Ya puedes sincronizar tus pasos, sueño y ritmo cardíaco directamente desde tu celular Android a través de Health Connect! Nuestro Coach IA analizará estos datos biométricos para darte recomendaciones de entrenamiento súper precisas.",
+            "fecha": "Hace 2 días",
+            "categoria": "Tecnología"
+        },
+        {
+            "id": 2,
+            "titulo": "Mejoras en el Coach IA",
+            "contenido": "Hemos optimizado el motor de razonamiento del coach. Ahora entiende mejor la fatiga acumulada basándose en tu RPE (esfuerzo percibido) y ajustará el volumen semanal automáticamente si estás al borde del sobreentrenamiento.",
+            "fecha": "Hace 5 días",
+            "categoria": "Inteligencia Artificial"
+        },
+        {
+            "id": 3,
+            "titulo": "Nuevas voces y tonos para tu Coach",
+            "contenido": "Prueba el 'Tono Militar' en la sección de configuración si necesitas un empujón de disciplina pura y dura, o el 'Tono Amigable' si prefieres una guía más empática para tus sesiones.",
+            "fecha": "Hace 1 semana",
+            "categoria": "Mejoras"
+        }
+    ]
+
+    desafios = [
+        {
+            "id": 1,
+            "titulo": "Racha de Hidratación Colombiana",
+            "descripcion": "Consumir al menos 2L (o 4 termos) de agua al día por 7 días seguidos. ¡Reporta cada termo en el bot!",
+            "recompensa": "Insignia de Acuaman / Racha de 7 días",
+            "participantes": 1240,
+            "activo": True
+        },
+        {
+            "id": 2,
+            "titulo": "Semana de Fuerza Pura",
+            "descripcion": "Registra un mínimo de 3 entrenos de fuerza (pesas, calistenia, etc.) con RPE >= 7.",
+            "recompensa": "Puntos de experiencia multiplicados x1.5",
+            "participantes": 850,
+            "activo": True
+        }
+    ]
+
+    comunidad = {
+        "records": [
+            {"ejercicio": "Sentadilla", "usuario": "@mateo_gym", "peso": "240 kg", "ciudad": "Medellín"},
+            {"ejercicio": "Press de Banca", "usuario": "@santiago_fit", "peso": "180 kg", "ciudad": "Bogotá"},
+            {"ejercicio": "Peso Muerto", "usuario": "@camila_power", "peso": "210 kg", "ciudad": "Cali"}
+        ],
+        "total_activos_hoy": 4350,
+        "tips_coach": "En climas cálidos como Cali o Barranquilla, aumenta tu ingesta de sodio y potasio si tus entrenos de cardio o fuerza duran más de 60 minutos."
+    }
+
+    accept_header = request.headers.get("accept", "")
+    if "application/json" in accept_header and "text/html" not in accept_header:
+        return {
+            "noticias": noticias,
+            "desafios": desafios,
+            "comunidad": comunidad
+        }
+
+    from src.web.templates import render
+    u = await obtener_usuario(uid)
+    return render(
+        request,
+        "app/novedades.html",
+        {
+            "user": {"uid": uid, "perfil": u},
+            "active": "novedades",
+            "page_title": "Novedades & Comunidad",
+            "page_subtitle": "Noticias, desafíos y récords activos en Colombia",
+            "noticias": noticias,
+            "desafios": desafios,
+            "comunidad": comunidad,
+        }
+    )
+
+
+@router.post("/telegram/pair-token")
+async def get_telegram_pair_token(uid: int = Depends(get_uid_from_token)) -> dict:
+    """Genera un token temporal para vinculación automatizada de Telegram.
+
+    Se guarda en Redis con un TTL de 10 minutos mapeado al uid del usuario.
+    """
+    import secrets
+    pair_token = f"pair_{secrets.token_hex(8)}"
+
+    from src.cache import get_redis
+    redis_client = await get_redis()
+    await redis_client.set(f"telegram:pair:{pair_token}", str(uid), ex=600)
+
+    return {"pair_token": pair_token}

@@ -245,6 +245,12 @@ async def _build_prompt(texto: str, uid: int) -> str:
         f"agua_hoy={agua_hoy}ml",
         f"agua_objetivo={agua_obj}ml",
     ]
+    
+    from src.services.wearables import obtener_resumen_biometrico
+    resumen_wearables = await obtener_resumen_biometrico(uid)
+    if resumen_wearables:
+        dinamicos.append(f"wearables_recientes=({resumen_wearables})")
+        
     if cached_static is not None:
         return f"[{' | '.join(dinamicos)} | {cached_static}] {texto}"
 
@@ -555,6 +561,49 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "Tranquilo, dame un segundo. Estoy procesando lo anterior."
         )
         return
+
+    # Verificar si hay un argumento de vinculación
+    pair_token = ctx.args[0] if ctx.args else None
+    if pair_token and pair_token.startswith("pair_"):
+        await update.message.chat.send_action(ChatAction.TYPING)
+        from src.cache import get_redis
+        redis_client = await get_redis()
+        
+        paired_uid_str = await redis_client.get(f"telegram:pair:{pair_token}")
+        if paired_uid_str:
+            paired_uid = int(paired_uid_str)
+            await redis_client.delete(f"telegram:pair:{pair_token}")
+            
+            from src.services.identity import link_telegram_to_user, resolve_user_by_telegram
+            
+            user_db = await resolve_user_by_telegram(paired_uid)
+            if user_db:
+                await link_telegram_to_user(user_db.id, uid)
+                
+                from telegram import InlineKeyboardMarkup
+                keyboard = [
+                    [InlineKeyboardButton("Volver a la App", url="entrenadorax://app/pair?status=success")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await update.message.reply_text(
+                    f"¡Hola {nombre}! 🎉 Tu cuenta de Telegram ha sido vinculada exitosamente con tu aplicación móvil de EntrenadorAX.\n\n"
+                    "Ya puedes regresar a la aplicación para continuar con tu seguimiento.",
+                    reply_markup=reply_markup
+                )
+                await log_evento(uid, "telegram_paired", {"user_id": user_db.id})
+                return
+            else:
+                await update.message.reply_text(
+                    "No encontramos una solicitud de vinculación activa o el usuario móvil no es válido."
+                )
+                return
+        else:
+            await update.message.reply_text(
+                "El código de vinculación es inválido o ya ha expirado. Por favor, solicita uno nuevo desde la aplicación."
+            )
+            return
+
     user = await obtener_o_crear_usuario(uid, nombre)
     await log_evento(uid, "start", {"nombre": nombre})
     await update.message.chat.send_action(ChatAction.TYPING)

@@ -756,6 +756,7 @@ mensaje/audio en Telegram y propon activar las notificaciones de Telegram.
   competencia, ranking o premios. Usa consultar_desafio_dia para estado actual.
 - configurar_quiet_hours espera hora_inicio y hora_fin en formato HH:MM 24h (ej "22:00", "07:00").
 - firmar_compromiso tipo acepta: entreno, comida, peso, general.
+- Wearables (Health Connect & Cloud): si el contexto incluye `wearables_recientes`, puedes ver los pasos, horas de sueño y ritmo cardíaco del usuario de las últimas 48 horas. Úsalos proactivamente para dar consejos adaptados, estimar fatiga o felicitar al deportista por su actividad y racha de pasos.
 
 Comandos del bot (NO los procesa el agente, los procesa el handler de Telegram):
 /start /menu /hoy /peso /pr /reporte /compromiso /tono /pausa /dia_libre

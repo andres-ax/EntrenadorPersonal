@@ -179,3 +179,81 @@ async def upsert_integracion(
         await session.commit()
         await session.refresh(integ)
         return integ
+
+
+async def obtener_resumen_biometrico(telegram_id: int) -> str | None:
+    """Obtiene un string resumido con los datos biométricos de las últimas 48 horas.
+
+    Busca pasos, sueño y ritmo cardíaco recientes de la DB para inyectar en el prompt.
+    """
+    from datetime import date, timedelta
+
+    async with async_session_factory() as session:
+        user_q = await session.execute(
+            select(Usuario.id).where(Usuario.telegram_id == telegram_id)
+        )
+        usuario_id = user_q.scalar_one_or_none()
+        if not usuario_id:
+            return None
+
+        integraciones_q = await session.execute(
+            select(IntegracionWearable.id).where(
+                IntegracionWearable.usuario_id == usuario_id
+            )
+        )
+        integraciones = list(integraciones_q.scalars().all())
+        if not integraciones:
+            return None
+
+        hace_48h = date.today() - timedelta(days=2)
+        datos_q = await session.execute(
+            select(DatosWearableRaw).where(
+                DatosWearableRaw.integracion_id.in_(integraciones),
+                DatosWearableRaw.fecha >= hace_48h
+            ).order_by(DatosWearableRaw.fecha.desc(), DatosWearableRaw.created_at.desc())
+        )
+        datos = list(datos_q.scalars().all())
+        if not datos:
+            return None
+
+        resumen_parts = []
+        pasos_agregados = {}
+        sueno_agregados = {}
+        ritmo_agregado = {}
+
+        for d in datos:
+            f_str = d.fecha.isoformat()
+            if d.tipo == "pasos" and f_str not in pasos_agregados:
+                pasos = d.payload.get("pasos") or d.payload.get("value")
+                if pasos:
+                    pasos_agregados[f_str] = pasos
+            elif d.tipo == "sueno" and f_str not in sueno_agregados:
+                horas = d.payload.get("horas") or d.payload.get("duration_hours")
+                calidad = d.payload.get("calidad") or d.payload.get("score")
+                if horas:
+                    sueno_agregados[f_str] = f"{horas}h" + (f" (calidad {calidad}%)" if calidad else "")
+            elif d.tipo == "ritmo_cardiaco" and f_str not in ritmo_agregado:
+                lpm = d.payload.get("lpm") or d.payload.get("avg_hr") or d.payload.get("bpm")
+                if lpm:
+                    ritmo_agregado[f_str] = f"{lpm} lpm"
+
+        fechas_unicas = sorted(
+            set(list(pasos_agregados.keys()) + list(sueno_agregados.keys()) + list(ritmo_agregado.keys())),
+            reverse=True
+        )
+
+        for f in fechas_unicas:
+            p = pasos_agregados.get(f)
+            s = sueno_agregados.get(f)
+            r = ritmo_agregado.get(f)
+            items = []
+            if p:
+                items.append(f"pasos={p}")
+            if s:
+                items.append(f"sueño={s}")
+            if r:
+                items.append(f"ritmo={r}")
+            if items:
+                resumen_parts.append(f"{f}: {', '.join(items)}")
+
+        return " | ".join(resumen_parts[:3]) if resumen_parts else None

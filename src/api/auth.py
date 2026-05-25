@@ -69,12 +69,12 @@ def _jwt_secret() -> bytes:
     return settings.jwt_secret.get_secret_value().encode()
 
 
-def _sign_jwt(uid: int) -> str:
+def _sign_jwt(uid: int, ttl: int = JWT_TTL_SECONDS) -> str:
     """JWT HS256 minimalista. Header valida alg='HS256' en verify."""
     import base64
 
     header = {"alg": "HS256", "typ": "JWT"}
-    payload = {"uid": uid, "exp": int(time.time()) + JWT_TTL_SECONDS}
+    payload = {"uid": uid, "exp": int(time.time()) + ttl}
 
     def b64url(obj):
         raw = json.dumps(obj, separators=(",", ":")).encode()
@@ -219,6 +219,185 @@ async def get_uid_from_token(
     if uid is None:
         raise HTTPException(401, "Token invalido o expirado")
     return uid
+
+
+# --- Autenticación Teléfono + OTP (Epic B2) ---
+
+class PhoneOtpRequest(BaseModel):
+    telefono: str
+    email: str | None = None
+
+
+class PhoneOtpVerify(BaseModel):
+    telefono: str
+    codigo: str
+
+
+JWT_APP_TTL_SECONDS = 2592000  # 30 días
+
+
+@router.post("/phone/request-otp")
+async def request_phone_otp(req: PhoneOtpRequest, request: Request) -> dict:
+    """Genera y envía un código OTP de 6 dígitos al correo electrónico del usuario.
+
+    Si el teléfono ya existe en la base de datos, envía el código al email asociado.
+    Si el teléfono es nuevo, es obligatorio proveer el parámetro `email`, el cual se
+    guarda temporalmente en Redis y se envía el código allí.
+    """
+    ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit_ip(ip, max_per_minute=5):
+        raise HTTPException(429, "Demasiados intentos. Espera un momento.")
+
+    telefono = req.telefono.strip()
+    if not telefono:
+        raise HTTPException(400, "El teléfono es requerido")
+
+    from src.services.identity import resolve_user_by_phone
+    user = await resolve_user_by_phone(telefono)
+
+    if user:
+        email = user.email
+        if not email:
+            if req.email:
+                email = req.email.strip().lower()
+            else:
+                raise HTTPException(
+                    400, "Este teléfono ya existe pero no tiene un correo asociado. Por favor provee uno."
+                )
+    else:
+        if not req.email:
+            raise HTTPException(
+                400, "Este teléfono es nuevo. Se requiere un correo electrónico para el registro."
+            )
+        email = req.email.strip().lower()
+
+    # Generar OTP de 6 dígitos
+    import random
+    codigo = f"{random.randint(100000, 999995)}"
+
+    # Guardar en Redis
+    from src.cache import get_redis
+    redis_client = await get_redis()
+    
+    await redis_client.set(f"otp:phone:{telefono}", codigo, ex=300)
+    
+    if not user:
+        await redis_client.set(f"otp:phone:email:{telefono}", email, ex=300)
+
+    # Enviar correo vía Resend
+    if settings.resend_api_key:
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {settings.resend_api_key.get_secret_value()}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": "EntrenadorAX <entrenadorax@axsoftware.codes>",
+                        "to": [email],
+                        "subject": f"Tu código de acceso: {codigo}",
+                        "html": (
+                            f"<p>Hola,</p>"
+                            f"<p>Tu código de acceso temporal para iniciar sesión en la aplicación de EntrenadorAX es:</p>"
+                            f"<h2 style='font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #1e3a8a;'>{codigo}</h2>"
+                            f"<p>Este código es de un solo uso y expira en 5 minutos.</p>"
+                            f"<p>Si no solicitaste este código, puedes ignorar este mensaje.</p>"
+                        ),
+                    },
+                )
+            logger.info("OTP enviado exitosamente a %s", email)
+        except Exception:
+            logger.exception("Error enviando OTP via Resend")
+    else:
+        logger.info("OTP generado para %s (%s): %s (Resend no configurado)", telefono, email, codigo)
+
+    return {"ok": True, "message": "Si los datos son válidos, recibirás un código de 6 dígitos en breve."}
+
+
+@router.post("/phone/verify-otp", response_model=TokenResp)
+async def verify_phone_otp(req: PhoneOtpVerify, response: Response) -> TokenResp:
+    """Verifica el código OTP enviado al teléfono.
+
+    Si es exitoso, crea el usuario si es nuevo o recupera el existente,
+    y firma un JWT de larga duración (30 días).
+    """
+    telefono = req.telefono.strip()
+    codigo = req.codigo.strip()
+
+    if not telefono or not codigo:
+        raise HTTPException(400, "Teléfono y código son requeridos")
+
+    from src.cache import get_redis
+    redis_client = await get_redis()
+    
+    codigo_guardado = await redis_client.get(f"otp:phone:{telefono}")
+    if not codigo_guardado or codigo_guardado != codigo:
+        raise HTTPException(401, "Código inválido o expirado")
+
+    await redis_client.delete(f"otp:phone:{telefono}")
+
+    from src.services.identity import resolve_user_by_phone
+    from src.db.connection import async_session_factory
+    from datetime import datetime
+    import secrets
+    from sqlalchemy import select
+
+    user = await resolve_user_by_phone(telefono)
+
+    async with async_session_factory() as session:
+        if not user:
+            email = await redis_client.get(f"otp:phone:email:{telefono}")
+            if not email:
+                raise HTTPException(
+                    400, "El tiempo de registro ha expirado. Solicita un nuevo código."
+                )
+            await redis_client.delete(f"otp:phone:email:{telefono}")
+
+            virtual_telegram_id = -int(secrets.randbits(31))
+            
+            user = Usuario(
+                telegram_id=virtual_telegram_id,
+                telefono=telefono,
+                email=email,
+                phone_verified_at=datetime.utcnow(),
+                auth_method="phone_email",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+            logger.info("Nuevo usuario registrado por teléfono: id=%s, telefono=%s, email=%s", user.id, telefono, email)
+        else:
+            user_q = await session.execute(
+                select(Usuario).where(Usuario.id == user.id)
+            )
+            user_db = user_q.scalar_one()
+            user_db.phone_verified_at = datetime.utcnow()
+            if user_db.auth_method == "telegram":
+                user_db.auth_method = "both"
+            session.add(user_db)
+            await session.commit()
+            await session.refresh(user_db)
+            user = user_db
+            logger.info("Usuario existente inició sesión por teléfono: id=%s, telefono=%s", user.id, telefono)
+
+        uid = user.telegram_id
+
+    jwt = _sign_jwt(uid, ttl=JWT_APP_TTL_SECONDS)
+    
+    response.set_cookie(
+        key="user_jwt",
+        value=jwt,
+        max_age=JWT_APP_TTL_SECONDS,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+    return TokenResp(jwt=jwt, uid=uid, expira_en=JWT_APP_TTL_SECONDS)
 
 
 # --- Magic link (auth web alternativa) ---
