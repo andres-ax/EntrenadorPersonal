@@ -729,7 +729,7 @@ async def health_all(admin: dict = Depends(get_admin_from_token)) -> dict:
         out["bot_api"]["db"] = await _ping_d()
         out["bot_api"]["redis"] = await _ping_r()
     except Exception:
-        pass
+        logger.exception("Error comprobando salud bot_api (db/redis)")
     realtime_url = settings.realtime_ws_url
     if realtime_url:
         http_url = (
@@ -743,7 +743,7 @@ async def health_all(admin: dict = Depends(get_admin_from_token)) -> dict:
                 r = await client.get(http_url)
                 out["realtime_ws"] = r.json()
         except Exception:
-            pass
+            logger.exception("Error consultando health de realtime_ws %s", http_url)
     return out
 
 

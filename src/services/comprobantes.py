@@ -152,7 +152,7 @@ async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
                     response.usage.completion_tokens,
                 )
             except Exception:
-                pass
+                logger.exception("Error loggeando uso LLM en comprobante (no critico)")
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
     except json.JSONDecodeError:

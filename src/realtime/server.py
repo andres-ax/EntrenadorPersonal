@@ -187,7 +187,7 @@ async def ws_realtime(ws: WebSocket) -> None:
                     try:
                         await ws.send_json({"type": "cuota", "segundos_restantes": 0})
                     except Exception:
-                        pass
+                        logger.exception("Error enviando aviso de cuota ws uid=%s", uid)
                     cerrado = True
                     break
             elif tipo == "error":
@@ -201,8 +201,8 @@ async def ws_realtime(ws: WebSocket) -> None:
                             "message": err.get("message", ""),
                         }
                     )
-                except Exception:
-                    pass
+                    except Exception:
+                        logger.exception("Error enviando error a cliente ws uid=%s", uid)
 
     try:
         await asyncio.gather(
@@ -230,7 +230,7 @@ async def ws_realtime(ws: WebSocket) -> None:
             try:
                 await ws.close()
             except Exception:
-                pass
+                logger.exception("Error cerrando websocket cliente uid=%s", uid)
 
 
 async def _persistir_sesion(

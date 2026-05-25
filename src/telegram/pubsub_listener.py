@@ -188,7 +188,7 @@ async def _listener_loop(app: Application) -> None:
             await pubsub.unsubscribe()
             await pubsub.aclose()
         except Exception:
-            pass
+            logger.exception("Error cerrando pubsub listener")
 
 
 def start_pubsub_listener(app: Application) -> asyncio.Task:

@@ -16,8 +16,14 @@ from sqlalchemy import func, select
 
 from src.config import settings
 from src.db.connection import async_session_factory
-from src.db.models import (Comida, MetricaCorporal, MetricaSueno,
-                           PersonalRecord, SesionEntrenamiento, Usuario)
+from src.db.models import (
+    Comida,
+    MetricaCorporal,
+    MetricaSueno,
+    PersonalRecord,
+    SesionEntrenamiento,
+    Usuario,
+)
 from src.db.repository import log_llm_usage
 
 logger = logging.getLogger(__name__)
@@ -160,7 +166,9 @@ async def _generar_narrativa(datos: dict) -> str:
                     response.usage.completion_tokens,
                 )
             except Exception:
-                pass
+                logger.exception(
+                    "Error loggeando uso LLM en analisis_mensual (no critico)"
+                )
         return response.choices[0].message.content or ""
     except Exception:
         logger.exception("Error generando narrativa mensual")

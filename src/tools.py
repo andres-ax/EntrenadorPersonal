@@ -556,7 +556,10 @@ async def guardar_pr(
                 ),
             )
         except Exception:
-            pass
+            # No queremos que falle el guardado de PR por un problema en el
+            # publish a Redis. Loggeamos la excepcion para monitoreo y
+            # continuamos sin interrumpir la operación principal.
+            logger.exception("Error publicando evento PR (no crítico)")
         return _ok({"ejercicio": pr.ejercicio, "peso_kg": pr.peso_kg, "reps": pr.reps})
     except Exception:
         logger.exception("Error en guardar_pr")

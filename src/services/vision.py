@@ -124,7 +124,7 @@ async def analizar_comida(
                     response.usage.completion_tokens,
                 )
             except Exception:
-                pass
+                logger.exception("Error loggeando uso LLM en vision (no critico)")
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
         elapsed_ms = (time.perf_counter() - t0) * 1000

@@ -81,7 +81,9 @@ async def transcribir_audio(
                 try:
                     await log_llm_usage(None, "whisper", model, 0, 0)
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Error loggeando uso LLM en transcripcion (no critico)"
+                    )
                 return text
             except (openai.RateLimitError, openai.APITimeoutError) as e:
                 if i == intentos - 1:
@@ -128,8 +130,8 @@ async def generar_voz(texto: str, voice: str = "alloy") -> BytesIO | None:
         cache_path.write_bytes(audio_bytes)
         try:
             await log_llm_usage(None, "tts", "tts-1", len(texto), 0)
-        except Exception:
-            pass
+            except Exception:
+                logger.exception("Error loggeando uso LLM en tts (no critico)")
         return BytesIO(audio_bytes)
     except Exception:
         logger.exception("Error generando TTS")
@@ -154,7 +156,7 @@ async def enviar_voz(
     try:
         await bot.send_chat_action(chat_id=chat_id, action=ChatAction.RECORD_VOICE)
     except Exception:
-        pass
+        logger.exception("Error sending chat action RECORD_VOICE uid=%s", chat_id)
 
     audio = await generar_voz(texto, voice=voice)
     if audio is None:
@@ -164,7 +166,7 @@ async def enviar_voz(
                     chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML
                 )
             except Exception:
-                logger.exception("Fallback texto tambien fallo uid=%s", chat_id)
+                    logger.exception("Fallback texto tambien fallo uid=%s", chat_id)
         return False
 
     try:
@@ -180,12 +182,12 @@ async def enviar_voz(
         logger.info("Bot bloqueado por %s", chat_id)
         return False
     except Exception:
-        logger.exception("Error enviando voz uid=%s", chat_id)
+            logger.exception("Error enviando voz uid=%s", chat_id)
         if fallback_text:
             try:
                 await bot.send_message(
                     chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML
                 )
             except Exception:
-                pass
+                    logger.exception("Error fallback texto tras fallo voz uid=%s", chat_id)
         return False

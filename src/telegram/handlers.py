@@ -10,29 +10,54 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import openai
-from agents import (InputGuardrailTripwireTriggered,
-                    OutputGuardrailTripwireTriggered, RunConfig, Runner,
-                    SessionSettings)
-
 import telegram.error
+from agents import (
+    InputGuardrailTripwireTriggered,
+    OutputGuardrailTripwireTriggered,
+    RunConfig,
+    Runner,
+    SessionSettings,
+)
+from telegram.constants import ChatAction
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    InlineQueryHandler,
+    MessageHandler,
+    PreCheckoutQueryHandler,
+    filters,
+)
+
 from src.cache import get_perfil_block as cache_get_perfil_block
 from src.cache import limpiar_keys_usuario
 from src.cache import set_perfil_block as cache_set_perfil_block
 from src.coach import coach
 from src.config import settings
 from src.db.models import DuracionPago, PlanSuscripcion
-from src.db.repository import aceptar_modo_militar, activar_plan
+from src.db.repository import (
+    aceptar_modo_militar,
+    activar_plan,
+    contar_fotos_hoy,
+    eliminar_usuario,
+    guardar_comida,
+    guardar_comprobante,
+    guardar_feedback_comida,
+    log_crisis,
+    log_evento,
+    marcar_bot_bloqueado,
+    marcar_comprobante_duplicado,
+    obtener_compromiso_activo,
+    obtener_o_crear_streak,
+    obtener_o_crear_usuario,
+    obtener_usuario,
+    pausar_recordatorios,
+    set_quiet_hours,
+    ultimos_eventos,
+    usar_freeze_streak,
+)
 from src.db.repository import cambiar_tono as repo_cambiar_tono
-from src.db.repository import (contar_fotos_hoy, eliminar_usuario,
-                               guardar_comida, guardar_comprobante,
-                               guardar_feedback_comida, log_crisis, log_evento,
-                               log_llm_usage, marcar_bot_bloqueado,
-                               marcar_comprobante_duplicado,
-                               obtener_compromiso_activo,
-                               obtener_o_crear_streak, obtener_o_crear_usuario,
-                               obtener_usuario, pausar_recordatorios,
-                               set_quiet_hours, ultimos_eventos,
-                               usar_freeze_streak)
 from src.services.crisis import detectar as detectar_crisis
 from src.services.crisis import detectar_diagnostico_output
 from src.services.hidratacion import consumo_hoy_ml, objetivo_ml
@@ -40,13 +65,16 @@ from src.telegram.decoradores import requiere_tier
 from src.telegram.middlewares import check_daily_quota, check_rate_limit
 from src.telegram.reacciones import reaccionar
 from src.telegram.safe_session import SafeRedisSession
-from telegram import (ForceReply, InlineKeyboardButton, InlineKeyboardMarkup,
-                      KeyboardButton, KeyboardButtonRequestChat, LabeledPrice,
-                      ReplyKeyboardMarkup, Update)
-from telegram.constants import ChatAction
-from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
-                          ContextTypes, InlineQueryHandler, MessageHandler,
-                          PreCheckoutQueryHandler, filters)
+from telegram import (
+    ForceReply,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    KeyboardButtonRequestChat,
+    LabeledPrice,
+    ReplyKeyboardMarkup,
+    Update,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -174,12 +202,7 @@ async def _build_prompt(texto: str, uid: int) -> str:
     """
     cached_static = await cache_get_perfil_block(uid)
     user = await obtener_o_crear_usuario(uid)
-    tz_name = user.timezone or "America/Bogota"
-    try:
-        ahora_user = datetime.now(ZoneInfo(tz_name))
-    except Exception:
-        tz_name = "America/Bogota"
-        ahora_user = datetime.now(ZoneInfo(tz_name))
+    ahora_user, tz_name = _safe_user_now(user)
     hoy_user = ahora_user.date()
 
     # Hidratacion hoy
@@ -235,7 +258,7 @@ async def _build_prompt(texto: str, uid: int) -> str:
         streak = await obtener_o_crear_streak(uid, "entreno")
         estaticos.append(f"streak_entreno={streak.dias_actuales}")
     except Exception:
-        pass
+        logger.exception("Error obteniendo/creando streak uid=%s", uid)
     if user.pausado_hasta and user.pausado_hasta >= hoy_user:
         estaticos.append(f"pausado_hasta={user.pausado_hasta.isoformat()}")
     estatico_block = " | ".join(estaticos)
@@ -312,24 +335,7 @@ async def _procesar(
             )
         output = result.final_output
 
-        if result.raw_responses:
-            try:
-                total_in = sum(
-                    r.usage.input_tokens for r in result.raw_responses if r.usage
-                )
-                total_out = sum(
-                    r.usage.output_tokens for r in result.raw_responses if r.usage
-                )
-                await log_llm_usage(
-                    uid,
-                    "coach",
-                    settings.coach_model,
-                    total_in,
-                    total_out,
-                    rounds=len(result.raw_responses),
-                )
-            except Exception:
-                pass
+        await _maybe_log_llm_usage(uid, result.raw_responses)
 
         diag = detectar_diagnostico_output(output)
         if diag:
@@ -343,13 +349,7 @@ async def _procesar(
             )
             await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
 
-        output = _sanitize_telegram_html(output)
-        chunks = [output[i : i + 4000] for i in range(0, len(output), 4000)] or [""]
-        for i, chunk in enumerate(chunks):
-            kwargs = {}
-            if with_keyboard and i == len(chunks) - 1:
-                kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
-            await _enviar_con_retry(message, chunk, **kwargs)
+        await _send_output_chunks(message, output, with_keyboard)
 
         if ctx is not None and ctx.job_queue is not None:
             await _autocancelar_escalation_si_cumplio(uid, ctx)
@@ -368,8 +368,7 @@ async def _autocancelar_escalation_si_cumplio(
 ) -> None:
     """Tras el run del agente, cancela escalation de los tipos cumplidos hoy."""
     try:
-        from src.telegram.escalation import (_ya_cumplio_hoy,
-                                             cancelar_escalado_hoy)
+        from src.telegram.escalation import _ya_cumplio_hoy, cancelar_escalado_hoy
 
         user = await obtener_usuario(uid)
         if user is None:
@@ -932,7 +931,7 @@ async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         try:
             await q.answer(ok=False, error_message="Error temporal. Intenta de nuevo.")
         except Exception:
-            pass
+            logger.exception("Error respondiendo precheckout q.answer uid=%s", uid)
 
 
 async def successful_payment_handler(
@@ -1058,10 +1057,13 @@ async def inline_query(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @requiere_tier(PlanSuscripcion.STARTER)
 async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia un chart segun el tipo. Uso: /grafico [peso|volumen|macros|streak|resumen]."""
-    from src.services.charts import (chart_macros_dia, chart_peso,
-                                     chart_reporte_semanal,
-                                     chart_streak_calendario,
-                                     chart_volumen_semanal)
+    from src.services.charts import (
+        chart_macros_dia,
+        chart_peso,
+        chart_reporte_semanal,
+        chart_streak_calendario,
+        chart_volumen_semanal,
+    )
 
     uid = update.effective_user.id
     args = ctx.args or []
@@ -1194,104 +1196,9 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Admin: aprobar/rechazar comprobante desde Telegram (solo developer_chat_id)
     if q.data.startswith("admin_aprobar:") or q.data.startswith("admin_rechazar:"):
-        if str(uid) != str(settings.developer_chat_id):
-            await q.answer("No tienes permiso para esta accion.", show_alert=True)
+        handled = await _handle_admin_callback(q, ctx)
+        if handled:
             return
-        accion, comp_id_str = q.data.split(":", 1)
-        try:
-            comp_id = int(comp_id_str)
-        except ValueError:
-            return
-        from src.db.repository import aprobar_comprobante, rechazar_comprobante
-        from src.services.pricing import formatear_precio
-
-        try:
-            if accion == "admin_aprobar":
-                comp = await aprobar_comprobante(comp_id, "admin@telegram", "")
-                if comp is None:
-                    await q.edit_message_caption(
-                        caption=q.message.caption
-                        + "\n\nYa fue procesado anteriormente.",
-                    )
-                    return
-                # Activar plan del usuario
-                from sqlalchemy import select
-
-                from src.db.connection import async_session_factory
-                from src.db.models import MetodoPago, Usuario
-
-                async with async_session_factory() as session:
-                    result = await session.execute(
-                        select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
-                    )
-                    uid_telegram = result.scalar_one()
-                await activar_plan(
-                    telegram_id=uid_telegram,
-                    plan=comp.plan_solicitado,
-                    dias=comp.dias_otorgados,
-                    metodo=comp.metodo or MetodoPago.OTRO,
-                    monto_cop=comp.monto_cop,
-                    comprobante_id=comp.id,
-                )
-                # Notificar al usuario
-                try:
-                    await ctx.bot.send_message(
-                        chat_id=uid_telegram,
-                        text=(
-                            f"<b>Pago aprobado!</b> Tu plan <b>{comp.plan_solicitado.value}</b> "
-                            f"esta activo. Gracias por confiar en EntrenadorAX!"
-                        ),
-                    )
-                except Exception:
-                    pass
-                # Actualizar el caption de la notificacion
-                await q.edit_message_caption(
-                    caption=q.message.caption + "\n\nAPROBADO. Plan activado.",
-                )
-                logger.info("admin_aprobar comp_id=%s por uid=%s", comp_id, uid)
-            else:
-                comp = await rechazar_comprobante(
-                    comp_id, "admin@telegram", "Rechazado via Telegram"
-                )
-                if comp is None:
-                    await q.edit_message_caption(
-                        caption=q.message.caption
-                        + "\n\nYa fue procesado anteriormente.",
-                    )
-                    return
-                # Notificar al usuario
-                from sqlalchemy import select
-
-                from src.db.connection import async_session_factory
-                from src.db.models import Usuario
-
-                async with async_session_factory() as session:
-                    result = await session.execute(
-                        select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
-                    )
-                    uid_telegram = result.scalar_one()
-                try:
-                    await ctx.bot.send_message(
-                        chat_id=uid_telegram,
-                        text=(
-                            "Tu comprobante fue revisado y <b>no se pudo validar</b>. "
-                            "Si crees que es un error, contacta soporte por WhatsApp: "
-                            "https://wa.me/573044093197"
-                        ),
-                    )
-                except Exception:
-                    pass
-                await q.edit_message_caption(
-                    caption=q.message.caption + "\n\nRECHAZADO.",
-                )
-                logger.info("admin_rechazar comp_id=%s por uid=%s", comp_id, uid)
-        except Exception:
-            logger.exception("Error en admin_%s comp_id=%s", accion, comp_id_str)
-            await q.edit_message_caption(
-                caption=q.message.caption
-                + "\n\nError procesando. Revisa en el panel web.",
-            )
-        return
 
     if q.data.startswith("tono:"):
         nuevo = q.data.split(":", 1)[1]
@@ -1337,8 +1244,7 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if q.data.startswith("agua:"):
-        from src.services.hidratacion import (consumo_hoy_ml, objetivo_ml,
-                                              registrar_agua)
+        from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
 
         try:
             ml = int(q.data.split(":", 1)[1])
@@ -1402,8 +1308,12 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if q.data.startswith("pagar:"):
         from src.db.models import DuracionPago, PlanSuscripcion
-        from src.services.pricing import (descripcion_plan, dias_duracion,
-                                          formatear_precio, precio_cop)
+        from src.services.pricing import (
+            descripcion_plan,
+            dias_duracion,
+            formatear_precio,
+            precio_cop,
+        )
 
         partes = q.data.split(":")
         if len(partes) >= 3:
@@ -1502,6 +1412,121 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 "No encontre datos asociados a tu cuenta. " "Usa /start para empezar."
             )
         return
+
+
+async def _handle_admin_callback(q, ctx) -> bool:
+    """Manejador separado para callbacks admin_aprobar/admin_rechazar.
+
+    Devuelve True si el callback fue procesado aqui.
+    """
+    uid = q.from_user.id
+    if str(uid) != str(settings.developer_chat_id):
+        await q.answer("No tienes permiso para esta accion.", show_alert=True)
+        return True
+    accion, comp_id_str = q.data.split(":", 1)
+    try:
+        comp_id = int(comp_id_str)
+    except ValueError:
+        return True
+    from src.db.repository import aprobar_comprobante, rechazar_comprobante
+
+    try:
+        if accion == "admin_aprobar":
+            comp = await aprobar_comprobante(comp_id, "admin@telegram", "")
+            if comp is None:
+                await q.edit_message_caption(
+                    caption=q.message.caption + "\n\nYa fue procesado anteriormente.",
+                )
+                return True
+            # Activar plan del usuario
+            from sqlalchemy import select
+
+            from src.db.connection import async_session_factory
+            from src.db.models import MetodoPago, Usuario
+
+            async with async_session_factory() as session:
+                result = await session.execute(
+                    select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
+                )
+                uid_telegram = result.scalar_one()
+            await activar_plan(
+                telegram_id=uid_telegram,
+                plan=comp.plan_solicitado,
+                dias=comp.dias_otorgados,
+                metodo=comp.metodo or MetodoPago.OTRO,
+                monto_cop=comp.monto_cop,
+                comprobante_id=comp.id,
+            )
+            # Notificar al usuario
+            try:
+                await ctx.bot.send_message(
+                    chat_id=uid_telegram,
+                    text=(
+                        f"<b>Pago aprobado!</b> Tu plan <b>{comp.plan_solicitado.value}</b> "
+                        f"esta activo. Gracias por confiar en EntrenadorAX!"
+                    ),
+                )
+            except Exception:
+                logger.exception(
+                    "No pude notificar usuario aprobo comp_id=%s uid=%s",
+                    comp_id,
+                    uid_telegram,
+                )
+            # Actualizar el caption de la notificacion
+            await q.edit_message_caption(
+                caption=q.message.caption + "\n\nAPROBADO. Plan activado.",
+            )
+            logger.info("admin_aprobar comp_id=%s por uid=%s", comp_id, uid)
+        else:
+            comp = await rechazar_comprobante(
+                comp_id, "admin@telegram", "Rechazado via Telegram"
+            )
+            if comp is None:
+                await q.edit_message_caption(
+                    caption=q.message.caption + "\n\nYa fue procesado anteriormente.",
+                )
+                return True
+            # Notificar al usuario
+            from sqlalchemy import select
+
+            from src.db.connection import async_session_factory
+            from src.db.models import Usuario
+
+            async with async_session_factory() as session:
+                result = await session.execute(
+                    select(Usuario.telegram_id).where(Usuario.id == comp.usuario_id)
+                )
+                uid_telegram = result.scalar_one()
+            try:
+                await ctx.bot.send_message(
+                    chat_id=uid_telegram,
+                    text=(
+                        "Tu comprobante fue revisado y <b>no se pudo validar</b>. "
+                        "Si crees que es un error, contacta soporte por WhatsApp: "
+                        "https://wa.me/573044093197"
+                    ),
+                )
+            except Exception:
+                logger.exception(
+                    "No pude notificar usuario rechazo comp_id=%s uid=%s",
+                    comp_id,
+                    uid_telegram,
+                )
+            await q.edit_message_caption(caption=q.message.caption + "\n\nRECHAZADO.")
+            logger.info("admin_rechazar comp_id=%s por uid=%s", comp_id, uid)
+    except Exception:
+        logger.exception("Error en admin_%s comp_id=%s", accion, comp_id_str)
+        try:
+            await q.edit_message_caption(
+                caption=q.message.caption
+                + "\n\nError procesando. Revisa en el panel web."
+            )
+        except Exception:
+            logger.exception(
+                "Error editando caption tras fallo admin callback comp_id=%s",
+                comp_id_str,
+            )
+    return True
 
     # Callbacks "menu_X" que redirigen a comandos slash existentes.
     # Asi reutilizamos sus handlers sin duplicar logica.
@@ -1606,6 +1631,23 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _procesar(q.message, texto, uid, ctx=ctx)
 
 
+async def _download_photo(update: Update) -> tuple[object | None, bytes | None]:
+    """Descarga la foto mayor enviada en `update` y la redimensiona si hace falta.
+
+    Devuelve (photo_obj, raw_bytes) o (None, None) en caso de fallo.
+    """
+    try:
+        photo = update.message.photo[-1]
+        file = await photo.get_file()
+        raw = bytes(await file.download_as_bytearray())
+        raw = resize_si_pesa(raw)
+        return photo, raw
+    except Exception:
+        uid = getattr(update.effective_user, "id", "?")
+        logger.exception("Error descargando foto uid=%s", uid)
+        return None, None
+
+
 _CAPTION_COMPROBANTE = re.compile(
     r"\b(pago|comprobante|bre\W?b|transferencia|nequi|daviplata|pse|recibo)\b",
     re.IGNORECASE,
@@ -1639,9 +1681,10 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     from src.db.models import PlanSuscripcion
     from src.db.repository import es_plan_minimo
-    from src.services.vision import (analizar_comida,
-                                     describir_imagen_no_comida,
-                                     resize_si_pesa)
+    from src.services.vision import (
+        analizar_comida,
+        describir_imagen_no_comida,
+    )
 
     uid = update.effective_user.id
     if not await check_rate_limit(uid):
@@ -1693,13 +1736,8 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.chat.send_action(ChatAction.TYPING)
 
-    try:
-        photo = update.message.photo[-1]
-        file = await photo.get_file()
-        raw = bytes(await file.download_as_bytearray())
-        raw = resize_si_pesa(raw)
-    except Exception:
-        logger.exception("Error descargando foto uid=%s", uid)
+    photo, raw = await _download_photo(update)
+    if photo is None:
         await update.message.reply_text("No pude descargar la foto. Intenta de nuevo.")
         return
 
@@ -1981,11 +2019,9 @@ async def _procesar_comprobante(
     "no es comprobante", no se guardaba nada y el pago se perdia.
     """
     from src.db.models import PlanSuscripcion
-    from src.services.comprobantes import (extraer_datos_comprobante,
-                                           sha256_imagen)
+    from src.services.comprobantes import extraer_datos_comprobante, sha256_imagen
     from src.services.deteccion_duplicados import es_duplicado
-    from src.services.pricing import (dias_duracion, formatear_precio,
-                                      precio_cop)
+    from src.services.pricing import dias_duracion, formatear_precio, precio_cop
 
     pendiente = ctx.user_data.get("plan_pendiente_pago") or {}
     plan_str = pendiente.get("plan", "starter")
@@ -2273,8 +2309,7 @@ async def cmd_llamar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_agua(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Registra agua o consulta consumo del dia. /agua [ml]."""
-    from src.services.hidratacion import (consumo_hoy_ml, objetivo_ml,
-                                          registrar_agua)
+    from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
 
     uid = update.effective_user.id
     args = ctx.args or []

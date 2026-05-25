@@ -98,7 +98,7 @@ class RealtimeBridge:
             try:
                 await self.ws.close()
             except Exception:
-                pass
+                logger.exception("Error cerrando websocket OpenAI realtime")
             self.ws = None
 
     async def iterar_eventos(self) -> AsyncIterator[dict]:

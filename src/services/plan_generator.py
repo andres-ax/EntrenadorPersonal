@@ -111,7 +111,9 @@ async def generar_plan_semanal_para(telegram_id: int) -> dict:
                     response.usage.completion_tokens,
                 )
             except Exception:
-                pass
+                logger.exception(
+                    "Error loggeando uso LLM en plan_generator (no critico)"
+                )
         raw = response.choices[0].message.content or "{}"
         data = json.loads(raw)
     except Exception:

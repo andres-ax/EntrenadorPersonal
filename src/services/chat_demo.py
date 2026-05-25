@@ -101,7 +101,7 @@ async def chat_demo(session_id: str | None, mensaje: str) -> dict:
         try:
             await session.close()
         except Exception:
-            pass
+            logger.exception("Error cerrando session demo_chat %s", session_id)
 
     restantes = max(0, DEMO_MAX_MESSAGES - count)
     cta_url = "https://t.me/EntrenadorAX_bot" if count >= 3 else None

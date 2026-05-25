@@ -15,6 +15,8 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from telegram.constants import ParseMode
+from telegram.ext import Application, Defaults
 
 from src.api.admin_auth import seed_admin_si_falta
 from src.cache import close_redis
@@ -22,15 +24,18 @@ from src.cache import ping as ping_redis
 from src.config import settings
 from src.db.connection import close_db, init_db
 from src.db.connection import ping as ping_db
-from src.log_setup import (bind_telegram_id, get_or_make_request_id,
-                           request_id_ctx, setup_logging, telegram_id_ctx)
+from src.log_setup import (
+    bind_telegram_id,
+    get_or_make_request_id,
+    request_id_ctx,
+    setup_logging,
+    telegram_id_ctx,
+)
 from src.telegram.bot_setup import set_application, setup_bot
 from src.telegram.handlers import registrar
 from src.telegram.pubsub_listener import start_pubsub_listener
 from src.telegram.scheduler import registrar_jobs
 from telegram import Update
-from telegram.constants import ParseMode
-from telegram.ext import Application, Defaults
 
 setup_logging()
 
@@ -66,7 +71,7 @@ async def error_handler(update, context) -> None:
         if update is not None and getattr(update, "effective_user", None):
             uid = update.effective_user.id
     except Exception:
-        pass
+        logger.exception("Error extrayendo uid en error_handler")
     logger.error(
         "Excepcion en handler de Telegram uid=%s update_id=%s",
         uid,
@@ -81,7 +86,7 @@ async def error_handler(update, context) -> None:
                 sentry_sdk.set_user({"id": uid})
             sentry_sdk.set_tag("source", "telegram_handler")
         except Exception:
-            pass
+            logger.exception("Error seteando usuario en Sentry (no critico)")
     if settings.developer_chat_id is None:
         return
     tb = "".join(
@@ -240,7 +245,7 @@ async def request_id_and_access_log(request: Request, call_next):
 
             sentry_sdk.set_tag("request_id", rid)
         except Exception:
-            pass
+            logger.exception("Error seteando request_id en Sentry (no critico)")
     t0 = time.perf_counter()
     status_code = 500
     try:
@@ -275,7 +280,7 @@ async def request_id_and_access_log(request: Request, call_next):
         try:
             request_id_ctx.reset(rid_token)
         except Exception:
-            pass
+            logger.exception("Error reseteando request_id_ctx")
 
 
 @app.exception_handler(Exception)
@@ -308,6 +313,7 @@ from src.api.auth import router as auth_router  # noqa: E402
 from src.api.integraciones import router as integraciones_router  # noqa: E402
 from src.api.me import router as me_router  # noqa: E402
 from src.api.public import router as public_router  # noqa: E402
+
 # Routers HTML server-side (Jinja2). Reemplazan los antiguos frontends
 # Next.js / Vite / Astro. Se montan con prioridad mayor que el StaticFiles
 # de la landing para que las rutas dinamicas (/, /admin/*, /app/*) ganen.
@@ -389,7 +395,9 @@ async def webhook(
 
             sentry_sdk.set_user({"id": uid})
         except Exception:
-            pass
+            logger.exception(
+                "Error seteando usuario en Sentry (webhook, no critico) uid=%s", uid
+            )
     logger.info(
         "TG update_id=%s type=%s uid=%s chat_id=%s text=%r",
         update.update_id,
@@ -421,7 +429,7 @@ async def webhook(
         try:
             telegram_id_ctx.reset(tid_token)
         except Exception:
-            pass
+            logger.exception("Error reseteando telegram_id_ctx")
     return {"ok": True}
 
 
