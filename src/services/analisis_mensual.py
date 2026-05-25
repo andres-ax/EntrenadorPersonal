@@ -45,9 +45,7 @@ async def _datos_del_mes(telegram_id: int, ano: int, mes: int) -> dict:
     else:
         fin = date(ano, mes + 1, 1)
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = user_q.scalar_one_or_none()
         if usuario is None:
             return {}
@@ -128,8 +126,7 @@ async def _datos_del_mes(telegram_id: int, ano: int, mes: int) -> dict:
         "delta_peso": (peso_fin - peso_inicio) if peso_inicio and peso_fin else None,
         "n_prs_nuevos": len(prs),
         "prs_nuevos": [
-            {"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps}
-            for p in prs
+            {"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps} for p in prs
         ],
     }
 
@@ -166,9 +163,7 @@ async def _generar_narrativa(datos: dict) -> str:
                     response.usage.completion_tokens,
                 )
             except Exception:
-                logger.exception(
-                    "Error loggeando uso LLM en analisis_mensual (no critico)"
-                )
+                logger.exception("Error loggeando uso LLM en analisis_mensual (no critico)")
         return response.choices[0].message.content or ""
     except Exception:
         logger.exception("Error generando narrativa mensual")

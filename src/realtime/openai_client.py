@@ -55,9 +55,7 @@ class RealtimeBridge:
 
         connect_params = inspect.signature(websockets.connect).parameters
         header_kwarg = (
-            "additional_headers"
-            if "additional_headers" in connect_params
-            else "extra_headers"
+            "additional_headers" if "additional_headers" in connect_params else "extra_headers"
         )
         self.ws = await websockets.connect(
             REALTIME_URL,

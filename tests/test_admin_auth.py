@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from src.api.admin_auth import (hash_password, sign_admin_jwt,
-                                verify_admin_jwt, verify_password)
+from src.api.admin_auth import (
+    hash_password,
+    sign_admin_jwt,
+    verify_admin_jwt,
+    verify_password,
+)
 
 
 def test_password_hash_y_verify():

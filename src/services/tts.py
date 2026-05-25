@@ -10,12 +10,12 @@ from io import BytesIO
 from pathlib import Path
 
 import openai
-import telegram.error
 from openai import AsyncOpenAI
-from telegram.constants import ChatAction, ParseMode
 
+import telegram.error
 from src.config import settings
 from src.db.repository import log_llm_usage
+from telegram.constants import ChatAction, ParseMode
 
 logger = logging.getLogger(__name__)
 

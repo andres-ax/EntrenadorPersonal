@@ -197,10 +197,7 @@ async def test_evaluar_concusion_alta_perdida_consciencia():
     data = _ok(raw)
     assert data["severidad"] == "alta"
     assert data["off_sport_dias"] == 21
-    assert (
-        "URGENCIAS" in data["recomendacion"]
-        or "urgencias" in data["recomendacion"].lower()
-    )
+    assert "URGENCIAS" in data["recomendacion"] or "urgencias" in data["recomendacion"].lower()
 
 
 @pytest.mark.asyncio

@@ -16,9 +16,16 @@ from sqlalchemy import func, select
 
 from src.config import settings
 from src.db.connection import async_session_factory
-from src.db.models import (Comida, DeporteCatalogo, EventoBot, PersonalRecord,
-                           PlanSuscripcion, SesionEntrenamiento, Streak,
-                           Usuario)
+from src.db.models import (
+    Comida,
+    DeporteCatalogo,
+    EventoBot,
+    PersonalRecord,
+    PlanSuscripcion,
+    SesionEntrenamiento,
+    Streak,
+    Usuario,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +58,7 @@ async def stats_publicas() -> dict:
         return _CACHE_STATS["data"]
 
     async with async_session_factory() as session:
-        total_usuarios = (
-            await session.execute(select(func.count(Usuario.id)))
-        ).scalar() or 0
+        total_usuarios = (await session.execute(select(func.count(Usuario.id)))).scalar() or 0
         onboarded = (
             await session.execute(
                 select(func.count(Usuario.id)).where(
@@ -72,25 +77,17 @@ async def stats_publicas() -> dict:
         sesiones_totales = (
             await session.execute(select(func.count(SesionEntrenamiento.id)))
         ).scalar() or 0
-        comidas_totales = (
-            await session.execute(select(func.count(Comida.id)))
-        ).scalar() or 0
-        prs_totales = (
-            await session.execute(select(func.count(PersonalRecord.id)))
-        ).scalar() or 0
+        comidas_totales = (await session.execute(select(func.count(Comida.id)))).scalar() or 0
+        prs_totales = (await session.execute(select(func.count(PersonalRecord.id)))).scalar() or 0
         interacciones_totales = (
             await session.execute(select(func.count(EventoBot.id)))
         ).scalar() or 0
         paises_distintos = (
             await session.execute(
-                select(func.count(func.distinct(Usuario.pais))).where(
-                    Usuario.pais.isnot(None)
-                )
+                select(func.count(func.distinct(Usuario.pais))).where(Usuario.pais.isnot(None))
             )
         ).scalar() or 0
-        racha_max = (
-            await session.execute(select(func.max(Streak.max_historico)))
-        ).scalar() or 0
+        racha_max = (await session.execute(select(func.max(Streak.max_historico)))).scalar() or 0
         deportes_count = (
             await session.execute(select(func.count(DeporteCatalogo.id)))
         ).scalar() or 0
@@ -186,8 +183,7 @@ async def chat_demo_endpoint(req: ChatDemoReq, request: Request) -> dict:
 async def precios_publicos() -> dict:
     """Precios actuales por tier para que la landing los muestre dinamicamente."""
     from src.db.models import DuracionPago
-    from src.services.pricing import (descripcion_plan, formatear_precio,
-                                      precio_cop)
+    from src.services.pricing import descripcion_plan, formatear_precio, precio_cop
 
     planes = []
     for plan in [

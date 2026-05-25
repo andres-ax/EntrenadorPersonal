@@ -5,8 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from src.db.models import DuracionPago, PlanSuscripcion
-from src.services.comprobantes import (_parse_fecha, _parse_hora, _parse_monto,
-                                       sha256_imagen)
+from src.services.comprobantes import (
+    _parse_fecha,
+    _parse_hora,
+    _parse_monto,
+    sha256_imagen,
+)
 from src.services.pricing import dias_duracion, formatear_precio, precio_cop
 
 

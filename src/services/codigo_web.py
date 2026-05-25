@@ -55,9 +55,7 @@ async def generar_codigo(telegram_id: int) -> str:
         except Exception:
             logger.exception("Error borrando codigo previo uid=%s", telegram_id)
     # Guardar nuevo codigo en ambas direcciones (codigo -> uid, uid -> codigo)
-    await client.setex(
-        CODIGO_KEY.format(codigo=codigo), CODIGO_TTL_SECONDS, str(telegram_id)
-    )
+    await client.setex(CODIGO_KEY.format(codigo=codigo), CODIGO_TTL_SECONDS, str(telegram_id))
     await client.setex(UID_KEY.format(uid=telegram_id), CODIGO_TTL_SECONDS, codigo)
     logger.info(
         "codigo_web generado uid=%s codigo=******%s ttl=%ds",

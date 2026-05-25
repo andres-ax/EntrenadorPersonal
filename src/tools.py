@@ -12,8 +12,9 @@ import json
 import logging
 import secrets
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from datetime import time as dtime
+from datetime import timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
@@ -21,33 +22,18 @@ from agents import function_tool
 
 from src.db.repository import (
     aceptar_modo_militar,
-    actualizar_usuario,
-    crear_compromiso,
-    guardar_metrica_corporal,
-    incrementar_citado_compromiso,
-    incrementar_streak,
-    listar_prs,
-    log_evento,
-    obtener_compromiso_activo,
-    obtener_o_crear_streak,
-    obtener_o_crear_usuario,
-    obtener_pr_ejercicio,
-    pausar_recordatorios,
-    reporte_semanal,
-    resumen_nutricional_dia,
-    set_quiet_hours,
-    usar_freeze_streak,
 )
-from src.db.repository import (
-    actualizar_sesion_skill_set as repo_actualizar_sesion_skill_set,
-)
+from src.db.repository import actualizar_sesion_skill_set as repo_actualizar_sesion_skill_set
+from src.db.repository import actualizar_usuario
 from src.db.repository import buscar_comida_similar as repo_buscar_comida_similar
 from src.db.repository import cambiar_tono as repo_cambiar_tono
 from src.db.repository import cerrar_sesion_abierta as repo_cerrar_sesion_abierta
+from src.db.repository import crear_compromiso
 from src.db.repository import crear_recordatorio as repo_crear_recordatorio
 from src.db.repository import desactivar_recordatorio as repo_desactivar_recordatorio
 from src.db.repository import eliminar_comida as repo_eliminar_comida
 from src.db.repository import guardar_comida as repo_guardar_comida
+from src.db.repository import guardar_metrica_corporal
 from src.db.repository import guardar_pr as repo_guardar_pr
 from src.db.repository import guardar_pr_truco as repo_guardar_pr_truco
 from src.db.repository import guardar_pr_via_escalada as repo_guardar_pr_via
@@ -56,11 +42,24 @@ from src.db.repository import guardar_sesion_skill as repo_guardar_sesion_skill
 from src.db.repository import guardar_sesion_sparring as repo_guardar_sesion_sparring
 from src.db.repository import guardar_sueno as repo_guardar_sueno
 from src.db.repository import historial_peso as repo_historial_peso
+from src.db.repository import incrementar_citado_compromiso, incrementar_streak, listar_prs
 from src.db.repository import listar_recordatorios as repo_listar_recordatorios
 from src.db.repository import listar_sesiones_skill as repo_listar_sesiones_skill
 from src.db.repository import listar_trucos_aterrizados as repo_listar_trucos
 from src.db.repository import (
-    obtener_ultima_sesion_skill as repo_obtener_ultima_sesion_skill,
+    log_evento,
+    obtener_compromiso_activo,
+    obtener_o_crear_streak,
+    obtener_o_crear_usuario,
+    obtener_pr_ejercicio,
+)
+from src.db.repository import obtener_ultima_sesion_skill as repo_obtener_ultima_sesion_skill
+from src.db.repository import (
+    pausar_recordatorios,
+    reporte_semanal,
+    resumen_nutricional_dia,
+    set_quiet_hours,
+    usar_freeze_streak,
 )
 from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
 from src.telegram.bot_setup import obtener_application

@@ -568,9 +568,7 @@ async def reconciliar_sesiones(
             )
             ids_borrar = [s.id for s in descartar]
             await session.execute(
-                delete(SesionEntrenamiento).where(
-                    SesionEntrenamiento.id.in_(ids_borrar)
-                )
+                delete(SesionEntrenamiento).where(SesionEntrenamiento.id.in_(ids_borrar))
             )
             await session.commit()
 
@@ -592,9 +590,7 @@ async def reconciliar_streaks(telegram_id: int, fecha: date, apply: bool) -> Non
     from src.db.repository import async_session_factory as _asf
 
     async with _asf() as session:
-        u = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        u = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         usuario = u.scalar_one_or_none()
         if usuario is None:
             log.warning("streaks: usuario no existe uid=%s", telegram_id)
@@ -637,9 +633,7 @@ async def reconciliar(uid: int, fecha: date, apply: bool) -> None:
             await _ensure_backup_table(session)
             await session.commit()
 
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == uid)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             log.error("uid=%s no existe en usuarios", uid)

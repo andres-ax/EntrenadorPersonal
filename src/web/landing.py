@@ -13,11 +13,19 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import (HTMLResponse, PlainTextResponse,
-                               RedirectResponse, Response)
+from fastapi.responses import (
+    HTMLResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 
-from src.api.admin_auth import (ADMIN_COOKIE_NAME, ADMIN_JWT_TTL, LoginRequest,
-                                autenticar_admin)
+from src.api.admin_auth import (
+    ADMIN_COOKIE_NAME,
+    ADMIN_JWT_TTL,
+    LoginRequest,
+    autenticar_admin,
+)
 from src.api.auth import JWT_TTL_SECONDS, _sign_jwt
 from src.config import settings
 from src.data.deportes import DEPORTES, deporte_por_slug
@@ -185,9 +193,7 @@ async def login_admin_submit(
     if not await check_rate_limit_ip(ip, max_per_minute=5):
         raise HTTPException(429, "Demasiados intentos. Espera un momento.")
     try:
-        resp_login = await autenticar_admin(
-            LoginRequest(email=email, password=password)
-        )
+        resp_login = await autenticar_admin(LoginRequest(email=email, password=password))
     except HTTPException as exc:
         return render(
             request,

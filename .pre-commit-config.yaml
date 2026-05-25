@@ -19,3 +19,4 @@ repos:
       - id: isort
         name: isort
         language_version: python3
+        args: ["--profile", "black"]

@@ -32,9 +32,7 @@ def test_registrar_jobs_deportes_registra_5_callbacks():
 
     app = MagicMock()
     registrar_jobs_deportes(app)
-    names_registrados = {
-        call.kwargs.get("name") for call in app.job_queue.run_daily.call_args_list
-    }
+    names_registrados = {call.kwargs.get("name") for call in app.job_queue.run_daily.call_args_list}
     assert "recordar_sesion_skill" in names_registrados
     assert "peso_diario_camp" in names_registrados
     assert "recovery_post_sparring" in names_registrados

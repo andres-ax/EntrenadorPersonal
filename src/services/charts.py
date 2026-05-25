@@ -12,8 +12,8 @@ matplotlib.use("Agg")
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
+from src.db.repository import historial_peso  # noqa: E402
 from src.db.repository import (
-    historial_peso,  # noqa: E402
     obtener_ultimas_sesiones,
     reporte_semanal,
     resumen_nutricional_dia,
@@ -70,9 +70,7 @@ async def chart_volumen_semanal(telegram_id: int) -> BytesIO | None:
                 continue
             iso = s.fecha.isocalendar()
             key = (iso[0], iso[1])
-            volumen = sum(
-                (e.peso_kg or 0) * (e.series or 0) * (e.reps or 0) for e in s.ejercicios
-            )
+            volumen = sum((e.peso_kg or 0) * (e.series or 0) * (e.reps or 0) for e in s.ejercicios)
             semanas[key] = semanas.get(key, 0) + volumen
         if not semanas:
             return None
@@ -90,9 +88,7 @@ async def chart_volumen_semanal(telegram_id: int) -> BytesIO | None:
         return None
 
 
-async def chart_macros_dia(
-    telegram_id: int, fecha: date | None = None
-) -> BytesIO | None:
+async def chart_macros_dia(telegram_id: int, fecha: date | None = None) -> BytesIO | None:
     """Pie chart de macros del dia."""
     try:
         resumen = await resumen_nutricional_dia(telegram_id, fecha)

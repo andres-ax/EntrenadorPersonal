@@ -19,11 +19,22 @@ from sqlalchemy import select
 
 from src.api.auth import verify_jwt
 from src.db.connection import async_session_factory
-from src.db.models import (Comida, Compromiso, MetricaCorporal, MetricaSueno,
-                           SesionEntrenamiento, Usuario)
-from src.db.repository import (historial_peso, listar_prs,
-                               obtener_o_crear_streak, obtener_usuario,
-                               reporte_semanal, resumen_nutricional_dia)
+from src.db.models import (
+    Comida,
+    Compromiso,
+    MetricaCorporal,
+    MetricaSueno,
+    SesionEntrenamiento,
+    Usuario,
+)
+from src.db.repository import (
+    historial_peso,
+    listar_prs,
+    obtener_o_crear_streak,
+    obtener_usuario,
+    reporte_semanal,
+    resumen_nutricional_dia,
+)
 from src.web.templates import render
 
 logger = logging.getLogger(__name__)
@@ -60,9 +71,7 @@ async def app_root(request: Request, user: dict | None = Depends(get_user_from_c
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def dashboard(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     """KPIs del dia y semana del usuario, server-rendered."""
     if user is None:
         return _redirect_login()
@@ -86,17 +95,13 @@ async def dashboard(
                 "freezes_disponibles": streak.freezes_disponibles,
             },
             "nutricion": nutricion,
-            "peso_recientes": [
-                {"fecha": str(r.fecha), "peso_kg": r.peso_kg} for r in peso_hist
-            ],
+            "peso_recientes": [{"fecha": str(r.fecha), "peso_kg": r.peso_kg} for r in peso_hist],
         },
     )
 
 
 @router.get("/calendario", response_class=HTMLResponse)
-async def calendario(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def calendario(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     """Calendario semanal: 7 dias con/sin entrenamientos."""
     if user is None:
         return _redirect_login()
@@ -104,9 +109,7 @@ async def calendario(
     hoy = date.today()
     inicio = hoy - timedelta(days=hoy.weekday())
     async with async_session_factory() as session:
-        u_q = await session.execute(
-            select(Usuario.id).where(Usuario.telegram_id == uid)
-        )
+        u_q = await session.execute(select(Usuario.id).where(Usuario.telegram_id == uid))
         usuario_id = u_q.scalar_one_or_none()
         sesiones = []
         if usuario_id:
@@ -201,9 +204,7 @@ async def historial(
     items: list = []
     headers: list[str] = []
     async with async_session_factory() as session:
-        u_q = await session.execute(
-            select(Usuario.id).where(Usuario.telegram_id == uid)
-        )
+        u_q = await session.execute(select(Usuario.id).where(Usuario.telegram_id == uid))
         usuario_id = u_q.scalar_one_or_none()
         if usuario_id:
             if tipo == "entrenos":
@@ -327,9 +328,7 @@ async def graficos(request: Request, user: dict | None = Depends(get_user_from_c
 
 
 @router.get("/settings", response_class=HTMLResponse)
-async def settings_view(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def settings_view(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     if user is None:
         return _redirect_login()
     uid = user["uid"]
@@ -371,9 +370,7 @@ async def pagar(request: Request, user: dict | None = Depends(get_user_from_cook
             "active": "pagar",
             "page_title": "Plan y pagos",
             "page_subtitle": "Mejora tu cuenta o consulta tu plan actual",
-            "plan_actual": (
-                perfil.plan_actual.value if perfil and perfil.plan_actual else "free"
-            ),
+            "plan_actual": (perfil.plan_actual.value if perfil and perfil.plan_actual else "free"),
             "plan_expira_en": perfil.plan_expira_en if perfil else None,
             "precios": {
                 "starter": settings.precio_starter_cop,
@@ -402,9 +399,7 @@ async def llamar(request: Request, user: dict | None = Depends(get_user_from_coo
 
 
 @router.get("/wearables", response_class=HTMLResponse)
-async def wearables(
-    request: Request, user: dict | None = Depends(get_user_from_cookie)
-):
+async def wearables(request: Request, user: dict | None = Depends(get_user_from_cookie)):
     if user is None:
         return _redirect_login()
     return render(

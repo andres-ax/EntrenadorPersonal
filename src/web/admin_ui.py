@@ -26,9 +26,15 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import Date, cast, func, select
 
 from src.api import admin as admin_api
-from src.api.admin_auth import (ADMIN_COOKIE_NAME, ADMIN_JWT_TTL, LoginRequest,
-                                autenticar_admin, get_admin_from_cookie,
-                                get_admin_optional, require_super)
+from src.api.admin_auth import (
+    ADMIN_COOKIE_NAME,
+    ADMIN_JWT_TTL,
+    LoginRequest,
+    autenticar_admin,
+    get_admin_from_cookie,
+    get_admin_optional,
+    require_super,
+)
 from src.web.templates import render
 
 logger = logging.getLogger(__name__)
@@ -42,9 +48,7 @@ router = APIRouter(prefix="/admin", tags=["admin-ui"], include_in_schema=False)
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(
-    request: Request, admin: dict | None = Depends(get_admin_optional)
-):
+async def login_page(request: Request, admin: dict | None = Depends(get_admin_optional)):
     if admin:
         return RedirectResponse(url="/admin/", status_code=303)
     return render(request, "admin/login.html", {"error": None})
@@ -57,9 +61,7 @@ async def login_submit(
     password: str = Form(...),
 ):
     try:
-        resp_login = await autenticar_admin(
-            LoginRequest(email=email, password=password)
-        )
+        resp_login = await autenticar_admin(LoginRequest(email=email, password=password))
     except HTTPException as exc:
         return render(
             request,
@@ -102,12 +104,8 @@ async def logout():
 async def dashboard(request: Request, admin: dict = Depends(get_admin_from_cookie)):
     # Llama a finanzas() directamente (es una funcion async dentro de admin_api)
     finanzas_data = await admin_api.finanzas(admin=admin, dias=30)
-    pagos_pendientes = await admin_api.listar_pagos(
-        admin=admin, estado="pendiente_humano", limit=5
-    )
-    crisis_recientes = await admin_api.listar_crisis(
-        admin=admin, nivel=None, dias=7, limit=5
-    )
+    pagos_pendientes = await admin_api.listar_pagos(admin=admin, estado="pendiente_humano", limit=5)
+    crisis_recientes = await admin_api.listar_crisis(admin=admin, nivel=None, dias=7, limit=5)
     return render(
         request,
         "admin/dashboard.html",
@@ -147,9 +145,7 @@ async def usuarios_lista(
         offset=offset,
     )
     template = (
-        "admin/_usuarios_tabla.html"
-        if request.headers.get("hx-request")
-        else "admin/usuarios.html"
+        "admin/_usuarios_tabla.html" if request.headers.get("hx-request") else "admin/usuarios.html"
     )
     return render(
         request,
@@ -171,9 +167,7 @@ async def usuarios_lista(
 
 
 @router.get("/usuarios/{uid}", response_class=HTMLResponse)
-async def usuario_detalle(
-    uid: int, request: Request, admin: dict = Depends(get_admin_from_cookie)
-):
+async def usuario_detalle(uid: int, request: Request, admin: dict = Depends(get_admin_from_cookie)):
     data = await admin_api.detalle_usuario(uid=uid, admin=admin)
     return render(
         request,
@@ -196,12 +190,8 @@ async def asignar_plan_form(
 
 
 @router.post("/usuarios/{uid}/pausar_form")
-async def pausar_form(
-    uid: int, admin: dict = Depends(get_admin_from_cookie), dias: int = Form(7)
-):
-    await admin_api.pausar_usuario(
-        uid=uid, req=admin_api.PausarReq(dias=dias), admin=admin
-    )
+async def pausar_form(uid: int, admin: dict = Depends(get_admin_from_cookie), dias: int = Form(7)):
+    await admin_api.pausar_usuario(uid=uid, req=admin_api.PausarReq(dias=dias), admin=admin)
     return RedirectResponse(url=f"/admin/usuarios/{uid}", status_code=303)
 
 
@@ -243,13 +233,9 @@ async def pagos_lista(
     limit: int = Query(50, le=200),
     offset: int = 0,
 ):
-    data = await admin_api.listar_pagos(
-        admin=admin, estado=estado, limit=limit, offset=offset
-    )
+    data = await admin_api.listar_pagos(admin=admin, estado=estado, limit=limit, offset=offset)
     template = (
-        "admin/_pagos_tabla.html"
-        if request.headers.get("hx-request")
-        else "admin/pagos.html"
+        "admin/_pagos_tabla.html" if request.headers.get("hx-request") else "admin/pagos.html"
     )
     return render(
         request,
@@ -292,9 +278,7 @@ async def pago_foto_cookie(comp_id: int, admin: dict = Depends(get_admin_from_co
         if not data.get("ok"):
             raise HTTPException(502, "getFile fallo")
         file_path = data["result"]["file_path"]
-        download = await client.get(
-            f"https://api.telegram.org/file/bot{token}/{file_path}"
-        )
+        download = await client.get(f"https://api.telegram.org/file/bot{token}/{file_path}")
         download.raise_for_status()
     return Response(content=download.content, media_type="image/jpeg")
 
@@ -317,9 +301,7 @@ async def pago_aprobar_form(
     admin: dict = Depends(get_admin_from_cookie),
     notas: str = Form(""),
 ):
-    await admin_api.aprobar(
-        comp_id=comp_id, req=admin_api.AprobarReq(notas=notas), admin=admin
-    )
+    await admin_api.aprobar(comp_id=comp_id, req=admin_api.AprobarReq(notas=notas), admin=admin)
     return RedirectResponse(
         url=f"/admin/pagos?msg=Pago+%23{comp_id}+aprobado.+Plan+activado.",
         status_code=303,
@@ -338,9 +320,7 @@ async def pago_rechazar_form(
         req=admin_api.RechazarReq(motivo=motivo, bloquear=bloquear),
         admin=admin,
     )
-    return RedirectResponse(
-        url=f"/admin/pagos?msg=Pago+%23{comp_id}+rechazado.", status_code=303
-    )
+    return RedirectResponse(url=f"/admin/pagos?msg=Pago+%23{comp_id}+rechazado.", status_code=303)
 
 
 # -----------------------------------------------------------------------------
@@ -356,9 +336,7 @@ async def crisis_lista(
     dias: int = 30,
     limit: int = Query(100, le=500),
 ):
-    data = await admin_api.listar_crisis(
-        admin=admin, nivel=nivel, dias=dias, limit=limit
-    )
+    data = await admin_api.listar_crisis(admin=admin, nivel=nivel, dias=dias, limit=limit)
     return render(
         request,
         "admin/crisis.html",
@@ -396,9 +374,7 @@ async def finanzas_view(
 
 
 @router.get("/operaciones", response_class=HTMLResponse)
-async def operaciones_view(
-    request: Request, admin: dict = Depends(get_admin_from_cookie)
-):
+async def operaciones_view(request: Request, admin: dict = Depends(get_admin_from_cookie)):
     await require_super(admin)
     return render(
         request,
@@ -577,9 +553,7 @@ async def costos_dashboard(
         nombres = {}
         if tg_ids:
             n_q = await session.execute(
-                select(Usuario.telegram_id, Usuario.nombre).where(
-                    Usuario.telegram_id.in_(tg_ids)
-                )
+                select(Usuario.telegram_id, Usuario.nombre).where(Usuario.telegram_id.in_(tg_ids))
             )
             nombres = {r[0]: r[1] for r in n_q}
         top_usuarios = [

@@ -46,9 +46,7 @@ def test_output_clean_no_falsos_positivos():
 
 def test_pais_desconocido_fallback():
     c = detectar("quiero morir", "ZZ")
-    assert (
-        "linea" in c.lineas_crisis.lower() or "emergencias" in c.lineas_crisis.lower()
-    )
+    assert "linea" in c.lineas_crisis.lower() or "emergencias" in c.lineas_crisis.lower()
 
 
 # ============================================================================
@@ -104,10 +102,7 @@ def test_hiperventilo_antes_apnea():
     c = detectar("hiperventilo antes de sumergir para aguantar mas", "ES")
     assert c is not None
     assert c.nivel == 1
-    assert (
-        "shallow water blackout" in c.mensaje_contenedor.lower()
-        or "SWB" in c.mensaje_contenedor
-    )
+    assert "shallow water blackout" in c.mensaje_contenedor.lower() or "SWB" in c.mensaje_contenedor
 
 
 def test_apnea_grupo_no_falso_positivo():

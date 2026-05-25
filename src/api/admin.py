@@ -16,21 +16,42 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
-from src.api.admin_auth import (LoginRequest, LoginResponse, autenticar_admin,
-                                get_admin_from_token, hash_password,
-                                require_super)
+from src.api.admin_auth import (
+    LoginRequest,
+    LoginResponse,
+    autenticar_admin,
+    get_admin_from_token,
+    hash_password,
+    require_super,
+)
 from src.cache import get_redis
 from src.config import settings
 from src.db.connection import async_session_factory
-from src.db.models import (Admin, CrisisLog, EscalacionState, EstadoPago,
-                           EventoBot, MetodoPago, PagoComprobante,
-                           PlanSuscripcion, RolAdmin, Suscripcion, Usuario,
-                           UsuarioBloqueado)
-from src.db.repository import (activar_plan, aprobar_comprobante,
-                               bloquear_usuario, desbloquear_usuario,
-                               eliminar_usuario, listar_comprobantes_admin,
-                               obtener_comprobante, pausar_recordatorios,
-                               rechazar_comprobante)
+from src.db.models import (
+    Admin,
+    CrisisLog,
+    EscalacionState,
+    EstadoPago,
+    EventoBot,
+    MetodoPago,
+    PagoComprobante,
+    PlanSuscripcion,
+    RolAdmin,
+    Suscripcion,
+    Usuario,
+    UsuarioBloqueado,
+)
+from src.db.repository import (
+    activar_plan,
+    aprobar_comprobante,
+    bloquear_usuario,
+    desbloquear_usuario,
+    eliminar_usuario,
+    listar_comprobantes_admin,
+    obtener_comprobante,
+    pausar_recordatorios,
+    rechazar_comprobante,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +90,7 @@ async def crear_admin(
     except ValueError:
         raise HTTPException(400, "rol invalido")
     async with async_session_factory() as session:
-        existente = await session.execute(
-            select(Admin).where(Admin.email == req.email.lower())
-        )
+        existente = await session.execute(select(Admin).where(Admin.email == req.email.lower()))
         if existente.scalar_one_or_none() is not None:
             raise HTTPException(409, "Email ya registrado")
         nuevo = Admin(
@@ -160,9 +179,7 @@ async def listar_usuarios(
         elif bloqueado is False:
             sub = select(UsuarioBloqueado.usuario_id)
             query = query.where(~Usuario.id.in_(sub))
-        total_q = await session.execute(
-            select(func.count()).select_from(query.subquery())
-        )
+        total_q = await session.execute(select(func.count()).select_from(query.subquery()))
         total = total_q.scalar() or 0
         query = query.order_by(Usuario.created_at.desc()).limit(limit).offset(offset)
         result = await session.execute(query)
@@ -176,13 +193,9 @@ async def listar_usuarios(
 
 
 @router.get("/usuarios/{uid}")
-async def detalle_usuario(
-    uid: int, admin: dict = Depends(get_admin_from_token)
-) -> dict:
+async def detalle_usuario(uid: int, admin: dict = Depends(get_admin_from_token)) -> dict:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == uid)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
         u = result.scalar_one_or_none()
         if u is None:
             raise HTTPException(404, "Usuario no encontrado")
@@ -247,12 +260,8 @@ async def detalle_usuario(
                 "monto_cop": p.monto_cop,
                 "monto_esperado_cop": p.monto_esperado_cop,
                 "monto_match": p.monto_match,
-                "plan_solicitado": (
-                    p.plan_solicitado.value if p.plan_solicitado else "starter"
-                ),
-                "duracion": (
-                    p.duracion_solicitada.value if p.duracion_solicitada else "mensual"
-                ),
+                "plan_solicitado": (p.plan_solicitado.value if p.plan_solicitado else "starter"),
+                "duracion": (p.duracion_solicitada.value if p.duracion_solicitada else "mensual"),
                 "estado": p.estado.value if p.estado else "pendiente_humano",
                 "metodo": p.metodo.value if p.metodo else "otro",
                 "referencia": p.referencia,
@@ -336,17 +345,13 @@ async def bloquear_endpoint(
 
 
 @router.delete("/usuarios/{uid}/bloquear")
-async def desbloquear_endpoint(
-    uid: int, admin: dict = Depends(get_admin_from_token)
-) -> dict:
+async def desbloquear_endpoint(uid: int, admin: dict = Depends(get_admin_from_token)) -> dict:
     ok = await desbloquear_usuario(uid)
     return {"ok": ok}
 
 
 @router.delete("/usuarios/{uid}")
-async def eliminar_endpoint(
-    uid: int, admin: dict = Depends(get_admin_from_token)
-) -> dict:
+async def eliminar_endpoint(uid: int, admin: dict = Depends(get_admin_from_token)) -> dict:
     await require_super(admin)
     ok = await eliminar_usuario(uid)
     return {"ok": ok}
@@ -394,9 +399,7 @@ async def listar_pagos(
             estado_enum = EstadoPago(estado)
         except ValueError:
             raise HTTPException(400, "estado invalido")
-    pagos = await listar_comprobantes_admin(
-        estado=estado_enum, limit=limit, offset=offset
-    )
+    pagos = await listar_comprobantes_admin(estado=estado_enum, limit=limit, offset=offset)
     async with async_session_factory() as session:
         q_total = select(func.count(PagoComprobante.id))
         if estado_enum:
@@ -436,25 +439,19 @@ async def descargar_foto_comprobante(
         if not data.get("ok"):
             raise HTTPException(502, "getFile fallo")
         file_path = data["result"]["file_path"]
-        download = await client.get(
-            f"https://api.telegram.org/file/bot{token}/{file_path}"
-        )
+        download = await client.get(f"https://api.telegram.org/file/bot{token}/{file_path}")
         download.raise_for_status()
     media_type = "image/jpeg"
     return Response(content=download.content, media_type=media_type)
 
 
 @router.get("/pagos/{comp_id}")
-async def detalle_pago(
-    comp_id: int, admin: dict = Depends(get_admin_from_token)
-) -> dict:
+async def detalle_pago(comp_id: int, admin: dict = Depends(get_admin_from_token)) -> dict:
     comp = await obtener_comprobante(comp_id)
     if comp is None:
         raise HTTPException(404, "Comprobante no encontrado")
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.id == comp.usuario_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.id == comp.usuario_id))
         u = result.scalar_one()
     return {
         "comprobante": _comprobante_dict(comp),
@@ -504,9 +501,7 @@ async def rechazar(
     req: RechazarReq,
     admin: dict = Depends(get_admin_from_token),
 ) -> dict:
-    comp = await rechazar_comprobante(
-        comp_id, admin["email"], req.motivo, bloquear=req.bloquear
-    )
+    comp = await rechazar_comprobante(comp_id, admin["email"], req.motivo, bloquear=req.bloquear)
     if comp is None:
         raise HTTPException(404, "No encontrado")
     async with async_session_factory() as session:
@@ -563,13 +558,9 @@ async def listar_crisis(
 
 
 @router.get("/escalation/{uid}")
-async def estado_escalation(
-    uid: int, admin: dict = Depends(get_admin_from_token)
-) -> dict:
+async def estado_escalation(uid: int, admin: dict = Depends(get_admin_from_token)) -> dict:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == uid)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
         u = result.scalar_one_or_none()
         if u is None:
             raise HTTPException(404, "Usuario no encontrado")

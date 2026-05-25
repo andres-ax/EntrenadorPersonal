@@ -37,9 +37,7 @@ def upgrade() -> None:
 
     # 1. Limpieza preventiva: borrar filas que violarian los CHECK que
     #    agregaremos despues. Idempotente.
-    op.execute(
-        "DELETE FROM metricas_sueno WHERE horas IS NULL OR horas <= 0 OR horas > 16"
-    )
+    op.execute("DELETE FROM metricas_sueno WHERE horas IS NULL OR horas <= 0 OR horas > 16")
     op.execute(
         "DELETE FROM metricas_corporales "
         "WHERE peso_kg IS NULL OR peso_kg <= 20 OR peso_kg >= 400"

@@ -3,10 +3,16 @@
 import enum
 from datetime import date, time
 
-from sqlalchemy import JSON, BigInteger, Boolean, Column, Date, DateTime
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+)
 from sqlalchemy import Enum as _SAEnum
-from sqlalchemy import (Float, ForeignKey, Integer, String, Text, Time, func,
-                        text)
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, Time, func, text
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -202,36 +208,22 @@ class Usuario(Base):
     sesiones = relationship(
         "SesionEntrenamiento", back_populates="usuario", cascade="all, delete-orphan"
     )
-    comidas = relationship(
-        "Comida", back_populates="usuario", cascade="all, delete-orphan"
-    )
-    prs = relationship(
-        "PersonalRecord", back_populates="usuario", cascade="all, delete-orphan"
-    )
-    sueno = relationship(
-        "MetricaSueno", back_populates="usuario", cascade="all, delete-orphan"
-    )
+    comidas = relationship("Comida", back_populates="usuario", cascade="all, delete-orphan")
+    prs = relationship("PersonalRecord", back_populates="usuario", cascade="all, delete-orphan")
+    sueno = relationship("MetricaSueno", back_populates="usuario", cascade="all, delete-orphan")
     metricas_corporales = relationship(
         "MetricaCorporal", back_populates="usuario", cascade="all, delete-orphan"
     )
-    compromisos = relationship(
-        "Compromiso", back_populates="usuario", cascade="all, delete-orphan"
-    )
+    compromisos = relationship("Compromiso", back_populates="usuario", cascade="all, delete-orphan")
     estados_escalacion = relationship(
         "EscalacionState", back_populates="usuario", cascade="all, delete-orphan"
     )
-    streaks = relationship(
-        "Streak", back_populates="usuario", cascade="all, delete-orphan"
-    )
+    streaks = relationship("Streak", back_populates="usuario", cascade="all, delete-orphan")
     checkins = relationship(
         "CheckinNocturno", back_populates="usuario", cascade="all, delete-orphan"
     )
-    eventos = relationship(
-        "EventoBot", back_populates="usuario", cascade="all, delete-orphan"
-    )
-    crisis = relationship(
-        "CrisisLog", back_populates="usuario", cascade="all, delete-orphan"
-    )
+    eventos = relationship("EventoBot", back_populates="usuario", cascade="all, delete-orphan")
+    crisis = relationship("CrisisLog", back_populates="usuario", cascade="all, delete-orphan")
     feedbacks_comida = relationship(
         "FeedbackComida", back_populates="usuario", cascade="all, delete-orphan"
     )
@@ -244,18 +236,14 @@ class SesionEntrenamiento(Base):
     __tablename__ = "sesiones_entrenamiento"
 
     id = Column(Integer, primary_key=True)
-    usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
-    )
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     # `cerrada` = False mientras la sesion sigue "en curso" y subsecuentes
     # mensajes del usuario del mismo deporte/dia hacen UPDATE en vez de
     # INSERT. Una vez el usuario dice "termine" pasa a True via
     # `cerrar_sesion_entrenamiento` (o expira a las 2h por timeout).
     cerrada = Column(Boolean, default=True, nullable=False)
-    updated_at = Column(
-        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
     tipo = Column(Enum(TipoEjercicio))
     subtipo = Column(Enum(SubtipoSesion), default=SubtipoSesion.SETS, nullable=False)
     duracion_min = Column(Integer)
@@ -301,9 +289,7 @@ class Comida(Base):
     __tablename__ = "comidas"
 
     id = Column(Integer, primary_key=True)
-    usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
-    )
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     tipo = Column(Enum(TipoComida))
     alimentos = Column(Text)
@@ -332,9 +318,7 @@ class PersonalRecord(Base):
     __tablename__ = "personal_records"
 
     id = Column(Integer, primary_key=True)
-    usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
-    )
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     tipo_pr = Column(Enum(TipoPR), default=TipoPR.PESO_REPS, nullable=False, index=True)
     ejercicio = Column(String(100), nullable=False)
     peso_kg = Column(Float)
@@ -360,9 +344,7 @@ class MetricaSueno(Base):
     __tablename__ = "metricas_sueno"
 
     id = Column(Integer, primary_key=True)
-    usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
-    )
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     horas = Column(Float)
     calidad = Column(Integer)
@@ -375,9 +357,7 @@ class MetricaCorporal(Base):
     __tablename__ = "metricas_corporales"
 
     id = Column(Integer, primary_key=True)
-    usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
-    )
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False)
     fecha = Column(Date, nullable=False, default=date.today, index=True)
     peso_kg = Column(Float)
     grasa_pct = Column(Float)
@@ -400,9 +380,7 @@ class Compromiso(Base):
     fecha_firma = Column(Date, nullable=False, default=date.today)
     deadline = Column(Date, nullable=False)
     frecuencia_semanal = Column(Integer, nullable=False, default=3)
-    tipo_compromiso = Column(
-        Enum(TipoCompromiso), nullable=False, default=TipoCompromiso.GENERAL
-    )
+    tipo_compromiso = Column(Enum(TipoCompromiso), nullable=False, default=TipoCompromiso.GENERAL)
     stake_simbolico = Column(String(300), default="")
     activo = Column(Boolean, default=True, nullable=False, index=True)
     citado_veces = Column(Integer, default=0, nullable=False)
@@ -431,9 +409,7 @@ class EscalacionState(Base):
     mensajes_enviados_hoy = Column(Integer, default=0, nullable=False)
     ultimo_mensaje_id = Column(BigInteger)
     ultimo_envio = Column(DateTime)
-    ultima_actualizacion = Column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
+    ultima_actualizacion = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     usuario = relationship("Usuario", back_populates="estados_escalacion")
 
@@ -484,9 +460,7 @@ class EventoBot(Base):
     # `usuario_id` queda NULL cuando el usuario se borra (CASCADE no aplica
     # porque eventos_bot.usuario_id es nullable; el SET NULL no esta
     # configurado pero asyncpg lo deja igual asi de facto en delete).
-    usuario_id = Column(
-        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
-    )
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), index=True)
     # Denormalizamos telegram_id para mantener trazabilidad despues de un
     # borrar_datos (usuario_id queda huerfano pero telegram_id se conserva).
     telegram_id = Column(BigInteger, nullable=True, index=True)
@@ -558,9 +532,7 @@ class Suscripcion(Base):
     expira_en = Column(DateTime)
     activa = Column(Boolean, default=True, nullable=False)
 
-    metodo_pago = Column(
-        Enum(MetodoPago), default=MetodoPago.MANUAL_ADMIN, nullable=False
-    )
+    metodo_pago = Column(Enum(MetodoPago), default=MetodoPago.MANUAL_ADMIN, nullable=False)
     monto_cop = Column(Integer, nullable=True)
     comprobante_id = Column(
         Integer, ForeignKey("pagos_comprobantes.id", ondelete="SET NULL"), nullable=True
@@ -611,12 +583,8 @@ class PagoComprobante(Base):
     hora_pago = Column(Time, nullable=True)
     metodo = Column(Enum(MetodoPago), default=MetodoPago.OTRO, nullable=False)
 
-    plan_solicitado = Column(
-        Enum(PlanSuscripcion), default=PlanSuscripcion.STARTER, nullable=False
-    )
-    duracion_solicitada = Column(
-        Enum(DuracionPago), default=DuracionPago.MENSUAL, nullable=False
-    )
+    plan_solicitado = Column(Enum(PlanSuscripcion), default=PlanSuscripcion.STARTER, nullable=False)
+    duracion_solicitada = Column(Enum(DuracionPago), default=DuracionPago.MENSUAL, nullable=False)
     dias_otorgados = Column(Integer, default=30, nullable=False)
 
     estado = Column(

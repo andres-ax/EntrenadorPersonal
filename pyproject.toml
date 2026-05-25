@@ -38,9 +38,13 @@ include = ["src*"]
 target-version = ["py313"]
 line-length = 100
 
+[tool.isort]
+profile = "black"
+line_length = 100
+
 [tool.ruff]
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "C90", "S", "T", "I"]
+select = ["E", "F", "W", "C90", "S", "T"]
 ignore = ["E501", "C901", "S110", "S101"]

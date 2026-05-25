@@ -9,8 +9,7 @@ import logging
 
 from src.config import settings
 from src.i18n import IDIOMAS_SOPORTADOS, t
-from telegram import (BotCommand, MenuButtonCommands, MenuButtonWebApp,
-                      WebAppInfo)
+from telegram import BotCommand, MenuButtonCommands, MenuButtonWebApp, WebAppInfo
 from telegram.ext import Application
 
 logger = logging.getLogger(__name__)
@@ -123,13 +122,9 @@ async def setup_bot(app: Application) -> None:
                 await bot.set_my_short_description(
                     t("bot_short_desc", lang=lang), language_code=lang
                 )
-                await bot.set_my_description(
-                    t("bot_descripcion", lang=lang), language_code=lang
-                )
+                await bot.set_my_description(t("bot_descripcion", lang=lang), language_code=lang)
             except Exception:
-                logger.warning(
-                    "No pude setear nombre/desc para lang=%s", lang, exc_info=True
-                )
+                logger.warning("No pude setear nombre/desc para lang=%s", lang, exc_info=True)
 
         if settings.miniapp_url:
             try:
@@ -146,8 +141,6 @@ async def setup_bot(app: Application) -> None:
         else:
             await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
-        logger.info(
-            "Bot identity completa configurada para %d idiomas", len(IDIOMAS_SOPORTADOS)
-        )
+        logger.info("Bot identity completa configurada para %d idiomas", len(IDIOMAS_SOPORTADOS))
     except Exception:
         logger.exception("Error configurando identidad del bot")

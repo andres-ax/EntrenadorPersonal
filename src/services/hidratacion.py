@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def registrar_agua(telegram_id: int, ml: int) -> int:
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return 0
@@ -30,9 +28,7 @@ async def registrar_agua(telegram_id: int, ml: int) -> int:
 async def consumo_hoy_ml(telegram_id: int) -> int:
     hoy_inicio = datetime.combine(date.today(), datetime.min.time())
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return 0
@@ -49,9 +45,7 @@ async def objetivo_ml(telegram_id: int) -> int:
     """Objetivo diario = peso_kg * 35ml + 500ml por entreno hoy."""
     hoy = date.today()
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return 2500

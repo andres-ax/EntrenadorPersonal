@@ -44,18 +44,13 @@ def _mensaje_pago(tipo: str, payload: dict) -> str | None:
     if tipo == "plan_asignado_admin":
         plan = payload.get("plan", "")
         dias = payload.get("dias", 0)
-        return (
-            f"Un admin te asigno plan <b>{plan}</b> por <b>{dias}</b> dias. "
-            f"Disfruta!"
-        )
+        return f"Un admin te asigno plan <b>{plan}</b> por <b>{dias}</b> dias. " f"Disfruta!"
     return None
 
 
 async def _enviar_mensaje_seguro(app: Application, chat_id: int, texto: str) -> None:
     try:
-        await app.bot.send_message(
-            chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML
-        )
+        await app.bot.send_message(chat_id=chat_id, text=texto, parse_mode=ParseMode.HTML)
     except Exception as e:
         import telegram.error
 
@@ -111,10 +106,7 @@ async def _procesar_broadcast(app: Application, raw: str) -> None:
     enviados = 0
     for u in usuarios:
         if plan_minimo_rank > 0:
-            if (
-                PLAN_RANKING.get(u.plan_actual or PlanSuscripcion.FREE, 0)
-                < plan_minimo_rank
-            ):
+            if PLAN_RANKING.get(u.plan_actual or PlanSuscripcion.FREE, 0) < plan_minimo_rank:
                 continue
         try:
             await app.bot.send_message(

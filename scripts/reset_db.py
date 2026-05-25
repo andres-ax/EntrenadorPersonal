@@ -1,23 +1,23 @@
 """Recrea TODAS las tablas. SOLO PARA DESARROLLO. Destruye todos los datos."""
 
 import asyncio
+import logging
 import os
 import sys
 
+from dotenv import load_dotenv
+from sqlalchemy import text
+
 if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("PRODUCTION"):
-    print("ERROR: Este script NO debe ejecutarse en produccion.")
+    logging.error("ERROR: Este script NO debe ejecutarse en produccion.")
     sys.exit(1)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dotenv import load_dotenv
-
 load_dotenv()
 
-from sqlalchemy import text
-
-from src.db.connection import engine
-from src.db.models import Base
+from src.db.connection import engine  # noqa: E402
+from src.db.models import Base  # noqa: E402
 
 
 async def reset_db():
@@ -29,9 +29,9 @@ async def reset_db():
         await conn.execute(text("DROP TABLE IF EXISTS metricas_sueno CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS metricas_corporales CASCADE"))
         await conn.execute(text("DROP TABLE IF EXISTS usuarios CASCADE"))
-        print("Tablas eliminadas")
+        logging.info("Tablas eliminadas")
         await conn.run_sync(Base.metadata.create_all)
-        print("Tablas recreadas")
+        logging.info("Tablas recreadas")
     await engine.dispose()
 
 

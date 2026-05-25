@@ -15,8 +15,6 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from telegram.constants import ParseMode
-from telegram.ext import Application, Defaults
 
 from src.api.admin_auth import seed_admin_si_falta
 from src.cache import close_redis
@@ -36,6 +34,8 @@ from src.telegram.handlers import registrar
 from src.telegram.pubsub_listener import start_pubsub_listener
 from src.telegram.scheduler import registrar_jobs
 from telegram import Update
+from telegram.constants import ParseMode
+from telegram.ext import Application, Defaults
 
 setup_logging()
 
@@ -89,9 +89,7 @@ async def error_handler(update, context) -> None:
             logger.exception("Error seteando usuario en Sentry (no critico)")
     if settings.developer_chat_id is None:
         return
-    tb = "".join(
-        traceback.format_exception(None, context.error, context.error.__traceback__)
-    )
+    tb = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
     msg = (
         f"<b>Excepcion en el bot</b>\n"
         f"<pre>{html.escape(str(update))[:1000]}</pre>\n"
@@ -168,9 +166,7 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("No pude setear el webhook en Telegram")
     else:
-        logger.warning(
-            "WEBHOOK_BASE_URL no seteada; el bot no recibira updates por webhook"
-        )
+        logger.warning("WEBHOOK_BASE_URL no seteada; el bot no recibira updates por webhook")
 
     yield
 
@@ -395,9 +391,7 @@ async def webhook(
 
             sentry_sdk.set_user({"id": uid})
         except Exception:
-            logger.exception(
-                "Error seteando usuario en Sentry (webhook, no critico) uid=%s", uid
-            )
+            logger.exception("Error seteando usuario en Sentry (webhook, no critico) uid=%s", uid)
     logger.info(
         "TG update_id=%s type=%s uid=%s chat_id=%s text=%r",
         update.update_id,
@@ -476,9 +470,7 @@ async def webhook_info(x_admin_token: str = Header(None)) -> dict:
     """Devuelve la URL de webhook y secret. Protegido por X-Admin-Token."""
     if not hmac.compare_digest(x_admin_token or "", ADMIN_TOKEN):
         raise HTTPException(403, "Acceso denegado")
-    base = (
-        str(settings.webhook_base_url).rstrip("/") if settings.webhook_base_url else ""
-    )
+    base = str(settings.webhook_base_url).rstrip("/") if settings.webhook_base_url else ""
     return {
         "webhook_url": f"{base}/webhook" if base else None,
         "secret_token": WEBHOOK_SECRET,
@@ -525,9 +517,7 @@ async def admin_stats(
     hoy = date_t.today()
     hace_30 = hoy - timedelta(days=30)
     async with async_session_factory() as session:
-        total_users = (
-            await session.execute(select(func.count(Usuario.id)))
-        ).scalar() or 0
+        total_users = (await session.execute(select(func.count(Usuario.id)))).scalar() or 0
         onboarded = (
             await session.execute(
                 select(func.count(Usuario.id)).where(
@@ -537,9 +527,7 @@ async def admin_stats(
         ).scalar() or 0
         bloqueados = (
             await session.execute(
-                select(func.count(Usuario.id)).where(
-                    Usuario.bot_bloqueado == True  # noqa: E712
-                )
+                select(func.count(Usuario.id)).where(Usuario.bot_bloqueado == True)  # noqa: E712
             )
         ).scalar() or 0
         pro_activos = (

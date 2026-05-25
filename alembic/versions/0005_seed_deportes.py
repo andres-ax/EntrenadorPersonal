@@ -1383,9 +1383,7 @@ def upgrade() -> None:
     for _, col in nuevas_columnas:
         op.add_column("usuarios", col)
     if any(name == "categoria_deporte" for name, _ in nuevas_columnas):
-        op.create_index(
-            "ix_usuarios_categoria_deporte", "usuarios", ["categoria_deporte"]
-        )
+        op.create_index("ix_usuarios_categoria_deporte", "usuarios", ["categoria_deporte"])
 
     tabla_existe = inspector.has_table("deportes_catalogo")
     if not tabla_existe:
@@ -1404,9 +1402,7 @@ def upgrade() -> None:
             sa.Column("spots_colombia", sa.JSON, server_default="[]"),
             sa.Column("referentes_colombia", sa.JSON, server_default="[]"),
             sa.Column("federacion", sa.String(120), server_default=""),
-            sa.Column(
-                "activo", sa.Boolean, server_default=sa.text("true"), nullable=False
-            ),
+            sa.Column("activo", sa.Boolean, server_default=sa.text("true"), nullable=False),
             sa.Column("creado_en", sa.DateTime, server_default=sa.func.now()),
         )
 

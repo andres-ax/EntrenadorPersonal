@@ -24,14 +24,12 @@ async def crear(email: str, password: str, rol: str) -> None:
     try:
         rol_enum = RolAdmin(rol)
     except ValueError:
-        print(f"rol invalido: {rol}. Use 'super' o 'soporte'")
+        sys.stderr.write(f"rol invalido: {rol}. Use 'super' o 'soporte'\n")
         sys.exit(1)
     async with async_session_factory() as session:
-        existente = await session.execute(
-            select(Admin).where(Admin.email == email.lower())
-        )
+        existente = await session.execute(select(Admin).where(Admin.email == email.lower()))
         if existente.scalar_one_or_none() is not None:
-            print(f"Admin con email {email} ya existe")
+            sys.stderr.write(f"Admin con email {email} ya existe\n")
             sys.exit(1)
         nuevo = Admin(
             email=email.lower(),
@@ -41,7 +39,7 @@ async def crear(email: str, password: str, rol: str) -> None:
         )
         session.add(nuevo)
         await session.commit()
-        print(f"Admin creado: id={nuevo.id} email={nuevo.email} rol={nuevo.rol.value}")
+        sys.stdout.write(f"Admin creado: id={nuevo.id} email={nuevo.email} rol={nuevo.rol.value}\n")
 
 
 def main() -> None:

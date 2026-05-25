@@ -41,9 +41,7 @@ async def es_duplicado(
     """
     async with async_session_factory() as session:
         if foto_sha256:
-            q = select(PagoComprobante).where(
-                PagoComprobante.foto_sha256 == foto_sha256
-            )
+            q = select(PagoComprobante).where(PagoComprobante.foto_sha256 == foto_sha256)
             if excluir_id is not None:
                 q = q.where(PagoComprobante.id != excluir_id)
             result = await session.execute(q)

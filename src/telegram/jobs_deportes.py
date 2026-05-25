@@ -21,8 +21,13 @@ from datetime import date, time, timedelta
 from sqlalchemy import select
 
 from src.db.connection import async_session_factory
-from src.db.models import (CategoriaDeporte, Compromiso, SesionEntrenamiento,
-                           SubtipoSesion, Usuario)
+from src.db.models import (
+    CategoriaDeporte,
+    Compromiso,
+    SesionEntrenamiento,
+    SubtipoSesion,
+    Usuario,
+)
 from src.db.repository import listar_usuarios_activos
 from telegram.ext import Application, ContextTypes
 
@@ -235,12 +240,8 @@ async def weekly_load_endurance(ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     continue
                 min_4_sem = sum(s.duracion_min or 0 for s in sesiones)
                 min_promedio_sem = min_4_sem / 4
-                min_ultima_sem = sum(
-                    s.duracion_min or 0 for s in sesiones if s.fecha >= hace_1_sem
-                )
-                alerta_deload = (
-                    min_promedio_sem > 0 and min_ultima_sem > 1.5 * min_promedio_sem
-                )
+                min_ultima_sem = sum(s.duracion_min or 0 for s in sesiones if s.fecha >= hace_1_sem)
+                alerta_deload = min_promedio_sem > 0 and min_ultima_sem > 1.5 * min_promedio_sem
 
                 lineas = [
                     f"<b>{u.nombre or 'Crack'}</b>, resumen tu semana endurance:",
@@ -269,13 +270,9 @@ def registrar_jobs_deportes(app: Application) -> None:
 
     jq.run_daily(recordar_sesion_skill, time=time(10, 0), name="recordar_sesion_skill")
     jq.run_daily(peso_diario_camp, time=time(7, 0), name="peso_diario_camp")
-    jq.run_daily(
-        recovery_post_sparring, time=time(20, 0), name="recovery_post_sparring"
-    )
+    jq.run_daily(recovery_post_sparring, time=time(20, 0), name="recovery_post_sparring")
     jq.run_daily(taper_alert, time=time(9, 0), name="taper_alert")
-    jq.run_daily(
-        weekly_load_endurance, time=time(7, 0), days=(0,), name="weekly_load_endurance"
-    )
+    jq.run_daily(weekly_load_endurance, time=time(7, 0), days=(0,), name="weekly_load_endurance")
 
     logger.info(
         "5 jobs deporte-aware registrados: sesion_skill, peso_diario_camp, "

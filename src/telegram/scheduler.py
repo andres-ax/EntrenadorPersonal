@@ -12,11 +12,22 @@ from sqlalchemy import func, select
 
 import telegram.error
 from src.db.connection import async_session_factory
-from src.db.models import (Comida, MetricaCorporal, MetricaSueno, Recordatorio,
-                           SesionEntrenamiento, TipoComida, Usuario)
-from src.db.repository import (listar_recordatorios_activos_global,
-                               listar_usuarios_activos, marcar_bot_bloqueado,
-                               marcar_recordatorio_enviado, reporte_semanal)
+from src.db.models import (
+    Comida,
+    MetricaCorporal,
+    MetricaSueno,
+    Recordatorio,
+    SesionEntrenamiento,
+    TipoComida,
+    Usuario,
+)
+from src.db.repository import (
+    listar_recordatorios_activos_global,
+    listar_usuarios_activos,
+    marcar_bot_bloqueado,
+    marcar_recordatorio_enviado,
+    reporte_semanal,
+)
 from telegram.constants import ParseMode
 from telegram.ext import Application
 
@@ -74,9 +85,7 @@ async def _broadcast(
             logger.exception("Error construyendo mensaje para %s", u.telegram_id)
     if not pares:
         return 0
-    await asyncio.gather(
-        *[_enviar_safe(bot, uid, txt, silent=silent) for uid, txt in pares]
-    )
+    await asyncio.gather(*[_enviar_safe(bot, uid, txt, silent=silent) for uid, txt in pares])
     return len(pares)
 
 
@@ -96,9 +105,7 @@ async def _dias_sin_entrenar(usuario_id: int) -> int:
 async def _dias_sin_pesarse(usuario_id: int) -> int:
     async with async_session_factory() as session:
         result = await session.execute(
-            select(func.max(MetricaCorporal.fecha)).where(
-                MetricaCorporal.usuario_id == usuario_id
-            )
+            select(func.max(MetricaCorporal.fecha)).where(MetricaCorporal.usuario_id == usuario_id)
         )
         ultima_fecha = result.scalar()
         if ultima_fecha is None:
@@ -389,9 +396,7 @@ def programar_recordatorio_en_jobqueue(app: Application, rec: Recordatorio) -> i
     if rec.dias_semana:
         dias = _normalizar_dias(rec.dias_semana)
         if not dias:
-            logger.warning(
-                "Recordatorio %s sin dias validos: %r", rec.id, rec.dias_semana
-            )
+            logger.warning("Recordatorio %s sin dias validos: %r", rec.id, rec.dias_semana)
             return 0
         hora_tz = rec.hora.replace(tzinfo=tz)
         jq.run_daily(

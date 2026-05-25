@@ -26,15 +26,11 @@ async def listar_desafios_activos() -> list[Desafio]:
 
 async def inscribir_en_desafio(telegram_id: int, desafio_slug: str) -> bool:
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return False
-        des_q = await session.execute(
-            select(Desafio).where(Desafio.slug == desafio_slug)
-        )
+        des_q = await session.execute(select(Desafio).where(Desafio.slug == desafio_slug))
         des = des_q.scalar_one_or_none()
         if des is None:
             return False
@@ -54,9 +50,7 @@ async def inscribir_en_desafio(telegram_id: int, desafio_slug: str) -> bool:
 
 async def ranking_desafio(desafio_slug: str, top: int = 10) -> list[dict]:
     async with async_session_factory() as session:
-        des_q = await session.execute(
-            select(Desafio).where(Desafio.slug == desafio_slug)
-        )
+        des_q = await session.execute(select(Desafio).where(Desafio.slug == desafio_slug))
         des = des_q.scalar_one_or_none()
         if des is None:
             return []
@@ -82,9 +76,7 @@ async def mi_posicion(telegram_id: int) -> list[dict]:
     """Posicion del usuario en cada desafio activo donde participa."""
     hoy = date.today()
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return []
@@ -108,9 +100,7 @@ async def mi_posicion(telegram_id: int) -> list[dict]:
     ]
 
 
-async def dar_kudos(
-    origen_telegram_id: int, destino_telegram_id: int, tipo: str = "pr"
-) -> bool:
+async def dar_kudos(origen_telegram_id: int, destino_telegram_id: int, tipo: str = "pr") -> bool:
     """Limite: 10/dia por usuario origen."""
     async with async_session_factory() as session:
         origen_q = await session.execute(

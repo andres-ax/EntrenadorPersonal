@@ -161,14 +161,8 @@ LINEAS_POR_PAIS: dict[str, str] = {
         "- 112 emergencias"
     ),
     "PE": ("<b>Lineas en Peru:</b>\n" "- 113 opcion 5 MinSal\n" "- ANAR 0800-2-2210"),
-    "CL": (
-        "<b>Lineas en Chile:</b>\n"
-        "- *4141 Salud Responde\n"
-        "- 600 360 7777 Linea Libre"
-    ),
-    "US": (
-        "<b>Lineas en US (espanol disponible):</b>\n" "- 988 Suicide & Crisis Lifeline"
-    ),
+    "CL": ("<b>Lineas en Chile:</b>\n" "- *4141 Salud Responde\n" "- 600 360 7777 Linea Libre"),
+    "US": ("<b>Lineas en US (espanol disponible):</b>\n" "- 988 Suicide & Crisis Lifeline"),
 }
 
 _LINEAS_FALLBACK = (

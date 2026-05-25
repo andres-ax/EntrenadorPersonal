@@ -47,9 +47,7 @@ async def publicar_pr(
     if not await esta_opted_in(telegram_id):
         return False
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         u = result.scalar_one_or_none()
     nombre = u.nombre.split()[0] if u and u.nombre else "Atleta"
     pais = (u.pais if u else "?") if not ciudad else ciudad

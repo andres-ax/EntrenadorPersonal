@@ -23,11 +23,22 @@ from sqlalchemy import func, select
 
 import telegram.error
 from src.db.connection import async_session_factory
-from src.db.models import (Comida, MetricaCorporal, MetricaSueno,
-                           SesionEntrenamiento, TonoCoach, Usuario)
-from src.db.repository import (avanzar_escalacion, listar_usuarios_activos,
-                               log_evento, marcar_bot_bloqueado,
-                               obtener_o_crear_escalacion, reset_escalacion)
+from src.db.models import (
+    Comida,
+    MetricaCorporal,
+    MetricaSueno,
+    SesionEntrenamiento,
+    TonoCoach,
+    Usuario,
+)
+from src.db.repository import (
+    avanzar_escalacion,
+    listar_usuarios_activos,
+    log_evento,
+    marcar_bot_bloqueado,
+    obtener_o_crear_escalacion,
+    reset_escalacion,
+)
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
@@ -390,9 +401,7 @@ async def _dias_consecutivos_sin(usuario_id: int, tipo_accion: str) -> int:
                 SesionEntrenamiento.usuario_id == usuario_id
             )
         elif tipo_accion == "comida":
-            query = select(func.max(Comida.fecha)).where(
-                Comida.usuario_id == usuario_id
-            )
+            query = select(func.max(Comida.fecha)).where(Comida.usuario_id == usuario_id)
         elif tipo_accion == "sueno":
             query = select(func.max(MetricaSueno.fecha)).where(
                 MetricaSueno.usuario_id == usuario_id
@@ -433,10 +442,7 @@ def _formatear_copy(
     fuente = _COPY_POR_LANG.get(lang, ESCALADO_COPY)
     plantillas = fuente.get(tipo_accion, {}).get(tono)
     if not plantillas:
-        plantillas = (
-            fuente.get(tipo_accion, {}).get("firme")
-            or ESCALADO_COPY[tipo_accion]["firme"]
-        )
+        plantillas = fuente.get(tipo_accion, {}).get("firme") or ESCALADO_COPY[tipo_accion]["firme"]
     level = max(0, min(level, MAX_LEVEL))
     template = plantillas[level] if level < len(plantillas) else plantillas[-1]
     texto = template.format(

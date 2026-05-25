@@ -217,9 +217,7 @@ async def seed_admin_si_falta() -> None:
 
 async def autenticar_admin(req: LoginRequest) -> LoginResponse:
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Admin).where(Admin.email == req.email.lower())
-        )
+        result = await session.execute(select(Admin).where(Admin.email == req.email.lower()))
         admin = result.scalar_one_or_none()
         if admin is None or not admin.activo:
             raise HTTPException(401, "Credenciales invalidas")

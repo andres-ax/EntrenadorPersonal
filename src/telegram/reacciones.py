@@ -33,8 +33,7 @@ _FIESTA = re.compile(
     re.IGNORECASE,
 )
 _SUENO_BIEN = re.compile(
-    r"\b(dorm[ií]\s+\d|dorm[ií]\s+rico|dorm[ií]\s+bien|descans[eé]|"
-    r"recuperad[oa])\b",
+    r"\b(dorm[ií]\s+\d|dorm[ií]\s+rico|dorm[ií]\s+bien|descans[eé]|" r"recuperad[oa])\b",
     re.IGNORECASE,
 )
 _PR_PROBABLE = re.compile(

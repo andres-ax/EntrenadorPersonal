@@ -2,9 +2,13 @@
 
 import pytest
 
-from src.telegram.escalation import (ESCALADO_COPY, MAX_LEVEL,
-                                     MAX_MENSAJES_DIA, OFFSET_POR_LEVEL,
-                                     _formatear_copy)
+from src.telegram.escalation import (
+    ESCALADO_COPY,
+    MAX_LEVEL,
+    MAX_MENSAJES_DIA,
+    OFFSET_POR_LEVEL,
+    _formatear_copy,
+)
 
 
 def test_escalado_copy_completo():

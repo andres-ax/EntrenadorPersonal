@@ -3,28 +3,52 @@
 import logging
 import re
 
-from agents import (Agent, GuardrailFunctionOutput, input_guardrail,
-                    output_guardrail)
+from agents import Agent, GuardrailFunctionOutput, input_guardrail, output_guardrail
 
 from src.config import settings
-from src.tools import (calcular_peso_objetivo_responsable, cambiar_tono,
-                       cancelar_recordatorio, cerrar_sesion_entrenamiento,
-                       configurar_quiet_hours, confirmar_modo_militar,
-                       consultar_compromiso, consultar_hidratacion_hoy,
-                       consultar_historial_peso, consultar_progreso_skill,
-                       consultar_resumen_visual, consultar_streak,
-                       consultar_ultima_sesion_skill, dar_premio_motivacional,
-                       editar_sesion_reciente, eliminar_comida_reciente,
-                       evaluar_concusion_simplificado, firmar_compromiso,
-                       guardar_perfil, guardar_pr, listar_recordatorios,
-                       listar_todos_prs, obtener_perfil, obtener_pr, pausar,
-                       programar_recordatorio, proponer_ejercicio_aleatorio,
-                       registrar_comida, registrar_entreno,
-                       registrar_hidratacion, registrar_pelea, registrar_peso,
-                       registrar_sesion_skill, registrar_sparring,
-                       registrar_sueno, registrar_truco_aterrizado,
-                       registrar_via_escalada, reporte_progreso,
-                       resumen_nutricional, usar_dia_libre, verificar_logros)
+from src.tools import (
+    calcular_peso_objetivo_responsable,
+    cambiar_tono,
+    cancelar_recordatorio,
+    cerrar_sesion_entrenamiento,
+    configurar_quiet_hours,
+    confirmar_modo_militar,
+    consultar_compromiso,
+    consultar_hidratacion_hoy,
+    consultar_historial_peso,
+    consultar_progreso_skill,
+    consultar_resumen_visual,
+    consultar_streak,
+    consultar_ultima_sesion_skill,
+    dar_premio_motivacional,
+    editar_sesion_reciente,
+    eliminar_comida_reciente,
+    evaluar_concusion_simplificado,
+    firmar_compromiso,
+    guardar_perfil,
+    guardar_pr,
+    listar_recordatorios,
+    listar_todos_prs,
+    obtener_perfil,
+    obtener_pr,
+    pausar,
+    programar_recordatorio,
+    proponer_ejercicio_aleatorio,
+    registrar_comida,
+    registrar_entreno,
+    registrar_hidratacion,
+    registrar_pelea,
+    registrar_peso,
+    registrar_sesion_skill,
+    registrar_sparring,
+    registrar_sueno,
+    registrar_truco_aterrizado,
+    registrar_via_escalada,
+    reporte_progreso,
+    resumen_nutricional,
+    usar_dia_libre,
+    verificar_logros,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -19,8 +19,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 
 from alembic import op
-from src.db.models import (Admin, PagoComprobante, PlanDefinicion,
-                           UsuarioBloqueado)
+from src.db.models import Admin, PagoComprobante, PlanDefinicion, UsuarioBloqueado
 
 revision: str = "0003_tiers_pagos"
 down_revision: Union[str, None] = "0001_initial_v1"

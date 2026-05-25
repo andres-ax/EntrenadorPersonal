@@ -41,9 +41,7 @@ OAUTH_SCOPES = {
 async def listar_para_usuario(telegram_id: int) -> list[dict]:
     """Lista integraciones del usuario."""
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return []
@@ -77,9 +75,7 @@ async def construir_url_oauth(telegram_id: int, proveedor: str) -> str:
     # montado en /api/integraciones/* en src/main.py), no el admin web. Por
     # eso usamos webhook_base_url y NO admin_url. Fallback al dominio Railway
     # real (dominio custom configurado en Railway).
-    api_base = str(
-        settings.webhook_base_url or "https://entrenadorax.axsoftware.codes"
-    ).rstrip("/")
+    api_base = str(settings.webhook_base_url or "https://entrenadorax.axsoftware.codes").rstrip("/")
     redirect_uri = f"{api_base}/api/integraciones/{proveedor}/callback"
     scope = OAUTH_SCOPES[proveedor]
 
@@ -99,9 +95,7 @@ async def sync_proveedor(telegram_id: int, proveedor: str) -> int:
     if proveedor not in PROVEEDORES_DISPONIBLES:
         return 0
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return 0
@@ -142,9 +136,7 @@ async def upsert_integracion(
     from src.services.crypto import encrypt_str
 
     async with async_session_factory() as session:
-        user_q = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == telegram_id)
-        )
+        user_q = await session.execute(select(Usuario).where(Usuario.telegram_id == telegram_id))
         user = user_q.scalar_one_or_none()
         if user is None:
             return None

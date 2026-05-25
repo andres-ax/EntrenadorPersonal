@@ -182,9 +182,7 @@ async def extraer_datos_comprobante(foto_bytes: bytes) -> dict:
     return {
         "ok": True,
         "es_comprobante": True,
-        "monto_cop": _parse_monto(
-            data.get("monto_extraido_raw", ""), data.get("monto_cop")
-        ),
+        "monto_cop": _parse_monto(data.get("monto_extraido_raw", ""), data.get("monto_cop")),
         "monto_extraido_raw": str(data.get("monto_extraido_raw", "")),
         "fecha_pago": _parse_fecha(data.get("fecha", "")),
         "hora_pago": _parse_hora(data.get("hora", "")),

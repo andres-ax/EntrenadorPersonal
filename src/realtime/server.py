@@ -28,8 +28,11 @@ from src.config import settings
 from src.db.connection import async_session_factory
 from src.db.models import RealtimeSesion, Usuario
 from src.log_setup import setup_logging
-from src.realtime.cuotas import (consumir_segundos, cuota_total_segundos,
-                                 disponible_segundos)
+from src.realtime.cuotas import (
+    consumir_segundos,
+    cuota_total_segundos,
+    disponible_segundos,
+)
 from src.realtime.openai_client import RealtimeBridge
 
 setup_logging()
@@ -77,9 +80,7 @@ async def ws_realtime(ws: WebSocket) -> None:
         return
 
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Usuario).where(Usuario.telegram_id == uid)
-        )
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == uid))
         usuario = result.scalar_one_or_none()
         if usuario is None:
             await ws.close(code=1008, reason="usuario_no_existe")
@@ -157,9 +158,7 @@ async def ws_realtime(ws: WebSocket) -> None:
                 if t:
                     transcript_parts.append(f"coach:{t}")
                     try:
-                        await ws.send_json(
-                            {"type": "transcript", "role": "coach", "text": t}
-                        )
+                        await ws.send_json({"type": "transcript", "role": "coach", "text": t})
                     except Exception:
                         cerrado = True
                         break
@@ -168,9 +167,7 @@ async def ws_realtime(ws: WebSocket) -> None:
                 if t:
                     transcript_parts.append(f"user:{t}")
                     try:
-                        await ws.send_json(
-                            {"type": "transcript", "role": "user", "text": t}
-                        )
+                        await ws.send_json({"type": "transcript", "role": "user", "text": t})
                     except Exception:
                         cerrado = True
                         break
@@ -201,8 +198,8 @@ async def ws_realtime(ws: WebSocket) -> None:
                             "message": err.get("message", ""),
                         }
                     )
-                    except Exception:
-                        logger.exception("Error enviando error a cliente ws uid=%s", uid)
+                except Exception:
+                    logger.exception("Error enviando error a cliente ws uid=%s", uid)
 
     try:
         await asyncio.gather(

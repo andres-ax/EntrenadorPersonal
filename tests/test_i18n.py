@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from src.i18n import (IDIOMAS_SOPORTADOS, aplicar_jerga, detectar_idioma,
-                      plural, t)
+from src.i18n import IDIOMAS_SOPORTADOS, aplicar_jerga, detectar_idioma, plural, t
 
 
 def test_idiomas_soportados():
@@ -18,9 +17,7 @@ def test_t_interpolacion():
 
 
 def test_t_fallback_lang():
-    assert t("saludo_inicial", "xx", nombre="X") == t(
-        "saludo_inicial", "es", nombre="X"
-    )
+    assert t("saludo_inicial", "xx", nombre="X") == t("saludo_inicial", "es", nombre="X")
 
 
 def test_t_fallback_key():

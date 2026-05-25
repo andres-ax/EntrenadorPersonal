@@ -12,15 +12,26 @@ from sqlalchemy import select
 from src.api.auth import get_uid_from_token
 from src.db.connection import async_session_factory
 from src.db.models import SesionEntrenamiento, Usuario
-from src.db.repository import (actualizar_usuario, guardar_comida,
-                               guardar_metrica_corporal, guardar_sesion,
-                               guardar_sueno, historial_peso, listar_prs,
-                               obtener_o_crear_streak, obtener_usuario,
-                               reporte_semanal, resumen_nutricional_dia,
-                               set_quiet_hours)
-from src.services.charts import (chart_macros_dia, chart_peso,
-                                 chart_streak_calendario,
-                                 chart_volumen_semanal)
+from src.db.repository import (
+    actualizar_usuario,
+    guardar_comida,
+    guardar_metrica_corporal,
+    guardar_sesion,
+    guardar_sueno,
+    historial_peso,
+    listar_prs,
+    obtener_o_crear_streak,
+    obtener_usuario,
+    reporte_semanal,
+    resumen_nutricional_dia,
+    set_quiet_hours,
+)
+from src.services.charts import (
+    chart_macros_dia,
+    chart_peso,
+    chart_streak_calendario,
+    chart_volumen_semanal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +71,7 @@ async def dashboard(uid: int = Depends(get_uid_from_token)) -> dict:
             "freezes_disponibles": streak.freezes_disponibles,
         },
         "nutricion_hoy": nutricion,
-        "peso_recientes": [
-            {"fecha": str(r.fecha), "peso_kg": r.peso_kg} for r in historial
-        ],
+        "peso_recientes": [{"fecha": str(r.fecha), "peso_kg": r.peso_kg} for r in historial],
     }
 
 
@@ -70,10 +79,7 @@ async def dashboard(uid: int = Depends(get_uid_from_token)) -> dict:
 async def prs(uid: int = Depends(get_uid_from_token)) -> dict:
     items = await listar_prs(uid)
     return {
-        "prs": [
-            {"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps}
-            for p in items
-        ]
+        "prs": [{"ejercicio": p.ejercicio, "peso_kg": p.peso_kg, "reps": p.reps} for p in items]
     }
 
 
@@ -116,9 +122,7 @@ async def chart_streak_png(uid: int = Depends(get_uid_from_token)) -> Response:
 
 
 @router.get("/calendar")
-async def calendario(
-    uid: int = Depends(get_uid_from_token), semana: str | None = None
-) -> dict:
+async def calendario(uid: int = Depends(get_uid_from_token), semana: str | None = None) -> dict:
     """Devuelve los 7 dias de la semana con entrenos realizados."""
     inicio = date.today() - timedelta(days=date.today().weekday())
     if semana:
@@ -131,9 +135,7 @@ async def calendario(
             pass
 
     async with async_session_factory() as session:
-        usuario_q = await session.execute(
-            select(Usuario.id).where(Usuario.telegram_id == uid)
-        )
+        usuario_q = await session.execute(select(Usuario.id).where(Usuario.telegram_id == uid))
         usuario_id = usuario_q.scalar_one_or_none()
         if usuario_id is None:
             raise HTTPException(404, "Usuario no encontrado")
@@ -176,9 +178,7 @@ class LogEntrenoReq(BaseModel):
 
 
 @router.post("/log/entreno")
-async def log_entreno(
-    req: LogEntrenoReq, uid: int = Depends(get_uid_from_token)
-) -> dict:
+async def log_entreno(req: LogEntrenoReq, uid: int = Depends(get_uid_from_token)) -> dict:
     try:
         sesion = await guardar_sesion(
             telegram_id=uid,
@@ -279,18 +279,14 @@ async def get_settings(uid: int = Depends(get_uid_from_token)) -> dict:
         "quiet_hours_inicio": (
             u.quiet_hours_inicio.strftime("%H:%M") if u.quiet_hours_inicio else "22:00"
         ),
-        "quiet_hours_fin": (
-            u.quiet_hours_fin.strftime("%H:%M") if u.quiet_hours_fin else "07:00"
-        ),
+        "quiet_hours_fin": (u.quiet_hours_fin.strftime("%H:%M") if u.quiet_hours_fin else "07:00"),
         "plan_actual": u.plan_actual.value if u.plan_actual else "free",
         "plan_expira_en": u.plan_expira_en.isoformat() if u.plan_expira_en else None,
     }
 
 
 @router.patch("/settings")
-async def patch_settings(
-    req: SettingsPatchReq, uid: int = Depends(get_uid_from_token)
-) -> dict:
+async def patch_settings(req: SettingsPatchReq, uid: int = Depends(get_uid_from_token)) -> dict:
     from src.db.models import TonoCoach
 
     updates = {}
@@ -323,9 +319,7 @@ async def generar_plan(uid: int = Depends(get_uid_from_token)) -> dict:
     from src.db.repository import es_plan_minimo
 
     if not await es_plan_minimo(uid, PlanSuscripcion.PRO):
-        raise HTTPException(
-            402, "Requiere plan Pro o superior. Mejora con /pagar en el bot."
-        )
+        raise HTTPException(402, "Requiere plan Pro o superior. Mejora con /pagar en el bot.")
     from src.services.plan_generator import generar_plan_semanal_para
 
     plan = await generar_plan_semanal_para(uid)
@@ -337,8 +331,7 @@ async def generar_plan(uid: int = Depends(get_uid_from_token)) -> dict:
 
 @router.get("/wearables")
 async def listar_wearables(uid: int = Depends(get_uid_from_token)) -> dict:
-    from src.services.wearables import (PROVEEDORES_DISPONIBLES,
-                                        listar_para_usuario)
+    from src.services.wearables import PROVEEDORES_DISPONIBLES, listar_para_usuario
 
     items = await listar_para_usuario(uid)
     return {
@@ -348,9 +341,7 @@ async def listar_wearables(uid: int = Depends(get_uid_from_token)) -> dict:
 
 
 @router.post("/wearables/{proveedor}/connect")
-async def connect_wearable(
-    proveedor: str, uid: int = Depends(get_uid_from_token)
-) -> dict:
+async def connect_wearable(proveedor: str, uid: int = Depends(get_uid_from_token)) -> dict:
     from src.services.wearables import construir_url_oauth
 
     url = await construir_url_oauth(uid, proveedor)

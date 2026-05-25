@@ -153,9 +153,7 @@ async def analizar_comida(
         }
     except json.JSONDecodeError:
         elapsed_ms = (time.perf_counter() - t0) * 1000
-        logger.exception(
-            "Vision devolvio JSON invalido vision_elapsed_ms=%.1f", elapsed_ms
-        )
+        logger.exception("Vision devolvio JSON invalido vision_elapsed_ms=%.1f", elapsed_ms)
         return {"error": "json_invalido"}
     except Exception:
         elapsed_ms = (time.perf_counter() - t0) * 1000

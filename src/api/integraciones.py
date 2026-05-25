@@ -46,9 +46,7 @@ def _client_credentials(proveedor: str) -> tuple[str, str, str]:
     # El callback OAuth lo recibe la API del bot (este router se monta en
     # src/main.py bajo /api/integraciones/*), no el admin web. Por eso
     # webhook_base_url y NO admin_url. Fallback al dominio Railway real.
-    api_base = str(
-        settings.webhook_base_url or "https://entrenadorax.axsoftware.codes"
-    ).rstrip("/")
+    api_base = str(settings.webhook_base_url or "https://entrenadorax.axsoftware.codes").rstrip("/")
     redirect = f"{api_base}/api/integraciones/{proveedor}/callback"
     return cid, csec, redirect
 
@@ -109,9 +107,7 @@ async def oauth_callback(
     refresh_token = tokens.get("refresh_token", "")
     expires_in = int(tokens.get("expires_in", 3600))
     expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-    external_user_id = str(
-        tokens.get("user_id") or tokens.get("athlete", {}).get("id", "") or ""
-    )
+    external_user_id = str(tokens.get("user_id") or tokens.get("athlete", {}).get("id", "") or "")
 
     integ = await upsert_integracion(
         telegram_id=telegram_id,

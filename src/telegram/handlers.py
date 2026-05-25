@@ -10,7 +10,6 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import openai
-import telegram.error
 from agents import (
     InputGuardrailTripwireTriggered,
     OutputGuardrailTripwireTriggered,
@@ -18,18 +17,8 @@ from agents import (
     Runner,
     SessionSettings,
 )
-from telegram.constants import ChatAction
-from telegram.ext import (
-    Application,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    InlineQueryHandler,
-    MessageHandler,
-    PreCheckoutQueryHandler,
-    filters,
-)
 
+import telegram.error
 from src.cache import get_perfil_block as cache_get_perfil_block
 from src.cache import limpiar_keys_usuario
 from src.cache import set_perfil_block as cache_set_perfil_block
@@ -39,6 +28,9 @@ from src.db.models import DuracionPago, PlanSuscripcion
 from src.db.repository import (
     aceptar_modo_militar,
     activar_plan,
+)
+from src.db.repository import cambiar_tono as repo_cambiar_tono
+from src.db.repository import (
     contar_fotos_hoy,
     eliminar_usuario,
     guardar_comida,
@@ -46,6 +38,7 @@ from src.db.repository import (
     guardar_feedback_comida,
     log_crisis,
     log_evento,
+    log_llm_usage,
     marcar_bot_bloqueado,
     marcar_comprobante_duplicado,
     obtener_compromiso_activo,
@@ -57,10 +50,10 @@ from src.db.repository import (
     ultimos_eventos,
     usar_freeze_streak,
 )
-from src.db.repository import cambiar_tono as repo_cambiar_tono
 from src.services.crisis import detectar as detectar_crisis
 from src.services.crisis import detectar_diagnostico_output
 from src.services.hidratacion import consumo_hoy_ml, objetivo_ml
+from src.services.vision import resize_si_pesa
 from src.telegram.decoradores import requiere_tier
 from src.telegram.middlewares import check_daily_quota, check_rate_limit
 from src.telegram.reacciones import reaccionar
@@ -74,6 +67,17 @@ from telegram import (
     LabeledPrice,
     ReplyKeyboardMarkup,
     Update,
+)
+from telegram.constants import ChatAction
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    InlineQueryHandler,
+    MessageHandler,
+    PreCheckoutQueryHandler,
+    filters,
 )
 
 logger = logging.getLogger(__name__)
@@ -284,9 +288,7 @@ async def _procesar(
     )
     try:
         try:
-            result = await Runner.run(
-                coach, prompt, session=session, run_config=RUN_CONFIG
-            )
+            result = await Runner.run(coach, prompt, session=session, run_config=RUN_CONFIG)
         except InputGuardrailTripwireTriggered:
             logger.warning("Input guardrail triggered uid=%s", uid)
             await _enviar_con_retry(
@@ -308,17 +310,14 @@ async def _procesar(
             if "No tool call found" not in str(e):
                 raise
             logger.warning(
-                "Sesion Redis corrupta uid=%s, limpiando y reintentando. "
-                "Error original: %s",
+                "Sesion Redis corrupta uid=%s, limpiando y reintentando. " "Error original: %s",
                 uid,
                 str(e)[:200],
             )
             try:
                 await session.close()
             except Exception:
-                logger.debug(
-                    "Error cerrando session corrupta uid=%s", uid, exc_info=True
-                )
+                logger.debug("Error cerrando session corrupta uid=%s", uid, exc_info=True)
             await limpiar_keys_usuario(uid)
             await log_evento(
                 uid,
@@ -330,18 +329,14 @@ async def _procesar(
                 url=settings.redis_url_str,
                 ttl=settings.session_ttl_seconds,
             )
-            result = await Runner.run(
-                coach, prompt, session=session, run_config=RUN_CONFIG
-            )
+            result = await Runner.run(coach, prompt, session=session, run_config=RUN_CONFIG)
         output = result.final_output
 
         await _maybe_log_llm_usage(uid, result.raw_responses)
 
         diag = detectar_diagnostico_output(output)
         if diag:
-            logger.warning(
-                "Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag
-            )
+            logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
             output = (
                 "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
                 "que un profesional medico/nutricionista/psicologo evalue tu caso. "
@@ -363,9 +358,7 @@ async def _procesar(
         await session.close()
 
 
-async def _autocancelar_escalation_si_cumplio(
-    uid: int, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def _autocancelar_escalation_si_cumplio(uid: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Tras el run del agente, cancela escalation de los tipos cumplidos hoy."""
     try:
         from src.telegram.escalation import _ya_cumplio_hoy, cancelar_escalado_hoy
@@ -384,9 +377,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
     nombre = update.effective_user.first_name
     if not await check_rate_limit(uid):
-        await update.message.reply_text(
-            "Tranquilo, dame un segundo. Estoy procesando lo anterior."
-        )
+        await update.message.reply_text("Tranquilo, dame un segundo. Estoy procesando lo anterior.")
         return
     user = await obtener_o_crear_usuario(uid, nombre)
     await log_evento(uid, "start", {"nombre": nombre})
@@ -450,9 +441,7 @@ async def mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if not await check_rate_limit(uid):
-        await update.message.reply_text(
-            "Tranquilo, estoy procesando. Espera un momento."
-        )
+        await update.message.reply_text("Tranquilo, estoy procesando. Espera un momento.")
         return
     puede, usado, limite = await check_daily_quota(uid)
     if not puede:
@@ -554,8 +543,7 @@ async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ],
     ]
     await update.message.reply_text(
-        "<b>Que quieres hacer?</b>\n\n"
-        "Toca cualquier boton, o usa los del teclado de abajo.",
+        "<b>Que quieres hacer?</b>\n\n" "Toca cualquier boton, o usa los del teclado de abajo.",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
     await update.message.reply_text(
@@ -589,11 +577,7 @@ async def borrar_datos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         username,
     )
     keyboard = [
-        [
-            InlineKeyboardButton(
-                "Si, borrar TODOS mis datos", callback_data="confirmar_borrado"
-            )
-        ]
+        [InlineKeyboardButton("Si, borrar TODOS mis datos", callback_data="confirmar_borrado")]
     ]
     await update.message.reply_text(
         "Esto eliminara permanentemente TODOS tus datos:\n"
@@ -622,9 +606,7 @@ async def cmd_pausa(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def cmd_porque_me_escribiste(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def cmd_porque_me_escribiste(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Transparencia algoritmica: muestra los ultimos 3 eventos del bot."""
     uid = update.effective_user.id
     eventos = await ultimos_eventos(uid, limit=3)
@@ -725,9 +707,7 @@ async def cmd_salir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await repo_cambiar_tono(uid, "amigable")
     await pausar_recordatorios(uid, 30)
     await log_evento(uid, "salir", {})
-    keyboard = [
-        [InlineKeyboardButton("Si, borrar todo", callback_data="confirmar_borrado")]
-    ]
+    keyboard = [[InlineKeyboardButton("Si, borrar todo", callback_data="confirmar_borrado")]]
     await update.message.reply_text(
         "Listo. Pause los recordatorios <b>30 dias</b> y baje el tono a amigable.\n\n"
         "Cuando quieras retomar, escribime y volvemos a la rutina.\n\n"
@@ -810,9 +790,7 @@ async def cmd_presumir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     await update.message.reply_text(
         "Elige el chat donde quieres presumir tu PR:",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard, resize_keyboard=True, one_time_keyboard=True
-        ),
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True),
     )
 
 
@@ -858,9 +836,7 @@ async def cmd_compromiso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if compromiso:
         await _procesar(update.message, "Muestrame mi compromiso actual", uid)
     else:
-        await _procesar(
-            update.message, "Quiero firmar un nuevo compromiso conmigo mismo", uid
-        )
+        await _procesar(update.message, "Quiero firmar un nuevo compromiso conmigo mismo", uid)
 
 
 async def cmd_firmar_compromiso(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -902,9 +878,7 @@ async def cmd_upgrade(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await log_evento(uid, "upgrade_invoice_enviado", {})
     except Exception:
         logger.exception("Error enviando invoice uid=%s", uid)
-        await update.message.reply_text(
-            "No pude crear el pago ahora. Reintenta en un momento."
-        )
+        await update.message.reply_text("No pude crear el pago ahora. Reintenta en un momento.")
 
 
 async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -915,9 +889,7 @@ async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     uid = q.from_user.id
     try:
         if not q.invoice_payload.startswith(f"pro_mensual_{uid}_"):
-            await q.answer(
-                ok=False, error_message="Payload invalido. Reinicia con /upgrade."
-            )
+            await q.answer(ok=False, error_message="Payload invalido. Reinicia con /upgrade.")
             return
         if q.total_amount != 100:
             await q.answer(ok=False, error_message="Monto invalido.")
@@ -934,9 +906,7 @@ async def precheckout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             logger.exception("Error respondiendo precheckout q.answer uid=%s", uid)
 
 
-async def successful_payment_handler(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def successful_payment_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Activa Pro al recibir successful_payment. Idempotente vs duplicados."""
     from sqlalchemy.exc import IntegrityError
 
@@ -1083,9 +1053,7 @@ async def cmd_grafico(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 "No tengo suficientes datos para este grafico. Registra mas y vuelve."
             )
             return
-        await ctx.bot.send_photo(
-            chat_id=uid, photo=img, caption=f"<b>Tu chart {tipo}</b>"
-        )
+        await ctx.bot.send_photo(chat_id=uid, photo=img, caption=f"<b>Tu chart {tipo}</b>")
     except Exception:
         logger.exception("Error generando grafico %s uid=%s", tipo, uid)
         await update.message.reply_text("No pude generar el grafico ahora.")
@@ -1200,97 +1168,16 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if handled:
             return
 
-    if q.data.startswith("tono:"):
-        nuevo = q.data.split(":", 1)[1]
-        if nuevo == "militar":
-            user = await obtener_usuario(uid)
-            if user is None or user.modo_militar_aceptado_en is None:
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "Acepto el modo militar",
-                            callback_data="aceptar_militar",
-                        )
-                    ]
-                ]
-                await q.edit_message_text(
-                    "<b>Modo militar - disclaimer</b>\n\n"
-                    "Te enviare mensajes mas intensos escalando frecuencia y "
-                    "dureza si fallas tu compromiso. NUNCA cruzaremos a "
-                    "humillaciones, ataques al cuerpo o lenguaje toxico. Maximo "
-                    "2 mensajes/dia y cada 30 dias te pregunto si quieres "
-                    "seguir.\n\n"
-                    "<b>NO recomiendo</b> modo militar si tienes o tuviste: "
-                    "ansiedad, depresion, trastorno alimenticio, TOC, PTSD, "
-                    "dismorfia corporal, RED-S, embarazo, postparto reciente, "
-                    "o eres menor de 18. Si estas en tratamiento, consultalo "
-                    "con tu profesional antes.\n\n"
-                    "Aceptas?",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                )
-                return
-        await repo_cambiar_tono(uid, nuevo)
-        await log_evento(uid, "cambio_tono", {"tono": nuevo})
-        await q.edit_message_text(f"Tono cambiado a <b>{nuevo}</b>.")
+    handled = await _handle_tono_callback(q, ctx, uid)
+    if handled:
         return
 
-    if q.data == "aceptar_militar":
-        await aceptar_modo_militar(uid)
-        await repo_cambiar_tono(uid, "militar")
-        await log_evento(uid, "acepto_militar", {})
-        await q.edit_message_text(
-            "Aceptado. Modo militar activado. <b>Sin excusas.</b>"
-        )
+    handled = await _handle_agua_callback(q, uid)
+    if handled:
         return
 
-    if q.data.startswith("agua:"):
-        from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
-
-        try:
-            ml = int(q.data.split(":", 1)[1])
-        except ValueError:
-            return
-        await registrar_agua(uid, ml)
-        await log_evento(uid, "agua_registrada", {"ml": ml})
-        consumido = await consumo_hoy_ml(uid)
-        objetivo = await objetivo_ml(uid)
-        pct = int(consumido / objetivo * 100) if objetivo else 0
-        keyboard = [
-            [
-                InlineKeyboardButton("+250ml", callback_data="agua:250"),
-                InlineKeyboardButton("+500ml", callback_data="agua:500"),
-                InlineKeyboardButton("+750ml", callback_data="agua:750"),
-            ]
-        ]
-        await q.edit_message_text(
-            f"<b>Hidratacion hoy</b>\n{consumido}ml / {objetivo}ml ({pct}%)",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-        return
-
-    if q.data.startswith("calma:"):
-        from io import BytesIO
-
-        from src.services.mindfulness import SESIONES, obtener_audio
-
-        slug = q.data.split(":", 1)[1]
-        sesion = SESIONES.get(slug)
-        if sesion is None:
-            return
-        await q.message.chat.send_action(ChatAction.RECORD_VOICE)
-        audio = await obtener_audio(slug)
-        if audio is None:
-            await q.edit_message_text("No pude generar el audio ahora.")
-            return
-        try:
-            await ctx.bot.send_voice(
-                chat_id=uid,
-                voice=BytesIO(audio),
-                caption=f"<b>{sesion['titulo']}</b>",
-            )
-            await q.delete_message()
-        except Exception:
-            logger.exception("Error enviando mindfulness uid=%s", uid)
+    handled = await _handle_calma_callback(q, ctx, uid)
+    if handled:
         return
 
     if q.data.startswith("desafio_inscribir:"):
@@ -1306,111 +1193,12 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await q.edit_message_text("Ya estabas inscrito o el desafio no existe.")
         return
 
-    if q.data.startswith("pagar:"):
-        from src.db.models import DuracionPago, PlanSuscripcion
-        from src.services.pricing import (
-            descripcion_plan,
-            dias_duracion,
-            formatear_precio,
-            precio_cop,
-        )
-
-        partes = q.data.split(":")
-        if len(partes) >= 3:
-            plan_str, duracion_str = partes[1], partes[2]
-        else:
-            plan_str, duracion_str = partes[1], "mensual"
-        try:
-            plan_pago = PlanSuscripcion(plan_str)
-            duracion = DuracionPago(duracion_str)
-        except ValueError:
-            await q.edit_message_text("Opcion invalida.")
-            return
-        monto = precio_cop(plan_pago, duracion)
-        dias = dias_duracion(plan_pago, duracion)
-        ctx.user_data["esperando_comprobante"] = True
-        ctx.user_data["plan_pendiente_pago"] = {
-            "plan": plan_pago.value,
-            "duracion": duracion.value,
-            "monto": monto,
-            "dias": dias,
-        }
-        await log_evento(
-            uid,
-            "pagar_seleccionado",
-            {"plan": plan_pago.value, "duracion": duracion.value, "monto": monto},
-        )
-        await q.edit_message_text(
-            f"<b>Plan {plan_pago.value} ({duracion.value}): {formatear_precio(monto)}</b>\n\n"
-            f"{descripcion_plan(plan_pago)}\n\n"
-            f"<b>Como pagar:</b>\n"
-            f"Transfiere a esta llave Nu:\n"
-            f"<code>{settings.cuenta_destino_pago}</code>\n\n"
-            f"Aceptamos transferencias de cualquier banco o billetera "
-            f"(Nequi, Daviplata, Bancolombia, Bre-B, etc.).\n\n"
-            f"Cuando termines, mandame la <b>foto del comprobante</b>. "
-            f"La activacion es automatica si el monto coincide; "
-            f"un admin la valida en maximo 24h."
-        )
+    handled = await _handle_pagar_callback(q, ctx)
+    if handled:
         return
 
-    if q.data == "confirmar_borrado":
-        logger.info("borrar_datos confirmado uid=%s", uid)
-        borrado = False
-        keys_redis = 0
-        evento_ok = False
-        fallo_critico = False
-        try:
-            borrado = await eliminar_usuario(uid)
-            logger.info("borrar_datos DB delete uid=%s borrado=%s", uid, borrado)
-        except Exception:
-            fallo_critico = True
-            logger.exception("borrar_datos fallo en eliminar_usuario uid=%s", uid)
-        if not fallo_critico:
-            try:
-                keys_redis = await limpiar_keys_usuario(uid)
-                logger.info(
-                    "borrar_datos Redis cleanup uid=%s keys=%d",
-                    uid,
-                    keys_redis,
-                )
-            except Exception:
-                logger.exception(
-                    "borrar_datos fallo en limpiar_keys uid=%s "
-                    "(DB ya estaba borrada)",
-                    uid,
-                )
-            try:
-                await log_evento(uid, "borrar_datos", {"existia": borrado})
-                evento_ok = True
-            except Exception:
-                logger.exception(
-                    "borrar_datos fallo en log_evento uid=%s " "(no critico)",
-                    uid,
-                )
-        logger.info(
-            "audit.borrar_datos uid=%s ok=%s db_borrado=%s "
-            "redis_keys=%d evento_ok=%s",
-            uid,
-            not fallo_critico,
-            borrado,
-            keys_redis,
-            evento_ok,
-        )
-        if fallo_critico:
-            await q.edit_message_text(
-                "Hubo un error eliminando tus datos. " "Intenta de nuevo en un momento."
-            )
-            return
-        if borrado:
-            await q.edit_message_text(
-                "Todos tus datos han sido eliminados permanentemente. "
-                "Usa /start para comenzar desde cero."
-            )
-        else:
-            await q.edit_message_text(
-                "No encontre datos asociados a tu cuenta. " "Usa /start para empezar."
-            )
+    handled = await _handle_confirmar_borrado(q, ctx, uid)
+    if handled:
         return
 
 
@@ -1478,9 +1266,7 @@ async def _handle_admin_callback(q, ctx) -> bool:
             )
             logger.info("admin_aprobar comp_id=%s por uid=%s", comp_id, uid)
         else:
-            comp = await rechazar_comprobante(
-                comp_id, "admin@telegram", "Rechazado via Telegram"
-            )
+            comp = await rechazar_comprobante(comp_id, "admin@telegram", "Rechazado via Telegram")
             if comp is None:
                 await q.edit_message_caption(
                     caption=q.message.caption + "\n\nYa fue procesado anteriormente.",
@@ -1518,14 +1304,233 @@ async def _handle_admin_callback(q, ctx) -> bool:
         logger.exception("Error en admin_%s comp_id=%s", accion, comp_id_str)
         try:
             await q.edit_message_caption(
-                caption=q.message.caption
-                + "\n\nError procesando. Revisa en el panel web."
+                caption=q.message.caption + "\n\nError procesando. Revisa en el panel web."
             )
         except Exception:
             logger.exception(
                 "Error editando caption tras fallo admin callback comp_id=%s",
                 comp_id_str,
             )
+    return True
+
+
+async def _handle_tono_callback(q, ctx, uid) -> bool:
+    if q.data.startswith("tono:"):
+        nuevo = q.data.split(":", 1)[1]
+        if nuevo == "militar":
+            user = await obtener_usuario(uid)
+            if user is None or user.modo_militar_aceptado_en is None:
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "Acepto el modo militar", callback_data="aceptar_militar"
+                        )
+                    ]
+                ]
+                await q.edit_message_text(
+                    "<b>Modo militar - disclaimer</b>\n\n"
+                    "Te enviare mensajes mas intensos escalando frecuencia y "
+                    "dureza si fallas tu compromiso. NUNCA cruzaremos a "
+                    "humillaciones, ataques al cuerpo o lenguaje toxico. Maximo "
+                    "2 mensajes/dia y cada 30 dias te pregunto si quieres "
+                    "seguir.\n\n"
+                    "<b>NO recomiendo</b> modo militar si tienes o tuviste: "
+                    "ansiedad, depresion, trastorno alimenticio, TOC, PTSD, "
+                    "dismorfia corporal, RED-S, embarazo, postparto reciente, "
+                    "o eres menor de 18. Si estas en tratamiento, consultalo "
+                    "con tu profesional antes.\n\n"
+                    "Aceptas?",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+                return True
+        await repo_cambiar_tono(uid, nuevo)
+        await log_evento(uid, "cambio_tono", {"tono": nuevo})
+        await q.edit_message_text(f"Tono cambiado a <b>{nuevo}</b>.")
+        return True
+    if q.data == "aceptar_militar":
+        await aceptar_modo_militar(uid)
+        await repo_cambiar_tono(uid, "militar")
+        await log_evento(uid, "acepto_militar", {})
+        await q.edit_message_text("Aceptado. Modo militar activado. <b>Sin excusas.</b>")
+        return True
+    return False
+
+
+async def _handle_agua_callback(q, uid) -> bool:
+    if not q.data.startswith("agua:"):
+        return False
+    from src.services.hidratacion import consumo_hoy_ml, objetivo_ml, registrar_agua
+
+    try:
+        ml = int(q.data.split(":", 1)[1])
+    except ValueError:
+        return True
+    await registrar_agua(uid, ml)
+    await log_evento(uid, "agua_registrada", {"ml": ml})
+    consumido = await consumo_hoy_ml(uid)
+    objetivo = await objetivo_ml(uid)
+    pct = int(consumido / objetivo * 100) if objetivo else 0
+    keyboard = [
+        [
+            InlineKeyboardButton("+250ml", callback_data="agua:250"),
+            InlineKeyboardButton("+500ml", callback_data="agua:500"),
+            InlineKeyboardButton("+750ml", callback_data="agua:750"),
+        ]
+    ]
+    await q.edit_message_text(
+        f"<b>Hidratacion hoy</b>\n{consumido}ml / {objetivo}ml ({pct}%)",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+    return True
+
+
+async def _handle_calma_callback(q, ctx, uid) -> bool:
+    if not q.data.startswith("calma:"):
+        return False
+    from io import BytesIO
+
+    from src.services.mindfulness import SESIONES, obtener_audio
+
+    slug = q.data.split(":", 1)[1]
+    sesion = SESIONES.get(slug)
+    if sesion is None:
+        return True
+    await q.message.chat.send_action(ChatAction.RECORD_VOICE)
+    audio = await obtener_audio(slug)
+    if audio is None:
+        await q.edit_message_text("No pude generar el audio ahora.")
+        return True
+    try:
+        await ctx.bot.send_voice(
+            chat_id=uid, voice=BytesIO(audio), caption=f"<b>{sesion['titulo']}</b>"
+        )
+        await q.delete_message()
+    except Exception:
+        logger.exception("Error enviando mindfulness uid=%s", uid)
+    return True
+
+
+async def _handle_pagar_callback(q, ctx) -> bool:
+    if not q.data.startswith("pagar:"):
+        return False
+    from src.db.models import DuracionPago, PlanSuscripcion
+    from src.services.pricing import (
+        descripcion_plan,
+        dias_duracion,
+        formatear_precio,
+        precio_cop,
+    )
+
+    partes = q.data.split(":")
+    if len(partes) >= 3:
+        plan_str, duracion_str = partes[1], partes[2]
+    else:
+        plan_str, duracion_str = partes[1], "mensual"
+    try:
+        plan_pago = PlanSuscripcion(plan_str)
+        duracion = DuracionPago(duracion_str)
+    except ValueError:
+        await q.edit_message_text("Opcion invalida.")
+        return True
+    monto = precio_cop(plan_pago, duracion)
+    dias = dias_duracion(plan_pago, duracion)
+    ctx.user_data["esperando_comprobante"] = True
+    ctx.user_data["plan_pendiente_pago"] = {
+        "plan": plan_pago.value,
+        "duracion": duracion.value,
+        "monto": monto,
+        "dias": dias,
+    }
+    uid = q.from_user.id
+    await log_evento(
+        uid,
+        "pagar_seleccionado",
+        {"plan": plan_pago.value, "duracion": duracion.value, "monto": monto},
+    )
+    await q.edit_message_text(
+        f"<b>Plan {plan_pago.value} ({duracion.value}): {formatear_precio(monto)}</b>\n\n"
+        f"{descripcion_plan(plan_pago)}\n\n"
+        f"<b>Como pagar:</b>\n"
+        f"Transfiere a esta llave Nu:\n"
+        f"<code>{settings.cuenta_destino_pago}</code>\n\n"
+        f"Aceptamos transferencias de cualquier banco o billetera "
+        f"(Nequi, Daviplata, Bancolombia, Bre-B, etc.).\n\n"
+        f"Cuando termines, mandame la <b>foto del comprobante</b>. "
+        f"La activacion es automatica si el monto coincide; "
+        f"un admin la valida en maximo 24h."
+    )
+    return True
+
+
+async def _handle_confirmar_borrado(q, ctx, uid) -> bool:
+    if q.data != "confirmar_borrado":
+        return False
+
+    async def _attempt_delete_user(uid: int) -> tuple[bool, bool]:
+        """Intenta borrar al usuario en DB.
+
+        Devuelve (borrado, fallo_critico).
+        """
+        borrado = False
+        fallo_critico = False
+        try:
+            borrado = await eliminar_usuario(uid)
+            logger.info("borrar_datos DB delete uid=%s borrado=%s", uid, borrado)
+        except Exception:
+            fallo_critico = True
+            logger.exception("borrar_datos fallo en eliminar_usuario uid=%s", uid)
+        return borrado, fallo_critico
+
+    async def _cleanup_after_delete(uid: int, borrado: bool) -> tuple[int, bool]:
+        """Limpia redis y persiste el evento; devuelve (keys_redis, evento_ok)."""
+        keys_redis = 0
+        evento_ok = False
+        try:
+            keys_redis = await limpiar_keys_usuario(uid)
+            logger.info("borrar_datos Redis cleanup uid=%s keys=%d", uid, keys_redis)
+        except Exception:
+            logger.exception(
+                "borrar_datos fallo en limpiar_keys uid=%s (DB ya estaba borrada)", uid
+            )
+        try:
+            await log_evento(uid, "borrar_datos", {"existia": borrado})
+            evento_ok = True
+        except Exception:
+            logger.exception("borrar_datos fallo en log_evento uid=%s (no critico)", uid)
+        return keys_redis, evento_ok
+
+    async def _reply_borrar_result(q, fallo_critico: bool, borrado: bool) -> None:
+        if fallo_critico:
+            await q.edit_message_text(
+                "Hubo un error eliminando tus datos. Intenta de nuevo en un momento."
+            )
+            return
+        if borrado:
+            await q.edit_message_text(
+                "Todos tus datos han sido eliminados permanentemente. Usa /start para comenzar desde cero."
+            )
+        else:
+            await q.edit_message_text(
+                "No encontre datos asociados a tu cuenta. Usa /start para empezar."
+            )
+
+    # Ejecutar pasos
+    borrado, fallo_critico = await _attempt_delete_user(uid)
+    keys_redis = 0
+    evento_ok = False
+    if not fallo_critico:
+        keys_redis, evento_ok = await _cleanup_after_delete(uid, borrado)
+
+    logger.info(
+        "audit.borrar_datos uid=%s ok=%s db_borrado=%s redis_keys=%d evento_ok=%s",
+        uid,
+        not fallo_critico,
+        borrado,
+        keys_redis,
+        evento_ok,
+    )
+
+    await _reply_borrar_result(q, fallo_critico, borrado)
     return True
 
     # Callbacks "menu_X" que redirigen a comandos slash existentes.
@@ -1571,9 +1576,7 @@ async def _handle_admin_callback(q, ctx) -> bool:
                 InlineKeyboardButton("Dia libre", callback_data="menu_dia_libre"),
             ],
             [
-                InlineKeyboardButton(
-                    "Bajar a amigable", callback_data="menu_apagar_firme"
-                ),
+                InlineKeyboardButton("Bajar a amigable", callback_data="menu_apagar_firme"),
                 InlineKeyboardButton("Exportar CSV", callback_data="menu_exportar"),
             ],
             [
@@ -1593,8 +1596,7 @@ async def _handle_admin_callback(q, ctx) -> bool:
         return
     if q.data == "menu_pausa":
         await q.message.reply_text(
-            "Usa: <code>/pausa N</code> para silenciarme N dias.\n"
-            "Ej: <code>/pausa 3</code>"
+            "Usa: <code>/pausa N</code> para silenciarme N dias.\n" "Ej: <code>/pausa 3</code>"
         )
         return
     if q.data == "menu_dia_libre":
@@ -1648,6 +1650,70 @@ async def _download_photo(update: Update) -> tuple[object | None, bytes | None]:
         return None, None
 
 
+def _safe_user_now(user) -> tuple[datetime, str]:
+    """Devuelve (now_with_tz, tz_name) usando la timezone del usuario o fallback."""
+    tz_name = getattr(user, "timezone", None) or "America/Bogota"
+    try:
+        ahora_user = datetime.now(ZoneInfo(tz_name))
+    except Exception:
+        tz_name = "America/Bogota"
+        ahora_user = datetime.now(ZoneInfo(tz_name))
+    return ahora_user, tz_name
+
+
+async def _maybe_log_llm_usage(telegram_id: int | None, raw_responses) -> None:
+    """Intenta extraer y persistir uso de tokens desde `raw_responses` de forma segura."""
+    if not raw_responses:
+        return
+    try:
+        for resp in raw_responses:
+            usage = getattr(resp, "usage", None)
+            model = getattr(resp, "model", None) or getattr(resp, "model_name", None)
+            if not usage:
+                continue
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+            await log_llm_usage(
+                telegram_id,
+                "chat",
+                model or "unknown",
+                prompt_tokens,
+                completion_tokens,
+            )
+    except Exception:
+        logger.exception("Error guardando uso LLM uid=%s", telegram_id)
+
+
+async def _send_output_chunks(message, output: str, with_keyboard: bool = False) -> None:
+    """Envía `output` en trozos adecuados a Telegram y opcionalmente añade keyboard final."""
+    if not output:
+        return
+    max_len = 3900
+    chunks = []
+    cur = []
+    cur_len = 0
+    for part in output.split("\n"):
+        if cur_len + len(part) + 1 > max_len:
+            chunks.append("\n".join(cur))
+            cur = [part]
+            cur_len = len(part) + 1
+        else:
+            cur.append(part)
+            cur_len += len(part) + 1
+    if cur:
+        chunks.append("\n".join(cur))
+
+    for i, chunk in enumerate(chunks):
+        kwargs = {"parse_mode": "HTML"}
+        # Only attach quick actions keyboard on the last chunk if requested
+        if with_keyboard and i == len(chunks) - 1:
+            kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
+        try:
+            await message.reply_text(_sanitize_telegram_html(chunk), **kwargs)
+        except Exception:
+            logger.exception("Error enviando chunk output uid=%s", getattr(message, "chat", None))
+
+
 _CAPTION_COMPROBANTE = re.compile(
     r"\b(pago|comprobante|bre\W?b|transferencia|nequi|daviplata|pse|recibo)\b",
     re.IGNORECASE,
@@ -1672,122 +1738,84 @@ def _tipo_comida_por_hora(hora: int) -> str:
     return "snack"
 
 
-async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Recibe foto del usuario.
-
-    Si es comprobante de pago (esperando_comprobante=True o caption indica pago)
-    -> procesa con Vision-comprobante. Si no, va a Vision-comida.
-    Cap 3 fotos/dia free.
-    """
-    from src.db.models import PlanSuscripcion
-    from src.db.repository import es_plan_minimo
-    from src.services.vision import (
-        analizar_comida,
-        describir_imagen_no_comida,
-    )
-
-    uid = update.effective_user.id
-    if not await check_rate_limit(uid):
-        await update.message.reply_text("Tranquilo, dame un segundo.")
-        return
-    puede, usado, limite = await check_daily_quota(uid)
-    if not puede:
-        await update.message.reply_text(
-            f"Llegaste a tu limite diario ({limite} mensajes). "
-            "Mejora tu plan con /pagar para seguir entrenando."
-        )
-        return
-
-    caption = (update.message.caption or "").strip()
-    esperando_pago = bool(ctx.user_data.get("esperando_comprobante", False))
-    es_modo_pago = esperando_pago or bool(
-        caption and _CAPTION_COMPROBANTE.search(caption)
-    )
-
-    if es_modo_pago:
-        await _procesar_comprobante(update, ctx, uid)
-        return
-
-    es_starter_o_mas = await es_plan_minimo(uid, PlanSuscripcion.STARTER)
-    if not es_starter_o_mas:
-        n = await contar_fotos_hoy(uid)
-        if n >= 3:
-            logger.info("photo_limit uid=%s n=%d/3 BLOQUEADO", uid, n)
-            await update.message.reply_text(
-                "Llegaste al limite de 3 fotos/dia en plan Free. "
-                "Manana puedes mas, o mejora tu plan con /pagar"
-            )
-            return
-        if n == 2:
-            logger.info("photo_limit uid=%s n=%d/3 ULTIMA", uid, n)
-
+async def _build_photo_user_context(uid: int) -> dict[str, str] | None:
+    """Construye contexto de usuario para el flujo de foto."""
     user = await obtener_usuario(uid)
     if not user:
-        return
+        return None
     objetivo = user.objetivo or "mantenerse"
     tono = user.tono.value if user.tono else "firme"
-    tz_name = user.timezone or "America/Bogota"
-    try:
-        ahora_user = datetime.now(ZoneInfo(tz_name))
-    except Exception:
-        ahora_user = datetime.now(ZoneInfo("America/Bogota"))
-    tipo_comida = _tipo_comida_por_hora(ahora_user.hour)
-    fecha_user = ahora_user.date().isoformat()
+    ahora_user, _ = _safe_user_now(user)
+    return {
+        "objetivo": objetivo,
+        "tono": tono,
+        "tipo_comida": _tipo_comida_por_hora(ahora_user.hour),
+        "fecha_user": ahora_user.date().isoformat(),
+    }
 
-    await update.message.chat.send_action(ChatAction.TYPING)
 
-    photo, raw = await _download_photo(update)
-    if photo is None:
-        await update.message.reply_text("No pude descargar la foto. Intenta de nuevo.")
-        return
+def _is_photo_payment_mode(ctx, caption: str) -> bool:
+    """Determina si la foto debe procesarse como comprobante de pago."""
+    esperando_pago = bool(ctx.user_data.get("esperando_comprobante", False))
+    return esperando_pago or bool(caption and _CAPTION_COMPROBANTE.search(caption))
 
-    if caption:
-        logger.info(
-            "recibir_foto con caption uid=%s len=%d preview=%r",
-            uid,
-            len(caption),
-            caption[:60],
+
+async def _validate_photo_quota(update: Update, uid: int, es_plan_minimo) -> bool:
+    """Valida cuota de fotos para usuarios en plan Free."""
+    if await es_plan_minimo(uid):
+        return True
+    n = await contar_fotos_hoy(uid)
+    if n >= 3:
+        logger.info("photo_limit uid=%s n=%d/3 BLOQUEADO", uid, n)
+        await update.message.reply_text(
+            "Llegaste al limite de 3 fotos/dia en plan Free. Manana puedes mas, o mejora tu plan con /pagar"
         )
-    result = await analizar_comida(
-        raw, objetivo_usuario=objetivo, tono=tono, caption=caption
+        return False
+    if n == 2:
+        logger.info("photo_limit uid=%s n=%d/3 ULTIMA", uid, n)
+    return True
+
+
+async def _delegate_photo_error_to_coach(
+    update: Update,
+    ctx: ContextTypes.DEFAULT_TYPE,
+    uid: int,
+    raw: bytes,
+    caption: str,
+    err: str,
+    describir_imagen_no_comida,
+) -> None:
+    descripcion = ""
+    if err == "no_food":
+        descripcion = await describir_imagen_no_comida(raw)
+
+    logger.info(
+        "photo error delegado al coach uid=%s error=%s tiene_caption=%s desc=%r",
+        uid,
+        err,
+        bool(caption),
+        descripcion,
     )
-    if "error" in result:
-        # Antes respondiamos con texto fijo y dejabamos al usuario colgado.
-        # Ahora delegamos al agente con contexto explicito para que decida
-        # apropiadamente. Usamos un segundo analisis para describir que hay.
-        err = result["error"]
-        descripcion = ""
-        if err == "no_food":
-            descripcion = await describir_imagen_no_comida(raw)
 
-        logger.info(
-            "photo error delegado al coach uid=%s error=%s tiene_caption=%s desc=%r",
-            uid,
-            err,
-            bool(caption),
-            descripcion,
-        )
-        contexto_partes = [
-            "[CONTEXTO_FOTO]",
-            f"El usuario te envio una foto pero el analizador no detecto comida (error={err}).",
-        ]
-        if descripcion:
-            contexto_partes.append(f"Lo que se ve en la foto: {descripcion}")
-        if caption:
-            contexto_partes.append(f"Caption del usuario: {caption!r}.")
+    contexto_partes = [
+        "[CONTEXTO_FOTO]",
+        f"El usuario te envio una foto pero el analizador no detecto comida (error={err}).",
+    ]
+    if descripcion:
+        contexto_partes.append(f"Lo que se ve en la foto: {descripcion}")
+    if caption:
+        contexto_partes.append(f"Caption del usuario: {caption!r}.")
+    contexto_partes.append(
+        "Responde al usuario de forma natural segun lo que se ve en la foto. "
+        "Si es un producto/etiqueta, pidele info textual si falta. "
+        "Si es de entreno, comenta algo motivador o tecnico sobre lo que ves. "
+        "Si no tiene nada que ver con fitness/nutricion, aclara que solo procesas "
+        "fotos de comida, etiquetas o entrenos."
+    )
+    await _procesar(update.message, " ".join(contexto_partes), uid, ctx=ctx)
 
-        contexto_partes.append(
-            "Responde al usuario de forma natural segun lo que se ve en la foto. "
-            "Si es un producto/etiqueta, pidele info textual si falta. "
-            "Si es de entreno, comenta algo motivador o tecnico sobre lo que ves. "
-            "Si no tiene nada que ver con fitness/nutricion, aclara que solo procesas "
-            "fotos de comida, etiquetas o entrenos."
-        )
-        contexto = " ".join(contexto_partes)
-        await _procesar(update.message, contexto, uid, ctx=ctx)
-        return
 
-    # Saneamos lo que viene de Vision (puede devolver dict en alimentos).
+def _normalize_alimentos(result: dict) -> list[str]:
     alimentos_raw = result.get("alimentos") or []
     alimentos_clean: list[str] = []
     for item in alimentos_raw:
@@ -1805,37 +1833,26 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
             if isinstance(nombre, str) and nombre.strip():
                 alimentos_clean.append(nombre.strip()[:80])
+    return alimentos_clean
 
-    calorias = int(result.get("calorias") or 0)
-    proteinas = float(result.get("proteinas_g") or 0)
-    carbs = float(result.get("carbohidratos_g") or 0)
-    grasas = float(result.get("grasas_g") or 0)
-    feedback_txt = (result.get("feedback") or "").strip()
 
-    # Log de la intencion ANTES de guardar para tener trazabilidad incluso
-    # si los inserts fallan (bug detectado en auditoria: comidas=0,
-    # feedback_comida=0 pese a que el bot respondia con macros).
-    logger.info(
-        "photo_meal flow uid=%s tipo=%s fecha=%s n_alim=%d kcal=%d "
-        "P=%.1f C=%.1f G=%.1f",
-        uid,
-        tipo_comida,
-        fecha_user,
-        len(alimentos_clean),
-        calorias,
-        proteinas,
-        carbs,
-        grasas,
-    )
-
-    # Guardamos en 3 pasos separados para que la falla de uno NO mate los
-    # otros. Antes un solo try englobaba los 3 y un error temprano dejaba
-    # la DB vacia.
+async def _persist_photo_meal(
+    uid: int,
+    photo_file_id: str,
+    fecha_user: str,
+    tipo_comida: str,
+    alimentos_clean: list[str],
+    calorias: int,
+    proteinas: float,
+    carbs: float,
+    grasas: float,
+    feedback_txt: str,
+) -> None:
     feedback_ok = False
     try:
         await guardar_feedback_comida(
             uid,
-            foto_file_id=photo.file_id,
+            foto_file_id=photo_file_id,
             alimentos=alimentos_clean,
             calorias=calorias,
             proteinas=proteinas,
@@ -1867,7 +1884,7 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         comida_ok = True
     except Exception:
         logger.exception(
-            "photo_meal: guardar_comida fallo uid=%s tipo=%s fecha=%s " "alimentos=%r",
+            "photo_meal: guardar_comida fallo uid=%s tipo=%s fecha=%s alimentos=%r",
             uid,
             tipo_comida,
             fecha_user,
@@ -1890,6 +1907,8 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         logger.exception("photo_meal: log_evento fallo uid=%s", uid)
 
+
+async def _reply_photo_meal(update: Update, result: dict) -> None:
     alimentos = ", ".join(result.get("alimentos", [])) or "alimentos"
     respuesta = (
         f"<b>Detecte:</b> {alimentos}\n"
@@ -1900,6 +1919,123 @@ async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         f"{result.get('feedback', '')}"
     )
     await update.message.reply_text(respuesta)
+
+
+async def _process_photo_result(
+    update: Update,
+    ctx: ContextTypes.DEFAULT_TYPE,
+    uid: int,
+    caption: str,
+    photo,
+    raw: bytes,
+    objetivo: str,
+    tono: str,
+    tipo_comida: str,
+    fecha_user: str,
+) -> None:
+    from src.services.vision import analizar_comida, describir_imagen_no_comida
+
+    result = await analizar_comida(raw, objetivo_usuario=objetivo, tono=tono, caption=caption)
+    if "error" in result:
+        await _delegate_photo_error_to_coach(
+            update,
+            ctx,
+            uid,
+            raw,
+            caption,
+            result["error"],
+            describir_imagen_no_comida,
+        )
+        return
+
+    alimentos_clean = _normalize_alimentos(result)
+    calorias = int(result.get("calorias") or 0)
+    proteinas = float(result.get("proteinas_g") or 0)
+    carbs = float(result.get("carbohidratos_g") or 0)
+    grasas = float(result.get("grasas_g") or 0)
+    feedback_txt = (result.get("feedback") or "").strip()
+
+    logger.info(
+        "photo_meal flow uid=%s tipo=%s fecha=%s n_alim=%d kcal=%d P=%.1f C=%.1f G=%.1f",
+        uid,
+        tipo_comida,
+        fecha_user,
+        len(alimentos_clean),
+        calorias,
+        proteinas,
+        carbs,
+        grasas,
+    )
+
+    await _persist_photo_meal(
+        uid,
+        photo.file_id,
+        fecha_user,
+        tipo_comida,
+        alimentos_clean,
+        calorias,
+        proteinas,
+        carbs,
+        grasas,
+        feedback_txt,
+    )
+    await _reply_photo_meal(update, result)
+
+
+async def recibir_foto(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Recibe foto del usuario.
+
+    Si es comprobante de pago (esperando_comprobante=True o caption indica pago)
+    -> procesa con Vision-comprobante. Si no, va a Vision-comida.
+    Cap 3 fotos/dia free.
+    """
+    from src.db.repository import es_plan_minimo
+
+    uid = update.effective_user.id
+    if not await check_rate_limit(uid):
+        await update.message.reply_text("Tranquilo, dame un segundo.")
+        return
+    puede, usado, limite = await check_daily_quota(uid)
+    if not puede:
+        await update.message.reply_text(
+            f"Llegaste a tu limite diario ({limite} mensajes). "
+            "Mejora tu plan con /pagar para seguir entrenando."
+        )
+        return
+
+    caption = (update.message.caption or "").strip()
+    if _is_photo_payment_mode(ctx, caption):
+        await _procesar_comprobante(update, ctx, uid)
+        return
+
+    if not await _validate_photo_quota(update, uid, es_plan_minimo):
+        return
+
+    context = await _build_photo_user_context(uid)
+    if context is None:
+        return
+
+    await update.message.chat.send_action(ChatAction.TYPING)
+
+    photo, raw = await _download_photo(update)
+    if photo is None:
+        await update.message.reply_text("No pude descargar la foto. Intenta de nuevo.")
+        return
+
+    await _process_photo_result(
+        update,
+        ctx,
+        uid,
+        caption,
+        photo,
+        raw,
+        context["objetivo"],
+        context["tono"],
+        context["tipo_comida"],
+        context["fecha_user"],
+    )
+
+    return
 
 
 async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1986,9 +2122,7 @@ async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 mensaje_enviado_id=sent.message_id,
                 derivado_a=crisis.lineas_crisis[:120],
             )
-            await log_evento(
-                uid, "crisis_detected", {"nivel": crisis.nivel, "via": "voz"}
-            )
+            await log_evento(uid, "crisis_detected", {"nivel": crisis.nivel, "via": "voz"})
         except Exception:
             logger.exception("Error manejando crisis (voz) uid=%s", uid)
         return
@@ -2006,9 +2140,7 @@ async def recibir_voz(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _procesar(update.message, texto, uid, ctx=ctx)
 
 
-async def _procesar_comprobante(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE, uid: int
-) -> None:
+async def _procesar_comprobante(update: Update, ctx: ContextTypes.DEFAULT_TYPE, uid: int) -> None:
     """Procesa una foto como comprobante de pago.
 
     Flujo: Vision analiza -> guarda SIEMPRE en DB -> duplicados -> activacion.
@@ -2045,9 +2177,7 @@ async def _procesar_comprobante(
         raw = bytes(await file.download_as_bytearray())
     except Exception:
         logger.exception("Error descargando comprobante uid=%s", uid)
-        await update.message.reply_text(
-            "No pude descargar el comprobante. Intenta de nuevo."
-        )
+        await update.message.reply_text("No pude descargar el comprobante. Intenta de nuevo.")
         return
 
     sha = sha256_imagen(raw)
@@ -2104,17 +2234,13 @@ async def _procesar_comprobante(
     )
 
     # NOTIFICAR AL ADMIN con botones inline para aprobar/rechazar desde Telegram
-    admin_base = str(
-        settings.landing_url or "https://entrenadorax.axsoftware.codes"
-    ).rstrip("/")
+    admin_base = str(settings.landing_url or "https://entrenadorax.axsoftware.codes").rstrip("/")
     admin_link = f"{admin_base}/admin/pagos/{comprobante.id}"
     if settings.developer_chat_id:
         try:
             status_label = "Vision OK" if vision_reconocio else "Vision NO reconocio"
             monto_label = (
-                formatear_precio(comprobante.monto_cop)
-                if comprobante.monto_cop
-                else "no detectado"
+                formatear_precio(comprobante.monto_cop) if comprobante.monto_cop else "no detectado"
             )
             admin_keyboard = InlineKeyboardMarkup(
                 [
@@ -2266,9 +2392,7 @@ async def cmd_mi_mes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         pdf_bytes = await generar_pdf_mensual(uid, ano, mes)
         if not pdf_bytes:
-            await update.message.reply_text(
-                "Aun no tengo datos suficientes del mes pasado."
-            )
+            await update.message.reply_text("Aun no tengo datos suficientes del mes pasado.")
             return
         await ctx.bot.send_document(
             chat_id=uid,
@@ -2362,9 +2486,7 @@ async def cmd_desafios(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     desafios = await listar_desafios_activos()
     if not desafios:
-        await update.message.reply_text(
-            "No hay desafios activos ahora. Vuelve a chequear pronto!"
-        )
+        await update.message.reply_text("No hay desafios activos ahora. Vuelve a chequear pronto!")
         return
     lineas = ["<b>Desafios activos:</b>"]
     botones = []
@@ -2378,9 +2500,7 @@ async def cmd_desafios(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
             ]
         )
-    await update.message.reply_text(
-        "\n".join(lineas), reply_markup=InlineKeyboardMarkup(botones)
-    )
+    await update.message.reply_text("\n".join(lineas), reply_markup=InlineKeyboardMarkup(botones))
 
 
 async def cmd_ranking(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2436,38 +2556,18 @@ async def cmd_pagar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     from src.db.models import PlanSuscripcion
     from src.services.pricing import formatear_precio, precio_cop
 
-    starter_m = formatear_precio(
-        precio_cop(PlanSuscripcion.STARTER, DuracionPago.MENSUAL)
-    )
+    starter_m = formatear_precio(precio_cop(PlanSuscripcion.STARTER, DuracionPago.MENSUAL))
     pro_m = formatear_precio(precio_cop(PlanSuscripcion.PRO, DuracionPago.MENSUAL))
     elite_m = formatear_precio(precio_cop(PlanSuscripcion.ELITE, DuracionPago.MENSUAL))
     pro_a = formatear_precio(precio_cop(PlanSuscripcion.PRO, DuracionPago.ANUAL))
-    lifetime = formatear_precio(
-        precio_cop(PlanSuscripcion.LIFETIME, DuracionPago.LIFETIME)
-    )
+    lifetime = formatear_precio(precio_cop(PlanSuscripcion.LIFETIME, DuracionPago.LIFETIME))
 
     keyboard = [
-        [
-            InlineKeyboardButton(
-                f"Starter {starter_m}/mes", callback_data="pagar:starter:mensual"
-            )
-        ],
+        [InlineKeyboardButton(f"Starter {starter_m}/mes", callback_data="pagar:starter:mensual")],
         [InlineKeyboardButton(f"Pro {pro_m}/mes", callback_data="pagar:pro:mensual")],
-        [
-            InlineKeyboardButton(
-                f"Elite {elite_m}/mes", callback_data="pagar:elite:mensual"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                f"Pro anual {pro_a} (20% off)", callback_data="pagar:pro:anual"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                f"Lifetime {lifetime}", callback_data="pagar:lifetime:lifetime"
-            )
-        ],
+        [InlineKeyboardButton(f"Elite {elite_m}/mes", callback_data="pagar:elite:mensual")],
+        [InlineKeyboardButton(f"Pro anual {pro_a} (20% off)", callback_data="pagar:pro:anual")],
+        [InlineKeyboardButton(f"Lifetime {lifetime}", callback_data="pagar:lifetime:lifetime")],
     ]
     await update.message.reply_text(
         "<b>Elige tu plan EntrenadorAX</b>\n\n"
@@ -2518,14 +2618,10 @@ def registrar(app: Application) -> None:
     # Sin esto, /sueno, /comida, /entreno etc. caen al MessageHandler de
     # texto que ignora el "/" inicial, perdiendo intencion clara del usuario.
     for _slash_name, _slash_prompt in _MENU_SLASH_PROMPTS.items():
-        app.add_handler(
-            CommandHandler(_slash_name, _make_menu_slash_handler(_slash_prompt))
-        )
+        app.add_handler(CommandHandler(_slash_name, _make_menu_slash_handler(_slash_prompt)))
     app.add_handler(InlineQueryHandler(inline_query))
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
-    app.add_handler(
-        MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler)
-    )
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, recibir_voz))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensaje))
     app.add_handler(MessageHandler(filters.PHOTO, recibir_foto))
