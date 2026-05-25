@@ -3,6 +3,8 @@ import json
 
 import pytest
 
+from sqlalchemy.exc import IntegrityError
+
 from src.services.identity import link_telegram_to_user
 from src.services.telegram_pair import (
     crear_solicitud_vinculacion,

@@ -591,6 +591,7 @@ async def finish_telegram_pair(
     """Tras vincular en el bot, refresca JWT si el subject cambio (app -> Telegram real)."""
     from src.api.jwt_app import token_resp_app
     from src.db.repository import obtener_usuario
+    from src.services.identity import obtener_usuario_por_id
     from src.services.telegram_pair import (
         consumir_refresh_jwt,
         consumir_refresh_jwt_por_user_id,
@@ -624,6 +625,25 @@ async def finish_telegram_pair(
 
     user = await obtener_usuario(uid)
     if user is None:
+        mapped_user_id = await resolver_user_id_desde_jwt_sub(uid)
+        if mapped_user_id is not None:
+            user = await obtener_usuario_por_id(mapped_user_id)
+            if user is not None and user.telegram_id is not None and user.telegram_id > 0:
+                profile_complete = bool(
+                    user.telefono and user.email and user.phone_verified_at
+                )
+                token = token_resp_app(
+                    user.telegram_id, response, profile_complete=profile_complete
+                )
+                await limpiar_jwt_sub_user(uid)
+                return {
+                    "ok": True,
+                    "telegram_linked": True,
+                    "jwt": token.jwt,
+                    "uid": token.uid,
+                    "expira_en": token.expira_en,
+                    "profile_complete": token.profile_complete,
+                }
         raise HTTPException(404, "Usuario no encontrado")
 
     telegram_linked = user.telegram_id is not None and user.telegram_id > 0

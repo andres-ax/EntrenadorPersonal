@@ -14,11 +14,11 @@ import json
 import logging
 import secrets
 
+from sqlalchemy.exc import IntegrityError
+
 from src.cache import get_redis
-from src.db.connection import async_session_factory
 from src.db.models import Usuario
-from src.services.identity import link_telegram_to_user
-from sqlalchemy import select
+from src.services.identity import link_telegram_to_user, obtener_usuario_por_id
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +30,7 @@ JWT_SUB_USER_PREFIX = "telegram:pair:jwt_sub_user:"
 
 
 async def _obtener_usuario_por_id(user_id: int) -> Usuario | None:
-    async with async_session_factory() as session:
-        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
-        return result.scalar_one_or_none()
+    return await obtener_usuario_por_id(user_id)
 
 
 def _generar_codigo_6() -> str:
@@ -107,7 +105,15 @@ async def ejecutar_vinculacion(pair_ref: str, telegram_id: int) -> Usuario | Non
         return None
 
     old_jwt_sub = user.telegram_id if user.telegram_id is not None else jwt_sub
-    linked = await link_telegram_to_user(user_id, telegram_id)
+    try:
+        linked = await link_telegram_to_user(user_id, telegram_id)
+    except IntegrityError:
+        logger.exception(
+            "No se pudo vincular telegram_id=%s a user_id=%s",
+            telegram_id,
+            user_id,
+        )
+        return None
 
     client = await get_redis()
     await client.setex(

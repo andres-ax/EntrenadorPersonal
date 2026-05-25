@@ -1038,7 +1038,15 @@ async def cmd_vincular(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     await update.message.chat.send_action(ChatAction.TYPING)
-    if await _intentar_vincular_desde_app(update, codigo):
+    try:
+        if await _intentar_vincular_desde_app(update, codigo):
+            return
+    except Exception:
+        logger.exception("cmd_vincular fallo uid=%s codigo=%s", uid, codigo)
+        await update.message.reply_text(
+            "Hubo un error al vincular. Intenta de nuevo en unos segundos "
+            "o genera un código nuevo en la app."
+        )
         return
     await update.message.reply_text(
         "Código inválido o expirado. Genera uno nuevo en la app (válido 10 minutos)."
