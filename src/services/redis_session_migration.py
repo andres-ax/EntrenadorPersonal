@@ -15,7 +15,7 @@ from src.services.conversation_service import (
 
 logger = logging.getLogger(__name__)
 
-_MIGRATION_FLAG = "migration:conv_redis_v1"
+_MIGRATION_FLAG = "migration:conv_redis_v2"
 
 
 async def migrar_sesiones_redis_legacy() -> int:
@@ -28,9 +28,10 @@ async def migrar_sesiones_redis_legacy() -> int:
         result = await session.execute(
             select(Usuario.telegram_id).where(Usuario.telegram_id.isnot(None))
         )
-        telegram_ids = [row[0] for row in result.all() if row[0]]
+        telegram_ids = [row[0] for row in result.all() if row[0] and row[0] > 0]
 
     renombradas = 0
+    errores = 0
     for tid in telegram_ids:
         try:
             conv = await asegurar_conversacion_principal(tid)
@@ -52,8 +53,14 @@ async def migrar_sesiones_redis_legacy() -> int:
                 except Exception:
                     logger.warning("No pude renombrar %s -> %s", key, new_key, exc_info=True)
         except Exception:
-            logger.exception("Error migrando sesion Redis uid=%s", tid)
+            errores += 1
+            logger.warning("Error migrando sesion Redis uid=%s", tid, exc_info=True)
 
-    await client.setex(_MIGRATION_FLAG, 86400 * 365, "done")
-    logger.info("Migracion Redis conversaciones: %s keys renombradas", renombradas)
+    if errores == 0 or renombradas > 0:
+        await client.setex(_MIGRATION_FLAG, 86400 * 365, "done")
+    logger.info(
+        "Migracion Redis conversaciones: %s keys renombradas, %s errores",
+        renombradas,
+        errores,
+    )
     return renombradas

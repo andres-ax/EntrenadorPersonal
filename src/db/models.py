@@ -581,7 +581,9 @@ class Conversacion(Base):
     )
     titulo = Column(String(120), default="Coach", nullable=False)
     canal_creador = Column(
-        Enum(CanalConversacion), default=CanalConversacion.TELEGRAM, nullable=False
+        Enum(CanalConversacion, native_enum=False, length=16),
+        default=CanalConversacion.TELEGRAM,
+        nullable=False,
     )
     activa = Column(Boolean, default=True, nullable=False)
     resumen_handoff = Column(Text, nullable=True)
@@ -607,10 +609,12 @@ class MensajeChat(Base):
         nullable=False,
         index=True,
     )
-    rol = Column(Enum(RolMensajeChat), nullable=False)
+    rol = Column(Enum(RolMensajeChat, native_enum=False, length=16), nullable=False)
     contenido = Column(Text, nullable=False)
     canal_origen = Column(
-        Enum(CanalConversacion), default=CanalConversacion.TELEGRAM, nullable=False
+        Enum(CanalConversacion, native_enum=False, length=16),
+        default=CanalConversacion.TELEGRAM,
+        nullable=False,
     )
     es_desde_telegram = Column(Boolean, default=False, nullable=False)
     metadata_json = Column("metadata", JSON, nullable=True)
