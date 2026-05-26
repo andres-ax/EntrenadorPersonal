@@ -623,6 +623,21 @@ class MensajeChat(Base):
     conversacion = relationship("Conversacion", back_populates="mensajes")
 
 
+class DevicePushToken(Base):
+    """Token FCM por dispositivo para push de chat."""
+
+    __tablename__ = "device_push_tokens"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    fcm_token = Column(String(512), unique=True, nullable=False)
+    platform = Column(String(16), default="android", nullable=False)
+    creado_en = Column(DateTime, server_default=func.now(), nullable=False)
+    actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class GooglePlayRtdnEvent(Base):
     """Eventos RTDN de Google Play (idempotencia de webhooks Pub/Sub)."""
 

@@ -17,13 +17,14 @@ from src.services.conversation_service import (
     archivar_conversacion,
     crear_conversacion,
     fijar_conversacion_activa,
-    listar_conversaciones,
+    listar_conversaciones_con_preview,
     listar_mensajes,
     obtener_conversacion,
     renombrar_conversacion,
     titulo_auto_desde_mensaje,
 )
-from src.services.coach_turn import run_coach_turn
+from src.services.coach_turn import run_coach_turn, run_coach_turn_stream
+from src.services.push_notifications import registrar_push_token
 from src.services.crisis import detectar as detectar_crisis
 from src.services.identity import resolver_user_id_desde_api_jwt
 from src.services.tts import transcribir_audio
@@ -51,6 +52,11 @@ class ActivaConversacionReq(BaseModel):
     conversacion_id: int
 
 
+class PushRegisterReq(BaseModel):
+    fcm_token: str = Field(min_length=10, max_length=512)
+    platform: str = "android"
+
+
 async def _require_user(jwt_sub: int) -> tuple[int, int]:
     user_id = await resolver_user_id_desde_api_jwt(jwt_sub)
     if user_id is None:
@@ -58,7 +64,7 @@ async def _require_user(jwt_sub: int) -> tuple[int, int]:
     return jwt_sub, user_id
 
 
-def _conv_dict(c) -> dict[str, Any]:
+def _conv_dict(c, preview: str | None = None) -> dict[str, Any]:
     return {
         "id": c.id,
         "titulo": c.titulo,
@@ -66,6 +72,7 @@ def _conv_dict(c) -> dict[str, Any]:
         "activa": c.activa,
         "es_principal": c.es_principal,
         "ultimo_mensaje_en": c.ultimo_mensaje_en.isoformat() if c.ultimo_mensaje_en else None,
+        "ultimo_mensaje_preview": preview,
         "resumen_handoff": c.resumen_handoff,
     }
 
@@ -82,6 +89,17 @@ def _msg_dict(m) -> dict[str, Any]:
     }
 
 
+@router.post("/push/register")
+async def api_push_register(
+    req: PushRegisterReq,
+    jwt_sub: int = Depends(get_uid_from_token),
+) -> dict:
+    """Registra token FCM del dispositivo para notificaciones de chat."""
+    _, user_id = await _require_user(jwt_sub)
+    await registrar_push_token(user_id, req.fcm_token, platform=req.platform)
+    return {"ok": True}
+
+
 @router.get("/conversaciones")
 async def api_listar_conversaciones(
     jwt_sub: int = Depends(get_uid_from_token),
@@ -91,8 +109,8 @@ async def api_listar_conversaciones(
     if not settings.chat_android_enabled:
         raise HTTPException(503, "Chat app deshabilitado")
     _, user_id = await _require_user(jwt_sub)
-    convs = await listar_conversaciones(user_id, limit=limit, offset=offset)
-    return {"conversaciones": [_conv_dict(c) for c in convs]}
+    convs = await listar_conversaciones_con_preview(user_id, limit=limit, offset=offset)
+    return {"conversaciones": [_conv_dict(c, preview) for c, preview in convs]}
 
 
 @router.post("/conversaciones")
@@ -233,15 +251,37 @@ async def api_chat_stream(
     req: ChatReq,
     jwt_sub: int = Depends(get_uid_from_token),
 ):
-    """SSE minimal: un evento con la respuesta completa (fase 9 polish)."""
+    """SSE con tokens en tiempo real del coach."""
     if not settings.chat_android_enabled:
         raise HTTPException(503, "Chat app deshabilitado")
     telegram_id, user_id = await _require_user(jwt_sub)
-    result, _conv = await _ejecutar_chat(telegram_id, user_id, conv_id, req.mensaje.strip())
+    conv = await obtener_conversacion(conv_id, user_id)
+    if conv is None:
+        raise HTTPException(404, "Conversacion no encontrada")
+
+    crisis = detectar_crisis(req.mensaje)
+    if crisis:
+        raise HTTPException(400, detail={"code": "crisis", "message": "Mensaje de crisis detectado"})
+
+    if not await check_rate_limit(telegram_id):
+        raise HTTPException(429, "Demasiados mensajes. Espera un momento.")
+    puede, usado, limite = await check_daily_quota(telegram_id)
+    if not puede:
+        raise HTTPException(402, f"Limite diario alcanzado ({limite} mensajes).")
+
+    mensaje = req.mensaje.strip()
+    if conv.titulo in ("Coach", "Nuevo hilo") and len(mensaje) > 3:
+        await renombrar_conversacion(conv_id, user_id, await titulo_auto_desde_mensaje(mensaje))
 
     async def gen():
-        payload = {"type": "done", "respuesta": result.respuesta, "request_id": result.request_id}
-        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        async for event in run_coach_turn_stream(
+            telegram_id=telegram_id,
+            conversacion_id=conv_id,
+            texto=mensaje,
+            canal="android",
+            conversacion_titulo=conv.titulo,
+        ):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 

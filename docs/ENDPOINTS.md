@@ -138,11 +138,19 @@ Todos requieren `Authorization: Bearer <JWT>` (mismo token de la app).
 | PATCH | `/api/me/conversaciones/{id}` | Renombrar / archivar |
 | GET | `/api/me/conversaciones/{id}/mensajes` | Historial `?before=&limit=` |
 | POST | `/api/me/conversaciones/{id}/chat` | Chat texto sync `{mensaje}` |
-| POST | `/api/me/conversaciones/{id}/chat/stream` | SSE (respuesta completa) |
+| POST | `/api/me/conversaciones/{id}/chat/stream` | SSE tokens (`token`, `tool`, `done`, `error`) |
 | POST | `/api/me/conversaciones/{id}/audio` | multipart `file` → Whisper |
 | POST | `/api/me/conversaciones/{id}/handoff/telegram` | Resumen + mensaje bot |
 | POST | `/api/me/conversaciones/activa` | `{conversacion_id}` hilo activo |
+| POST | `/api/me/push/register` | Registra token FCM `{fcm_token, platform?}` |
 | GET | `/api/me/realtime/cuota` | Minutos de voz disponibles |
+
+### WebSocket sync chat
+
+- URL: `wss://entrenadorax.axsoftware.codes/ws/chat?token=<JWT>`
+- Eventos JSON: `connected`, `message.new`, `conversacion.updated`, `typing`
+- Cliente → servidor: `{"type":"ping"}` → `{"type":"pong"}`
+- Flag: `CHAT_WS_ENABLED=true`
 
 ### Ejemplo chat texto
 
@@ -158,6 +166,8 @@ curl -X POST "https://entrenadorax.axsoftware.codes/api/me/conversaciones/1/chat
 - `CHAT_ANDROID_ENABLED=true`
 - `CHAT_MULTITHREAD_ENABLED=true`
 - `CHAT_HANDOFF_ENABLED=true`
+- `CHAT_WS_ENABLED=true`
+- `FCM_ENABLED=false` (+ `FIREBASE_SERVICE_ACCOUNT_JSON` en Railway)
 
 ## 8. WebSocket Realtime
 

@@ -20,8 +20,10 @@ async def build_coach_prompt(
     uid: int,
     *,
     conversacion_titulo: str | None = None,
+    conversacion_id: int | None = None,
+    canal: str | None = None,
 ) -> str:
-    """Prompt con perfil, tono, wearables y titulo del hilo activo."""
+    """Prompt con perfil, tono, wearables, modo e historial del hilo activo."""
     cached_static = await cache_get_perfil_block(uid)
     user = await obtener_o_crear_usuario(uid)
     tz_name = user.timezone or "America/Bogota"
@@ -47,6 +49,20 @@ async def build_coach_prompt(
     ]
     if conversacion_titulo:
         dinamicos.append(f"hilo='{conversacion_titulo[:80]}'")
+
+    modo = "libre"
+    if conversacion_id is not None and canal:
+        from src.services.coach_modo import resolver_modo_coach
+
+        modo = await resolver_modo_coach(uid, conversacion_id, canal)
+    dinamicos.append(f"modo={modo}")
+
+    if modo == "libre":
+        from src.services.coach_historial_snapshot import build_historial_snapshot
+
+        historial = await build_historial_snapshot(uid)
+        if historial:
+            dinamicos.append(f"historial_deportista=({historial})")
 
     from src.services.wearables import obtener_resumen_biometrico
 

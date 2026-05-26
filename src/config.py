@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     chat_android_enabled: bool = True
     chat_multithread_enabled: bool = True
     chat_handoff_enabled: bool = True
+    chat_ws_enabled: bool = True
+    fcm_enabled: bool = False
+    firebase_service_account_json: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

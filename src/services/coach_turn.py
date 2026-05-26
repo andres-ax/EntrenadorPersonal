@@ -4,8 +4,9 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 import openai
 from agents import (
@@ -25,6 +26,7 @@ from src.services.coach_context import build_coach_prompt
 from src.services.coach_output import aplicar_guardrails_output
 from src.services.conversation_service import (
     guardar_mensaje,
+    obtener_conversacion_por_id,
     session_key_for_conversacion,
 )
 from src.telegram.permissions import current_session_uid, current_turn_tools
@@ -117,6 +119,16 @@ async def run_coach_turn(
         )
         user_msg_id = user_msg.id
 
+    conv_row = await obtener_conversacion_por_id(conversacion_id)
+    usuario_id = conv_row.usuario_id if conv_row else None
+    if usuario_id:
+        try:
+            from src.services.chat_events import emit_coach_typing
+
+            await emit_coach_typing(usuario_id, conversacion_id, True)
+        except Exception:
+            pass
+
     respuesta_bot: str | None = None
     tokens_in = 0
     tokens_out = 0
@@ -131,7 +143,11 @@ async def run_coach_turn(
 
     try:
         prompt = await build_coach_prompt(
-            texto, telegram_id, conversacion_titulo=conversacion_titulo
+            texto,
+            telegram_id,
+            conversacion_titulo=conversacion_titulo,
+            conversacion_id=conversacion_id,
+            canal=canal,
         )
         try:
             try:
@@ -192,6 +208,13 @@ async def run_coach_turn(
             respuesta_bot = "Tuve un saltico tecnico. Vuelve a escribirme y arrancamos."
         finally:
             await session.close()
+            if usuario_id:
+                try:
+                    from src.services.chat_events import emit_coach_typing
+
+                    await emit_coach_typing(usuario_id, conversacion_id, False)
+                except Exception:
+                    pass
     finally:
         current_session_uid.reset(token_uid)
         tools_invocadas = current_turn_tools.get() or []
@@ -243,3 +266,152 @@ async def run_coach_turn(
         mensaje_usuario_id=user_msg_id,
         mensaje_coach_id=coach_msg_id,
     )
+
+
+async def run_coach_turn_stream(
+    *,
+    telegram_id: int,
+    conversacion_id: int,
+    texto: str,
+    canal: CanalCoach,
+    conversacion_titulo: str | None = None,
+    metadata_usuario: dict | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    """Ejecuta turno del coach emitiendo eventos SSE: token, tool, done, error."""
+    t_start = time.perf_counter()
+    request_id = uuid.uuid4().hex
+    canal_db = _canal_enum(canal)
+    es_tg = _es_desde_telegram(canal)
+
+    token_uid = current_session_uid.set(telegram_id)
+    token_tools = current_turn_tools.set([])
+
+    user_msg = await guardar_mensaje(
+        conversacion_id,
+        RolMensajeChat.USER,
+        texto,
+        canal_db,
+        es_desde_telegram=es_tg,
+        metadata=metadata_usuario,
+    )
+
+    conv_row = await obtener_conversacion_por_id(conversacion_id)
+    usuario_id = conv_row.usuario_id if conv_row else None
+    if usuario_id:
+        try:
+            from src.services.chat_events import emit_coach_typing
+
+            await emit_coach_typing(usuario_id, conversacion_id, True)
+        except Exception:
+            pass
+
+    respuesta_bot = ""
+    tokens_in = 0
+    tokens_out = 0
+    error_message: str | None = None
+    tools_invocadas: list[dict] = []
+
+    session = SafeRedisSession.from_url(
+        session_key_for_conversacion(conversacion_id),
+        url=settings.redis_url_str,
+        ttl=settings.session_ttl_seconds,
+    )
+
+    try:
+        prompt = await build_coach_prompt(
+            texto,
+            telegram_id,
+            conversacion_titulo=conversacion_titulo,
+            conversacion_id=conversacion_id,
+            canal=canal,
+        )
+        buffer = ""
+        try:
+            if hasattr(Runner, "run_streamed"):
+                result = Runner.run_streamed(coach, prompt, session=session, run_config=RUN_CONFIG)
+                async for event in result.stream_events():
+                    etype = getattr(event, "type", None)
+                    if etype == "raw_response_event":
+                        data = getattr(event, "data", None)
+                        if data and getattr(data, "type", "") == "response.output_text.delta":
+                            delta = getattr(data, "delta", "") or ""
+                            if delta:
+                                buffer += delta
+                                yield {"type": "token", "delta": delta}
+                    elif etype == "tool_call_event":
+                        tc = getattr(event, "tool_call", None)
+                        name = getattr(tc, "name", "") if tc else ""
+                        if name:
+                            yield {"type": "tool", "name": name}
+                respuesta_bot = buffer or (getattr(result, "final_output", None) or "")
+            else:
+                output, tokens_in, tokens_out = await _run_agent_once(
+                    prompt, session, telegram_id
+                )
+                respuesta_bot = output
+                yield {"type": "token", "delta": output}
+        except InputGuardrailTripwireTriggered:
+            respuesta_bot = "Ese mensaje no se ve bien. Intentalo de nuevo con algo mas claro."
+            yield {"type": "error", "message": "input_guardrail"}
+            yield {"type": "token", "delta": respuesta_bot}
+        except OutputGuardrailTripwireTriggered:
+            respuesta_bot = (
+                "Note algo en mi respuesta que prefiero no afirmar. Consulta a un profesional."
+            )
+            yield {"type": "error", "message": "output_guardrail"}
+            yield {"type": "token", "delta": respuesta_bot}
+        except Exception as e:
+            logger.exception("Error coach stream uid=%s conv=%s", telegram_id, conversacion_id)
+            error_message = f"{type(e).__name__}: {e}"
+            respuesta_bot = "Tuve un saltico tecnico. Vuelve a escribirme y arrancamos."
+            yield {"type": "error", "message": error_message}
+            yield {"type": "token", "delta": respuesta_bot}
+        finally:
+            await session.close()
+            if usuario_id:
+                try:
+                    from src.services.chat_events import emit_coach_typing
+
+                    await emit_coach_typing(usuario_id, conversacion_id, False)
+                except Exception:
+                    pass
+    finally:
+        current_session_uid.reset(token_uid)
+        tools_invocadas = current_turn_tools.get() or []
+        current_turn_tools.reset(token_tools)
+
+        coach_msg_id: int | None = None
+        if respuesta_bot:
+            coach_msg = await guardar_mensaje(
+                conversacion_id,
+                RolMensajeChat.ASSISTANT,
+                respuesta_bot,
+                canal_db,
+                es_desde_telegram=es_tg,
+                metadata={"request_id": request_id, "tools_invocadas": tools_invocadas},
+            )
+            coach_msg_id = coach_msg.id
+
+        duracion_ms = int((time.perf_counter() - t_start) * 1000)
+        await grabar_auditoria_turno(
+            telegram_id=telegram_id,
+            request_id=request_id,
+            prompt_usuario=texto,
+            respuesta_bot=respuesta_bot or None,
+            tools_invocadas=tools_invocadas,
+            tokens_input=tokens_in,
+            tokens_output=tokens_out,
+            costo_estimado_usd=0.0,
+            duracion_ms=duracion_ms,
+            error=error_message,
+            conversacion_id=conversacion_id,
+            canal=canal,
+        )
+
+        yield {
+            "type": "done",
+            "respuesta": respuesta_bot,
+            "mensaje_usuario_id": user_msg.id,
+            "mensaje_coach_id": coach_msg_id,
+            "request_id": request_id,
+        }

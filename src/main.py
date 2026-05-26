@@ -340,6 +340,7 @@ from src.api.auth import router as auth_router  # noqa: E402
 from src.api.integraciones import router as integraciones_router  # noqa: E402
 from src.api.me import router as me_router  # noqa: E402
 from src.api.chat import router as chat_router  # noqa: E402
+from src.chat.ws import router as chat_ws_router  # noqa: E402
 from src.api.billing import me_billing_router, webhooks_router  # noqa: E402
 from src.api.public import router as public_router  # noqa: E402
 
@@ -360,6 +361,7 @@ from src.web.landing import router as landing_router  # noqa: E402
 app.include_router(admin_ui_router)
 app.include_router(app_ui_router)
 app.include_router(realtime_router)
+app.include_router(chat_ws_router)
 
 app.include_router(auth_router)
 app.include_router(me_router)

@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 
 from src.cache import get_redis
 from src.db.connection import async_session_factory
@@ -90,6 +91,38 @@ async def crear_conversacion(
         await session.commit()
         await session.refresh(conv)
         return conv
+
+
+async def listar_conversaciones_con_preview(
+    user_id: int,
+    limit: int = 30,
+    offset: int = 0,
+    incluir_inactivas: bool = False,
+) -> list[tuple[Conversacion, str | None]]:
+    """Lista hilos con preview del ultimo mensaje."""
+    convs = await listar_conversaciones(user_id, limit=limit, offset=offset, incluir_inactivas=incluir_inactivas)
+    if not convs:
+        return []
+    conv_ids = [c.id for c in convs]
+    previews: dict[int, str] = {}
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(MensajeChat.conversacion_id, MensajeChat.contenido)
+            .where(MensajeChat.conversacion_id.in_(conv_ids))
+            .order_by(MensajeChat.conversacion_id, MensajeChat.id.desc())
+        )
+        for conv_id, contenido in result.all():
+            if conv_id not in previews:
+                previews[conv_id] = (contenido or "")[:120]
+    return [(c, previews.get(c.id)) for c in convs]
+
+
+async def obtener_conversacion_por_id(conversacion_id: int) -> Conversacion | None:
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Conversacion).where(Conversacion.id == conversacion_id)
+        )
+        return result.scalar_one_or_none()
 
 
 async def listar_conversaciones(
@@ -196,7 +229,30 @@ async def guardar_mensaje(
         )
         await session.commit()
         await session.refresh(msg)
-        return msg
+
+    conv = await obtener_conversacion_por_id(conversacion_id)
+    if conv is not None:
+        try:
+            from src.services.chat_events import emit_conversacion_updated, emit_message_new
+
+            preview = contenido[:120].replace("\n", " ")
+            await emit_message_new(
+                msg,
+                usuario_id=conv.usuario_id,
+                conversacion_id=conversacion_id,
+                conversacion_titulo=conv.titulo,
+            )
+            await emit_conversacion_updated(
+                conv.usuario_id,
+                conversacion_id,
+                titulo=conv.titulo,
+                ultimo_mensaje_preview=preview,
+                ultimo_mensaje_en=ahora.isoformat(),
+            )
+        except Exception:
+            logger.exception("Error emitiendo evento chat conv=%s", conversacion_id)
+
+    return msg
 
 
 async def listar_mensajes(
