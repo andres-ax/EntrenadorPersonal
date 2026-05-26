@@ -329,6 +329,7 @@ from src.api.admin import router as admin_router  # noqa: E402
 from src.api.auth import router as auth_router  # noqa: E402
 from src.api.integraciones import router as integraciones_router  # noqa: E402
 from src.api.me import router as me_router  # noqa: E402
+from src.api.billing import me_billing_router, webhooks_router  # noqa: E402
 from src.api.public import router as public_router  # noqa: E402
 
 # Routers HTML server-side (Jinja2). Reemplazan los antiguos frontends
@@ -351,6 +352,8 @@ app.include_router(realtime_router)
 
 app.include_router(auth_router)
 app.include_router(me_router)
+app.include_router(me_billing_router)
+app.include_router(webhooks_router)
 app.include_router(admin_router)
 app.include_router(public_router)
 app.include_router(integraciones_router)

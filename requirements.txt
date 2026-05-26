@@ -133,6 +133,13 @@ python-json-logger>=2.0,<3.0
 
 
 # -----------------------------------------------------------------------------
+# Google Play Billing (Android Publisher API)
+# -----------------------------------------------------------------------------
+google-api-python-client>=2.160,<3.0
+google-auth>=2.38,<3.0
+
+
+# -----------------------------------------------------------------------------
 # UI server-side (consolidacion total a Python: admin + miniapp + landing)
 # -----------------------------------------------------------------------------
 # Jinja2 para renderizar HTML server-side de admin (/admin/*), miniapp (/app/*)

@@ -93,6 +93,7 @@ class MetodoPago(str, enum.Enum):
     BANCOLOMBIA = "bancolombia"
     MANUAL_ADMIN = "manual_admin"
     TELEGRAM_STARS = "telegram_stars"
+    GOOGLE_PLAY = "google_play"
     OTRO = "otro"
 
 
@@ -544,7 +545,26 @@ class Suscripcion(Base):
     )
     referido_aplicado = Column(Boolean, default=False, nullable=False)
 
+    google_purchase_token = Column(String(512), unique=True, nullable=True, index=True)
+    google_order_id = Column(String(128), nullable=True)
+    google_product_id = Column(String(64), nullable=True)
+    google_base_plan_id = Column(String(64), nullable=True)
+    google_linked_purchase_token = Column(String(512), nullable=True)
+
     usuario = relationship("Usuario", back_populates="suscripciones")
+
+
+class GooglePlayRtdnEvent(Base):
+    """Eventos RTDN de Google Play (idempotencia de webhooks Pub/Sub)."""
+
+    __tablename__ = "google_play_rtdn_events"
+
+    id = Column(Integer, primary_key=True)
+    message_id = Column(String(128), unique=True, nullable=False, index=True)
+    notification_type = Column(Integer, nullable=True)
+    purchase_token = Column(String(512), nullable=True)
+    payload = Column(JSON, nullable=False)
+    processed_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
 class PlanDefinicion(Base):

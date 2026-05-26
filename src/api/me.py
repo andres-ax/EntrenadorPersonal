@@ -346,7 +346,7 @@ async def generar_plan(uid: int = Depends(get_uid_from_token)) -> dict:
 
     if not await es_plan_minimo(uid, PlanSuscripcion.PRO):
         raise HTTPException(
-            402, "Requiere plan Pro o superior. Mejora con /pagar en el bot."
+            402, "Requiere plan Pro o superior. Mejora tu plan en la app."
         )
     from src.services.plan_generator import generar_plan_semanal_para
 
@@ -684,11 +684,25 @@ class CompleteProfileConfirm(BaseModel):
 @router.get("/cuenta")
 async def get_cuenta(uid: int = Depends(get_uid_from_token)) -> dict:
     from src.db.repository import obtener_usuario
+    from src.services.identity import resolver_user_id_desde_api_jwt
+    from src.db.repository import obtener_plan_efectivo_por_user_id
+
     u = await obtener_usuario(uid)
     if u is None:
         raise HTTPException(404, "Usuario no encontrado")
-    
-    # telegram_linked is True if u.telegram_id is positive (and not None)
+
+    user_id = await resolver_user_id_desde_api_jwt(uid)
+    billing_source = None
+    plan_actual = u.plan_actual.value if u.plan_actual else "free"
+    plan_expira_en = u.plan_expira_en.isoformat() if u.plan_expira_en else None
+    if user_id is not None:
+        plan_efectivo, expira_efectiva, metodo = await obtener_plan_efectivo_por_user_id(user_id)
+        plan_actual = plan_efectivo.value
+        if expira_efectiva is not None:
+            plan_expira_en = expira_efectiva.isoformat()
+        if metodo is not None:
+            billing_source = metodo.value
+
     telegram_linked = u.telegram_id is not None and u.telegram_id > 0
     profile_complete = bool(u.telefono and u.email and u.phone_verified_at)
 
@@ -698,7 +712,9 @@ async def get_cuenta(uid: int = Depends(get_uid_from_token)) -> dict:
         "phone_verified": u.phone_verified_at is not None,
         "telegram_linked": telegram_linked,
         "auth_method": u.auth_method,
-        "plan_actual": u.plan_actual.value if u.plan_actual else "free",
+        "plan_actual": plan_actual,
+        "plan_expira_en": plan_expira_en,
+        "billing_source": billing_source,
         "profile_complete": profile_complete,
     }
 

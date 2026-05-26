@@ -62,6 +62,21 @@ async def obtener_usuario_por_id(user_id: int) -> Usuario | None:
         return result.scalar_one_or_none()
 
 
+async def resolver_user_id_desde_api_jwt(jwt_sub: int) -> int | None:
+    """Resuelve usuarios.id desde el sub del JWT (telegram_id real o virtual)."""
+    from src.services.telegram_pair import resolver_user_id_desde_jwt_sub
+
+    mapped = await resolver_user_id_desde_jwt_sub(jwt_sub)
+    if mapped is not None:
+        return mapped
+    async with async_session_factory() as session:
+        result = await session.execute(select(Usuario).where(Usuario.telegram_id == jwt_sub))
+        usuario = result.scalar_one_or_none()
+        if usuario is not None:
+            return usuario.id
+    return None
+
+
 def _temp_telegram_id(user_id: int) -> int:
     """ID temporal único para liberar telegram_id real sin dejar NULL expuesto."""
     return -user_id

@@ -1337,6 +1337,212 @@ async def activar_suscripcion_pro(
         return sus
 
 
+async def activar_plan_por_user_id(
+    user_id: int,
+    plan: PlanSuscripcion,
+    dias: int | None = None,
+    duracion: DuracionPago = DuracionPago.MENSUAL,
+    metodo: MetodoPago = MetodoPago.MANUAL_ADMIN,
+    monto_cop: int | None = None,
+    comprobante_id: int | None = None,
+    expira_en: datetime | None = None,
+    google_purchase_token: str | None = None,
+    google_order_id: str | None = None,
+    google_product_id: str | None = None,
+    google_base_plan_id: str | None = None,
+    google_linked_purchase_token: str | None = None,
+) -> Suscripcion:
+    """Crea/extiende suscripcion por PK usuarios.id."""
+    dias_real = dias if dias is not None else _dias_por_duracion(plan, duracion)
+    async with async_session_factory() as session:
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
+            raise ValueError(f"Usuario id={user_id} no existe")
+        ahora = datetime.utcnow()
+        if expira_en is not None:
+            nueva_expira = expira_en
+        elif plan == PlanSuscripcion.LIFETIME:
+            nueva_expira = None
+        else:
+            base = usuario.plan_expira_en or ahora
+            if base < ahora:
+                base = ahora
+            nueva_expira = base + timedelta(days=dias_real)
+        usuario.plan_actual = plan
+        usuario.plan_expira_en = nueva_expira
+        sus = Suscripcion(
+            usuario_id=usuario.id,
+            plan=plan,
+            metodo_pago=metodo,
+            monto_cop=monto_cop,
+            comprobante_id=comprobante_id,
+            iniciada_en=ahora,
+            expira_en=nueva_expira,
+            activa=True,
+            google_purchase_token=google_purchase_token,
+            google_order_id=google_order_id,
+            google_product_id=google_product_id,
+            google_base_plan_id=google_base_plan_id,
+            google_linked_purchase_token=google_linked_purchase_token,
+        )
+        session.add(sus)
+        await session.commit()
+        await session.refresh(sus)
+        return sus
+
+
+async def activar_plan_google(
+    user_id: int,
+    purchase_token: str,
+    order_id: str | None,
+    product_id: str,
+    base_plan_id: str | None,
+    expira_en: datetime,
+    linked_purchase_token: str | None = None,
+) -> Suscripcion:
+    """Activa plan Google Play. Idempotente por purchase_token."""
+    from src.services.google_play_products import product_to_plan
+
+    plan, duracion = product_to_plan(product_id)
+    async with async_session_factory() as session:
+        existing_q = await session.execute(
+            select(Suscripcion).where(Suscripcion.google_purchase_token == purchase_token)
+        )
+        existing = existing_q.scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
+            raise ValueError(f"Usuario id={user_id} no existe")
+
+        ahora = datetime.utcnow()
+        usuario.plan_actual = plan
+        usuario.plan_expira_en = expira_en
+        sus = Suscripcion(
+            usuario_id=usuario.id,
+            plan=plan,
+            metodo_pago=MetodoPago.GOOGLE_PLAY,
+            iniciada_en=ahora,
+            expira_en=expira_en,
+            activa=True,
+            google_purchase_token=purchase_token,
+            google_order_id=order_id,
+            google_product_id=product_id,
+            google_base_plan_id=base_plan_id,
+            google_linked_purchase_token=linked_purchase_token,
+        )
+        session.add(sus)
+        await session.commit()
+        await session.refresh(sus)
+        _FEATURE_CACHE.clear()
+        return sus
+
+
+async def obtener_plan_efectivo_por_user_id(
+    user_id: int,
+) -> tuple[PlanSuscripcion, datetime | None, MetodoPago | None]:
+    """Plan vigente maximo entre suscripciones activas no expiradas."""
+    ahora = datetime.utcnow()
+    async with async_session_factory() as session:
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
+            return PlanSuscripcion.FREE, None, None
+        if await _esta_bloqueado(session, usuario.id):
+            return PlanSuscripcion.FREE, None, None
+
+        subs_q = await session.execute(
+            select(Suscripcion).where(
+                Suscripcion.usuario_id == user_id,
+                Suscripcion.activa == True,  # noqa: E712
+            )
+        )
+        subs = list(subs_q.scalars().all())
+
+        best_plan = PlanSuscripcion.FREE
+        best_expira: datetime | None = None
+        best_metodo: MetodoPago | None = None
+        best_rank = 0
+
+        for sub in subs:
+            plan = sub.plan or PlanSuscripcion.FREE
+            if plan == PlanSuscripcion.LIFETIME:
+                return PlanSuscripcion.LIFETIME, None, sub.metodo_pago
+            if sub.expira_en is not None and sub.expira_en < ahora:
+                continue
+            rank = PLAN_RANKING.get(plan, 0)
+            if rank > best_rank or (
+                rank == best_rank
+                and sub.expira_en
+                and (best_expira is None or sub.expira_en > best_expira)
+            ):
+                best_plan = plan
+                best_expira = sub.expira_en
+                best_metodo = sub.metodo_pago
+                best_rank = rank
+
+        if best_rank > 0:
+            return best_plan, best_expira, best_metodo
+
+        plan = usuario.plan_actual or PlanSuscripcion.FREE
+        if plan == PlanSuscripcion.LIFETIME:
+            return PlanSuscripcion.LIFETIME, None, None
+        if plan == PlanSuscripcion.FREE:
+            return PlanSuscripcion.FREE, None, None
+        if usuario.plan_expira_en is not None and usuario.plan_expira_en < ahora:
+            return PlanSuscripcion.FREE, None, None
+        return plan, usuario.plan_expira_en, None
+
+
+async def sync_usuario_plan_efectivo(user_id: int) -> None:
+    """Recalcula plan_actual del usuario desde suscripciones vigentes."""
+    plan, expira_en, _ = await obtener_plan_efectivo_por_user_id(user_id)
+    async with async_session_factory() as session:
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        usuario = result.scalar_one_or_none()
+        if usuario is None:
+            return
+        usuario.plan_actual = plan
+        usuario.plan_expira_en = expira_en
+        await session.commit()
+    _FEATURE_CACHE.clear()
+
+
+async def desactivar_plan_google(purchase_token: str) -> bool:
+    """Marca suscripcion Google como inactiva y recalcula plan del usuario."""
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Suscripcion).where(Suscripcion.google_purchase_token == purchase_token)
+        )
+        sus = result.scalar_one_or_none()
+        if sus is None:
+            return False
+        sus.activa = False
+        user_id = sus.usuario_id
+        await session.commit()
+    await sync_usuario_plan_efectivo(user_id)
+    return True
+
+
+async def listar_tokens_google_activos(user_id: int) -> list[str]:
+    """Tokens Google Play activos del usuario (para restore)."""
+    ahora = datetime.utcnow()
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Suscripcion.google_purchase_token).where(
+                Suscripcion.usuario_id == user_id,
+                Suscripcion.metodo_pago == MetodoPago.GOOGLE_PLAY,
+                Suscripcion.activa == True,  # noqa: E712
+                Suscripcion.google_purchase_token.is_not(None),
+            )
+        )
+        tokens = [t for t in result.scalars().all() if t]
+    return tokens
+
+
 # --- Pagos por comprobante ---
 
 

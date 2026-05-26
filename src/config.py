@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     admin_seed_email: str | None = None
     admin_seed_password: SecretStr | None = None
 
+    google_play_billing_enabled: bool = False
+    google_play_package_name: str = "co.entrenadorax.app"
+    google_play_service_account_json: str = ""
+    google_play_rtdn_audience: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
