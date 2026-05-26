@@ -14,7 +14,7 @@ import json
 import logging
 import secrets
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.cache import get_redis
 from src.db.models import Usuario
@@ -107,7 +107,7 @@ async def ejecutar_vinculacion(pair_ref: str, telegram_id: int) -> Usuario | Non
     old_jwt_sub = user.telegram_id if user.telegram_id is not None else jwt_sub
     try:
         linked = await link_telegram_to_user(user_id, telegram_id)
-    except IntegrityError:
+    except SQLAlchemyError:
         logger.exception(
             "No se pudo vincular telegram_id=%s a user_id=%s",
             telegram_id,
@@ -115,18 +115,25 @@ async def ejecutar_vinculacion(pair_ref: str, telegram_id: int) -> Usuario | Non
         )
         return None
 
-    client = await get_redis()
-    await client.setex(
-        f"{JWT_REFRESH_PREFIX}{old_jwt_sub}",
-        PAIR_TTL_SECONDS,
-        str(telegram_id),
-    )
-    await client.setex(
-        f"{JWT_REFRESH_PREFIX}user:{user_id}",
-        PAIR_TTL_SECONDS,
-        str(telegram_id),
-    )
-    await _limpiar_solicitud(payload)
+    try:
+        client = await get_redis()
+        await client.setex(
+            f"{JWT_REFRESH_PREFIX}{old_jwt_sub}",
+            PAIR_TTL_SECONDS,
+            str(telegram_id),
+        )
+        await client.setex(
+            f"{JWT_REFRESH_PREFIX}user:{user_id}",
+            PAIR_TTL_SECONDS,
+            str(telegram_id),
+        )
+        await _limpiar_solicitud(payload)
+    except Exception:
+        logger.exception(
+            "Vinculacion DB OK pero fallo Redis user_id=%s telegram_id=%s",
+            user_id,
+            telegram_id,
+        )
 
     logger.info(
         "telegram vinculado user_id=%s telegram_id=%s jwt_sub_anterior=%s",

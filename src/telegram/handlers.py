@@ -575,7 +575,13 @@ async def _intentar_vincular_desde_app(
     linked = await ejecutar_vinculacion(pair_ref.strip(), telegram_id)
     if linked is None:
         return False
-    await _responder_vinculacion_ok(update, nombre, linked.id, telegram_id)
+    try:
+        await _responder_vinculacion_ok(update, nombre, linked.id, telegram_id)
+    except Exception:
+        logger.exception(
+            "Telegram vinculado user_id=%s pero fallo respuesta al chat",
+            linked.id,
+        )
     return True
 
 
@@ -1038,15 +1044,7 @@ async def cmd_vincular(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     await update.message.chat.send_action(ChatAction.TYPING)
-    try:
-        if await _intentar_vincular_desde_app(update, codigo):
-            return
-    except Exception:
-        logger.exception("cmd_vincular fallo uid=%s codigo=%s", uid, codigo)
-        await update.message.reply_text(
-            "Hubo un error al vincular. Intenta de nuevo en unos segundos "
-            "o genera un código nuevo en la app."
-        )
+    if await _intentar_vincular_desde_app(update, codigo):
         return
     await update.message.reply_text(
         "Código inválido o expirado. Genera uno nuevo en la app (válido 10 minutos)."

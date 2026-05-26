@@ -3,8 +3,6 @@ import json
 
 import pytest
 
-from sqlalchemy.exc import IntegrityError
-
 from src.services.identity import link_telegram_to_user
 from src.services.telegram_pair import (
     crear_solicitud_vinculacion,
@@ -86,6 +84,35 @@ async def test_reasociar_telegram_de_otro_usuario(db_session):
     linked = await link_telegram_to_user(new_user.id, real_telegram_id)
     assert linked.telegram_id == real_telegram_id
     assert linked.id == new_user.id
+
+    await db_session.refresh(old_user)
+    assert old_user.telegram_id is None
+
+
+@pytest.mark.asyncio
+async def test_reasociar_usa_placeholder_sin_colision(db_session):
+    """El ID real nunca queda NULL expuesto entre usuarios."""
+    real_telegram_id = 8324604749
+    old_user = Usuario(
+        telegram_id=real_telegram_id,
+        nombre="Cuenta Telegram antigua",
+        auth_method="telegram",
+    )
+    new_user = Usuario(
+        telegram_id=-999888777,
+        nombre="App",
+        telefono="+573044093197",
+        email="test@ejemplo.com",
+        auth_method="phone_email",
+    )
+    db_session.add(old_user)
+    db_session.add(new_user)
+    await db_session.commit()
+    await db_session.refresh(old_user)
+    await db_session.refresh(new_user)
+
+    linked = await link_telegram_to_user(new_user.id, real_telegram_id)
+    assert linked.telegram_id == real_telegram_id
 
     await db_session.refresh(old_user)
     assert old_user.telegram_id is None
