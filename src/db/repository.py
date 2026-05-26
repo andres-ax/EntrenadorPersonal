@@ -2670,6 +2670,8 @@ async def grabar_auditoria_turno(
     costo_estimado_usd: float = 0.0,
     duracion_ms: int = 0,
     error: Optional[str] = None,
+    conversacion_id: Optional[int] = None,
+    canal: str = "telegram",
 ) -> None:
     """Graba de forma segura un registro de auditoría de turno.
 
@@ -2691,6 +2693,8 @@ async def grabar_auditoria_turno(
                 costo_estimado_usd=costo_estimado_usd,
                 duracion_ms=duracion_ms,
                 error=error,
+                conversacion_id=conversacion_id,
+                canal=canal,
             )
             session.add(row)
             await session.commit()

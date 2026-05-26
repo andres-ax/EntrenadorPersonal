@@ -67,6 +67,7 @@ async def check_rate_limit_ip(ip: str, max_per_minute: int = 5) -> bool:
 
 async def check_daily_quota(
     telegram_id: int,
+    canal: str = "telegram",
 ) -> tuple[bool, int, int]:
     """Verifica cuota diaria de mensajes solo para usuarios FREE.
 

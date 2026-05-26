@@ -100,6 +100,10 @@ class Settings(BaseSettings):
     google_play_service_account_json: str = ""
     google_play_rtdn_audience: str = ""
 
+    chat_android_enabled: bool = True
+    chat_multithread_enabled: bool = True
+    chat_handoff_enabled: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

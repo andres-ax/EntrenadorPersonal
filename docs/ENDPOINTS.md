@@ -18,6 +18,8 @@ Este archivo describe los endpoints HTTP expuestos por la app en modo webhook. I
 4. [Configurar Telegram para el webhook](#4-configurar-telegram-para-el-webhook)
 5. [Probar en local con ngrok](#5-probar-en-local-con-ngrok)
 6. [Nota sobre polling vs webhook](#6-nota-sobre-polling-vs-webhook)
+7. [API Chat multicanal (Android)](#7-api-chat-multicanal-android)
+8. [WebSocket Realtime](#8-websocket-realtime)
 
 ## 1. GET /health
 
@@ -124,4 +126,43 @@ curl -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook?url=https
 - `POST /webhook` es útil para probar el endpoint HTTP.
 - En modo polling (`python3 run_bot.py`) no hay endpoint HTTP de recepción de mensajes.
 - Para probar la experiencia completa, usa el bot en Telegram y webhook con FastAPI.
-EOF
+
+## 7. API Chat multicanal (Android)
+
+Todos requieren `Authorization: Bearer <JWT>` (mismo token de la app).
+
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/api/me/conversaciones` | Lista hilos |
+| POST | `/api/me/conversaciones` | Crear hilo `{titulo?}` |
+| PATCH | `/api/me/conversaciones/{id}` | Renombrar / archivar |
+| GET | `/api/me/conversaciones/{id}/mensajes` | Historial `?before=&limit=` |
+| POST | `/api/me/conversaciones/{id}/chat` | Chat texto sync `{mensaje}` |
+| POST | `/api/me/conversaciones/{id}/chat/stream` | SSE (respuesta completa) |
+| POST | `/api/me/conversaciones/{id}/audio` | multipart `file` → Whisper |
+| POST | `/api/me/conversaciones/{id}/handoff/telegram` | Resumen + mensaje bot |
+| POST | `/api/me/conversaciones/activa` | `{conversacion_id}` hilo activo |
+| GET | `/api/me/realtime/cuota` | Minutos de voz disponibles |
+
+### Ejemplo chat texto
+
+```bash
+curl -X POST "https://entrenadorax.axsoftware.codes/api/me/conversaciones/1/chat" \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"mensaje":"Que toca hoy?"}'
+```
+
+### Feature flags (.env)
+
+- `CHAT_ANDROID_ENABLED=true`
+- `CHAT_MULTITHREAD_ENABLED=true`
+- `CHAT_HANDOFF_ENABLED=true`
+
+## 8. WebSocket Realtime
+
+- URL: `wss://entrenadorax.axsoftware.codes/ws/realtime?token=<JWT>`
+- Audio cliente → servidor: bytes PCM16 24kHz mono
+- Audio servidor → cliente: bytes PCM16
+- Eventos JSON: `cuota`, `transcript`, `error` (`sin_cuota`)
+- Cierre: enviar `{"type":"fin"}`

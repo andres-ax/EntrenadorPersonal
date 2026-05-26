@@ -103,6 +103,19 @@ class DuracionPago(str, enum.Enum):
     LIFETIME = "lifetime"
 
 
+class CanalConversacion(str, enum.Enum):
+    TELEGRAM = "telegram"
+    ANDROID = "android"
+    MIXED = "mixed"
+    SYSTEM = "system"
+
+
+class RolMensajeChat(str, enum.Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
 class EstadoPago(str, enum.Enum):
     PENDIENTE_HUMANO = "pendiente_humano"
     APROBADO = "aprobado"
@@ -242,6 +255,9 @@ class Usuario(Base):
     )
     turnos_audit = relationship(
         "AuditoriaTurno", back_populates="usuario", cascade="all, delete-orphan"
+    )
+    conversaciones = relationship(
+        "Conversacion", back_populates="usuario", cascade="all, delete-orphan"
     )
 
 
@@ -552,6 +568,55 @@ class Suscripcion(Base):
     google_linked_purchase_token = Column(String(512), nullable=True)
 
     usuario = relationship("Usuario", back_populates="suscripciones")
+
+
+class Conversacion(Base):
+    """Hilo de chat multicanal (Telegram + Android)."""
+
+    __tablename__ = "conversaciones"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(
+        Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    titulo = Column(String(120), default="Coach", nullable=False)
+    canal_creador = Column(
+        Enum(CanalConversacion), default=CanalConversacion.TELEGRAM, nullable=False
+    )
+    activa = Column(Boolean, default=True, nullable=False)
+    resumen_handoff = Column(Text, nullable=True)
+    ultimo_mensaje_en = Column(DateTime, nullable=True)
+    es_principal = Column(Boolean, default=False, nullable=False)
+    creado_en = Column(DateTime, server_default=func.now(), nullable=False)
+
+    usuario = relationship("Usuario", back_populates="conversaciones")
+    mensajes = relationship(
+        "MensajeChat", back_populates="conversacion", cascade="all, delete-orphan"
+    )
+
+
+class MensajeChat(Base):
+    """Mensaje persistido de un hilo para UI app + sync Telegram."""
+
+    __tablename__ = "mensajes_chat"
+
+    id = Column(Integer, primary_key=True)
+    conversacion_id = Column(
+        Integer,
+        ForeignKey("conversaciones.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    rol = Column(Enum(RolMensajeChat), nullable=False)
+    contenido = Column(Text, nullable=False)
+    canal_origen = Column(
+        Enum(CanalConversacion), default=CanalConversacion.TELEGRAM, nullable=False
+    )
+    es_desde_telegram = Column(Boolean, default=False, nullable=False)
+    metadata_json = Column("metadata", JSON, nullable=True)
+    creado_en = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+    conversacion = relationship("Conversacion", back_populates="mensajes")
 
 
 class GooglePlayRtdnEvent(Base):
@@ -924,9 +989,14 @@ class AuditoriaTurno(Base):
     costo_estimado_usd = Column(Float, default=0.0, nullable=False)
     duracion_ms = Column(Integer, default=0, nullable=False)
     error = Column(Text, nullable=True)
+    conversacion_id = Column(
+        Integer, ForeignKey("conversaciones.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    canal = Column(String(16), default="telegram", nullable=False)
     creado_en = Column(DateTime, server_default=func.now(), index=True)
 
     usuario = relationship("Usuario", back_populates="turnos_audit")
+    conversacion = relationship("Conversacion")
 
 
 class TaskAuditLog(Base):

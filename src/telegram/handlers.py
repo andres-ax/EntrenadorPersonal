@@ -307,233 +307,32 @@ async def _procesar(
     with_keyboard: bool = False,
     ctx: ContextTypes.DEFAULT_TYPE | None = None,
 ) -> None:
-    """Ejecuta el agente con sesion Redis. Sesion DB cerrada antes del LLM.
-    Cancela escalation de los tipos que el usuario cumplio during the run.
-    """
-    import time
-    import uuid
-    from src.telegram.permissions import current_session_uid, current_turn_tools
-    from src.db.repository import grabar_auditoria_turno
+    """Ejecuta el agente via run_coach_turn y envia respuesta a Telegram."""
+    from src.services.coach_turn import run_coach_turn
+    from src.services.coach_output import sanitize_telegram_html
+    from src.services.conversation_service import obtener_conversacion_activa
 
-    t_start = time.perf_counter()
-    request_id = uuid.uuid4().hex
+    conv = await obtener_conversacion_activa(uid)
+    result = await run_coach_turn(
+        telegram_id=uid,
+        conversacion_id=conv.id,
+        texto=texto,
+        canal="telegram",
+        conversacion_titulo=conv.titulo,
+    )
 
-    # Variables de recopilación de auditoría
-    prompt_usuario = texto
-    respuesta_bot = None
-    tokens_input = 0
-    tokens_output = 0
-    costo_estimado = 0.0
-    error_message = None
+    output_sanitized = sanitize_telegram_html(result.respuesta)
+    chunks = [output_sanitized[i : i + 4000] for i in range(0, len(output_sanitized), 4000)] or [""]
+    for i, chunk in enumerate(chunks):
+        kwargs = {}
+        if with_keyboard and i == len(chunks) - 1:
+            kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
+        await _enviar_con_retry(message, chunk, **kwargs)
 
-    token = current_session_uid.set(uid)
-    token_tools = current_turn_tools.set([])
+    if ctx is not None and ctx.job_queue is not None:
+        await _autocancelar_escalacion_si_cumplio(uid, ctx)
 
-    try:
-        prompt = await _build_prompt(texto, uid)
-        session = SafeRedisSession.from_url(
-            str(uid),
-            url=settings.redis_url_str,
-            ttl=settings.session_ttl_seconds,
-        )
-        try:
-            try:
-                result = await Runner.run(
-                    coach, prompt, session=session, run_config=RUN_CONFIG
-                )
-                output = result.final_output
 
-                if result.raw_responses:
-                    try:
-                        total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
-                        total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
-                        tokens_input = total_in
-                        tokens_output = total_out
-                        costo_estimado = (total_in / 1_000_000) * 0.15 + (total_out / 1_000_000) * 0.60
-                        if settings.coach_model in ("gpt-4o", "gpt-4"):
-                            costo_estimado = (total_in / 1_000_000) * 2.50 + (total_out / 1_000_000) * 10.00
-                        await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
-                    except Exception:
-                        pass
-
-                diag = detectar_diagnostico_output(output)
-                if diag:
-                    logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
-                    output = (
-                        "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
-                        "que un profesional medico/nutricionista/psicologo evalue tu caso. "
-                        "Sigamos con habitos concretos: que vamos a hacer hoy?"
-                    )
-                    await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
-
-                respuesta_bot = output
-                if _afirma_registro_sin_tool(output, current_turn_tools.get()):
-                    logger.warning(
-                        "Guardrail registro sin tool uid=%s output=%r",
-                        uid,
-                        output[:120],
-                    )
-                    output = (
-                        "Para registrar eso necesito usar mis herramientas. "
-                        "Cuentame de nuevo que quieres registrar y lo hago ahora."
-                    )
-                    respuesta_bot = output
-                    await log_evento(uid, "guardrail_registro_sin_tool", {})
-                output_sanitized = _sanitize_telegram_html(output)
-                chunks = [output_sanitized[i : i + 4000] for i in range(0, len(output_sanitized), 4000)] or [""]
-                for i, chunk in enumerate(chunks):
-                    kwargs = {}
-                    if with_keyboard and i == len(chunks) - 1:
-                        kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
-                    await _enviar_con_retry(message, chunk, **kwargs)
-
-                if ctx is not None and ctx.job_queue is not None:
-                    await _autocancelar_escalation_si_cumplio(uid, ctx)
-
-            except InputGuardrailTripwireTriggered as e:
-                guardrail_obj = getattr(getattr(e, "guardrail_result", None), "guardrail", None)
-                g_name = getattr(guardrail_obj, "name", "")
-                logger.warning("Input guardrail triggered uid=%s name=%s", uid, g_name)
-                error_message = f"InputGuardrailTripwireTriggered: {g_name}"
-
-                if g_name == "guardrail_red_flags_medicos" or "red_flags" in g_name:
-                    await _enviar_con_retry(
-                        message,
-                        "<b>Atención médica recomendada</b>\n\n"
-                        "Lo que describes (como dolor de pecho, dificultad respiratoria o mareo grave) es un síntoma de alerta médica inmediata. "
-                        "Por tu propia seguridad, <b>detén cualquier actividad física de inmediato</b>, descansa y busca asistencia o valoración médica.\n\n"
-                        "Puedes comunicarte a la línea de emergencias local (ej: <b>123</b> en Colombia, <b>911</b> en otros países) si te sientes mal. Tu salud es lo primero.",
-                    )
-                elif g_name == "guardrail_anti_pollution" or "anti_pollution" in g_name:
-                    await _enviar_con_retry(
-                        message,
-                        "Entiendo que puedas tener dudas o inconvenientes con soporte técnico o facturación de otras plataformas, "
-                        "pero mi único rol es ser tu coach deportivo y ayudarte con tus entrenamientos, comidas y descanso saludable.\n\n"
-                        "<b>Volvamos a lo nuestro:</b> ¿cómo va tu actividad física hoy? ¿Qué tal estuvo tu entrenamiento o descanso?",
-                    )
-                else:
-                    await _enviar_con_retry(
-                        message,
-                        "Ese mensaje no se ve bien. Intentalo de nuevo con algo mas claro.",
-                    )
-                return
-            except OutputGuardrailTripwireTriggered:
-                logger.warning("Output guardrail (SDK) triggered uid=%s", uid)
-                error_message = "OutputGuardrailTripwireTriggered"
-                await _enviar_con_retry(
-                    message,
-                    "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
-                    "que un profesional medico/nutricionista/psicologo evalue tu caso. "
-                    "Sigamos con habitos concretos: que vamos a hacer hoy?",
-                )
-                await log_evento(uid, "output_guardrail_diagnostico", {"source": "sdk"})
-                return
-            except openai.BadRequestError as e:
-                if "No tool call found" not in str(e):
-                    raise
-                logger.warning(
-                    "Sesion Redis corrupta uid=%s, limpiando y reintentando. "
-                    "Error original: %s",
-                    uid,
-                    str(e)[:200],
-                )
-                try:
-                    await session.close()
-                except Exception:
-                    logger.debug("Error cerrando session corrupta uid=%s", uid, exc_info=True)
-                await limpiar_keys_usuario(uid)
-                await log_evento(
-                    uid,
-                    "sesion_redis_recuperada",
-                    {"error": str(e)[:200]},
-                )
-                session = SafeRedisSession.from_url(
-                    str(uid),
-                    url=settings.redis_url_str,
-                    ttl=settings.session_ttl_seconds,
-                )
-                result = await Runner.run(
-                    coach, prompt, session=session, run_config=RUN_CONFIG
-                )
-                output = result.final_output
-
-                if result.raw_responses:
-                    try:
-                        total_in = sum(r.usage.input_tokens for r in result.raw_responses if r.usage)
-                        total_out = sum(r.usage.output_tokens for r in result.raw_responses if r.usage)
-                        tokens_input = total_in
-                        tokens_output = total_out
-                        costo_estimado = (total_in / 1_000_000) * 0.15 + (total_out / 1_000_000) * 0.60
-                        if settings.coach_model in ("gpt-4o", "gpt-4"):
-                            costo_estimado = (total_in / 1_000_000) * 2.50 + (total_out / 1_000_000) * 10.00
-                        await log_llm_usage(uid, "coach", settings.coach_model, total_in, total_out, rounds=len(result.raw_responses))
-                    except Exception:
-                        pass
-
-                diag = detectar_diagnostico_output(output)
-                if diag:
-                    logger.warning("Output guardrail (regex fallback): diagnostico uid=%s: %s", uid, diag)
-                    output = (
-                        "Note algo en mi respuesta que prefiero no afirmar. Lo correcto es "
-                        "que un profesional medico/nutricionista/psicologo evalue tu caso. "
-                        "Sigamos con habitos concretos: que vamos a hacer hoy?"
-                    )
-                    await log_evento(uid, "output_guardrail_diagnostico", {"matches": diag[:5]})
-
-                respuesta_bot = output
-                if _afirma_registro_sin_tool(output, current_turn_tools.get()):
-                    logger.warning(
-                        "Guardrail registro sin tool uid=%s output=%r",
-                        uid,
-                        output[:120],
-                    )
-                    output = (
-                        "Para registrar eso necesito usar mis herramientas. "
-                        "Cuentame de nuevo que quieres registrar y lo hago ahora."
-                    )
-                    respuesta_bot = output
-                    await log_evento(uid, "guardrail_registro_sin_tool", {})
-                output_sanitized = _sanitize_telegram_html(output)
-                chunks = [output_sanitized[i : i + 4000] for i in range(0, len(output_sanitized), 4000)] or [""]
-                for i, chunk in enumerate(chunks):
-                    kwargs = {}
-                    if with_keyboard and i == len(chunks) - 1:
-                        kwargs["reply_markup"] = QUICK_ACTIONS_KEYBOARD
-                    await _enviar_con_retry(message, chunk, **kwargs)
-
-                if ctx is not None and ctx.job_queue is not None:
-                    await _autocancelar_escalation_si_cumplio(uid, ctx)
-        except Exception as e:
-            logger.exception("Error procesando mensaje uid=%s", uid)
-            error_message = f"{type(e).__name__}: {str(e)}"
-            await _enviar_con_retry(
-                message,
-                "Tuve un saltico tecnico. Vuelve a escribirme y arrancamos.",
-            )
-        finally:
-            await session.close()
-    finally:
-        # En el finally más externo registramos de forma 100% segura la auditoría de turno
-        duracion_ms = int((time.perf_counter() - t_start) * 1000)
-        tools_invocadas = current_turn_tools.get()
-        try:
-            await grabar_auditoria_turno(
-                telegram_id=uid,
-                request_id=request_id,
-                prompt_usuario=prompt_usuario,
-                respuesta_bot=respuesta_bot,
-                tools_invocadas=tools_invocadas,
-                tokens_input=tokens_input,
-                tokens_output=tokens_output,
-                costo_estimado_usd=costo_estimado,
-                duracion_ms=duracion_ms,
-                error=error_message,
-            )
-        except Exception as ae:
-            logger.warning("Error llamando a grabar_auditoria_turno en finally de _procesar: %s", ae, exc_info=True)
-
-        current_turn_tools.reset(token_tools)
-        current_session_uid.reset(token)
 
 
 async def _autocancelar_escalation_si_cumplio(
@@ -1072,6 +871,58 @@ async def cmd_presumir(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def cmd_nuevo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Crea un hilo nuevo y lo activa."""
+    uid = update.effective_user.id
+    if not settings.chat_multithread_enabled:
+        await update.message.reply_text(
+            "Multiples hilos no estan disponibles. Sigue en tu hilo actual."
+        )
+        return
+    from src.db.models import CanalConversacion
+    from src.services.conversation_service import crear_conversacion, fijar_conversacion_activa
+
+    titulo = " ".join(ctx.args or []).strip() or "Nuevo hilo"
+    user = await obtener_o_crear_usuario(uid)
+    conv = await crear_conversacion(user.id, titulo=titulo, canal=CanalConversacion.TELEGRAM)
+    await fijar_conversacion_activa(uid, conv.id)
+    await update.message.reply_text(
+        f"Hilo nuevo: <b>{conv.titulo}</b>. Escribe tu mensaje.",
+        parse_mode="HTML",
+    )
+
+
+async def cmd_hilos(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lista hilos con teclado inline para cambiar."""
+    uid = update.effective_user.id
+    from src.services.conversation_service import (
+        listar_conversaciones,
+        obtener_conversacion_activa,
+    )
+
+    user = await obtener_o_crear_usuario(uid)
+    convs = await listar_conversaciones(user.id, limit=15)
+    if not convs:
+        await update.message.reply_text("No tienes hilos. Usa /nuevo para crear uno.")
+        return
+    activa = await obtener_conversacion_activa(uid)
+    keyboard = []
+    for c in convs:
+        marker = "✓ " if c.id == activa.id else ""
+        keyboard.append(
+            [InlineKeyboardButton(f"{marker}{c.titulo[:40]}", callback_data=f"conv_switch:{c.id}")]
+        )
+    await update.message.reply_text(
+        "Tus hilos de conversacion:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def cmd_continuar(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Alias de /hilos para elegir hilo activo."""
+    await cmd_hilos(update, ctx)
+
+
 async def cmd_hoy(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Delega al agente: que toca hoy."""
     uid = update.effective_user.id
@@ -1451,6 +1302,28 @@ async def boton(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     uid = q.from_user.id
+
+    if q.data.startswith("conv_switch:"):
+        try:
+            conv_id = int(q.data.split(":", 1)[1])
+        except ValueError:
+            return
+        from src.services.conversation_service import (
+            fijar_conversacion_activa,
+            obtener_conversacion,
+        )
+
+        user = await obtener_o_crear_usuario(uid)
+        conv = await obtener_conversacion(conv_id, user.id)
+        if conv is None:
+            await q.answer("Hilo no encontrado", show_alert=True)
+            return
+        await fijar_conversacion_activa(uid, conv.id)
+        await q.edit_message_text(
+            f"Activo: <b>{conv.titulo}</b>. Escribe para continuar.",
+            parse_mode="HTML",
+        )
+        return
 
     # Admin: aprobar/rechazar comprobante desde Telegram (solo developer_chat_id)
     if q.data.startswith("admin_aprobar:") or q.data.startswith("admin_rechazar:"):
@@ -2782,6 +2655,9 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("codigo_web", cmd_codigo_web))
     app.add_handler(CommandHandler("vincular", cmd_vincular))
     app.add_handler(CommandHandler("presumir", cmd_presumir))
+    app.add_handler(CommandHandler("nuevo", cmd_nuevo))
+    app.add_handler(CommandHandler("hilos", cmd_hilos))
+    app.add_handler(CommandHandler("continuar", cmd_continuar))
     app.add_handler(CommandHandler("hoy", cmd_hoy))
     app.add_handler(CommandHandler("pr", cmd_pr))
     app.add_handler(CommandHandler("reporte", cmd_reporte))

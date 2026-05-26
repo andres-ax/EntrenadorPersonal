@@ -123,6 +123,15 @@ async def lifespan(app: FastAPI):
         logger.exception("Error en seed_admin_si_falta (no critico)")
     logger.info("Base de datos inicializada")
 
+    try:
+        from src.services.redis_session_migration import migrar_sesiones_redis_legacy
+
+        n_migradas = await migrar_sesiones_redis_legacy()
+        if n_migradas:
+            logger.info("Migradas %s keys Redis de sesion legacy", n_migradas)
+    except Exception:
+        logger.exception("Migracion Redis conversaciones fallo (no critico)")
+
     defaults = Defaults(
         parse_mode=ParseMode.HTML,
         tzinfo=ZoneInfo(settings.default_timezone),
@@ -142,6 +151,7 @@ async def lifespan(app: FastAPI):
 
     await telegram_app.initialize()
     await telegram_app.start()
+    app.state.telegram_bot = telegram_app.bot
     pubsub_task = start_pubsub_listener(telegram_app)
     logger.info("Telegram app inicializada + pubsub listener activo")
 
@@ -329,6 +339,7 @@ from src.api.admin import router as admin_router  # noqa: E402
 from src.api.auth import router as auth_router  # noqa: E402
 from src.api.integraciones import router as integraciones_router  # noqa: E402
 from src.api.me import router as me_router  # noqa: E402
+from src.api.chat import router as chat_router  # noqa: E402
 from src.api.billing import me_billing_router, webhooks_router  # noqa: E402
 from src.api.public import router as public_router  # noqa: E402
 
@@ -352,6 +363,7 @@ app.include_router(realtime_router)
 
 app.include_router(auth_router)
 app.include_router(me_router)
+app.include_router(chat_router)
 app.include_router(me_billing_router)
 app.include_router(webhooks_router)
 app.include_router(admin_router)
